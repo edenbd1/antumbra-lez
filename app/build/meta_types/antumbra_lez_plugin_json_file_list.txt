@@ -1,0 +1,2 @@
+/Users/eden/data/ns.com/antumbra-lez/app/build/antumbra_lez_plugin_autogen/include/../UVLADIE3JM/moc_chain_bridge.cpp.json
+/Users/eden/data/ns.com/antumbra-lez/app/build/antumbra_lez_plugin_autogen/include/../UVLADIE3JM/moc_plugin.cpp.json

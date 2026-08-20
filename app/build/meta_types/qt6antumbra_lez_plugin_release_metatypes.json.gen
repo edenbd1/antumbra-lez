@@ -1,0 +1,187 @@
+[
+    {
+        "classes": [
+            {
+                "className": "ChainBridge",
+                "lineNumber": 21,
+                "methods": [
+                    {
+                        "access": "public",
+                        "index": 5,
+                        "name": "refresh",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "url",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 6,
+                        "name": "setEndpoint",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 7,
+                        "isConst": true,
+                        "name": "endpoint",
+                        "returnType": "QString"
+                    }
+                ],
+                "object": true,
+                "qualifiedClassName": "ChainBridge",
+                "signals": [
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "vt",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "vc",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "saleReserve",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "realCollateral",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "seedReserve",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 0,
+                        "name": "saleUpdated",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "reserveToken",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "reserveCollateral",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "weightStart",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "weightEnd",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "lastSeen",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 1,
+                        "name": "poolUpdated",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "total",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "claimed",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "lastSeen",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "kind",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 2,
+                        "name": "scheduleUpdated",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "which",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "reason",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 3,
+                        "name": "failed",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "text",
+                                "type": "QString"
+                            }
+                        ],
+                        "index": 4,
+                        "name": "statusChanged",
+                        "returnType": "void"
+                    }
+                ],
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QObject"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "chain_bridge.h",
+        "outputRevision": 69
+    },
+    {
+        "classes": [
+            {
+                "className": "AntumbraPlugin",
+                "interfaces": [
+                    [
+                        {
+                            "className": "IComponent",
+                            "id": "\"com.logos.component.IComponent\""
+                        }
+                    ]
+                ],
+                "lineNumber": 42,
+                "object": true,
+                "qualifiedClassName": "AntumbraPlugin",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QObject"
+                    },
+                    {
+                        "access": "public",
+                        "name": "IComponent"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "plugin.h",
+        "outputRevision": 69
+    }
+]

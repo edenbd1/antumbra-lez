@@ -1,0 +1,30 @@
+{
+    "classes": [
+        {
+            "className": "AntumbraPlugin",
+            "interfaces": [
+                [
+                    {
+                        "className": "IComponent",
+                        "id": "\"com.logos.component.IComponent\""
+                    }
+                ]
+            ],
+            "lineNumber": 42,
+            "object": true,
+            "qualifiedClassName": "AntumbraPlugin",
+            "superClasses": [
+                {
+                    "access": "public",
+                    "name": "QObject"
+                },
+                {
+                    "access": "public",
+                    "name": "IComponent"
+                }
+            ]
+        }
+    ],
+    "inputFile": "plugin.h",
+    "outputRevision": 69
+}

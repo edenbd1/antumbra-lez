@@ -1,0 +1,6 @@
+/Users/eden/data/ns.com/antumbra-lez/app/build/CMakeFiles/antumbra_lez_plugin.dir
+/Users/eden/data/ns.com/antumbra-lez/app/build/CMakeFiles/qt_internal_plugins.dir
+/Users/eden/data/ns.com/antumbra-lez/app/build/CMakeFiles/edit_cache.dir
+/Users/eden/data/ns.com/antumbra-lez/app/build/CMakeFiles/rebuild_cache.dir
+/Users/eden/data/ns.com/antumbra-lez/app/build/CMakeFiles/antumbra_lez_plugin_autogen_timestamp_deps.dir
+/Users/eden/data/ns.com/antumbra-lez/app/build/CMakeFiles/antumbra_lez_plugin_autogen.dir

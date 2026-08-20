@@ -1,0 +1,22 @@
+{
+  "name": "antumbra_lez",
+  "version": "0.1.0",
+  "description": "Antumbra launchpad and vesting — read the live on-chain state of the bonding curve, the LBP pool and a vesting schedule, straight from a LEZ sequencer",
+  "author": "edenbd1",
+  "type": "ui",
+  "main": "antumbra_lez",
+  "dependencies": [],
+  "category": "defi",
+  "build": {
+    "type": "cmake",
+    "files": [
+      "src/plugin.cpp",
+      "src/plugin.h",
+      "src/chain_bridge.cpp",
+      "src/chain_bridge.h",
+      "qml/Main.qml",
+      "qml/qmldir",
+      "src/metadata.json"
+    ]
+  }
+}
