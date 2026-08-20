@@ -34,6 +34,13 @@ the host.
 | `antumbra_vesting` | `create_schedule` | [`dbe8c753…b1bfa475`](https://explorer.testnet.lez.logos.co/transaction/dbe8c7538ca3c759e0668c9fa285e6fd343aab574fa92d861514e0bcb1bfa475) | 16413 |
 | `antumbra_vesting` | `record_claim` | [`3aff5549…ec203685`](https://explorer.testnet.lez.logos.co/transaction/3aff5549434a0573a4d98895e7fd28afbdc4353c90ebf217320e3e59ec203685) | 16415 |
 
+The host side of every comparison below is reproducible too — a claim that the
+chain agrees with this crate is only checkable if both halves are:
+
+```bash
+cargo run --release --example onchain_reference
+```
+
 ### What the chain came back with
 
 **The bonding curve.** A sale opened at `Vt = 1e24`, `Vc = 1e21`, sale reserve
