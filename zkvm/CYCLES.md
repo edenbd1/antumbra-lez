@@ -20,6 +20,11 @@ The number that matters is LEZ's 32,000,000-cycle public-execution cap.
 | `weight_at` | 12 | 8,810 | 98 | 8,810 |
 | `curve_buy` | 12 | 10,622 | 10,622 | 10,622 |
 | `curve_sell` | 12 | 10,623 | 10,623 | 10,623 |
+| `vested_at` (linear) | 12 | 8,717 | 64 | 8,717 |
+| `vested_at` (cliff+linear) | 12 | 8,711 | 56 | 8,711 |
+| `vesting_claim` | 12 | 8,808 | 124 | 8,808 |
+| `vesting_cancel` | 12 | 8,840 | 186 | 8,840 |
+| `signal_milestone` | 12 | **30** | 30 | 30 |
 
 A whole constant-product buy, from `Curve::new` through `buy`, is 10,710
 cycles end to end.
@@ -36,6 +41,15 @@ on the math.
 recomputes from the schedule rather than reading a refreshed value. Removing
 the poke entirely is not a correctness risk here, and it is not a cost risk
 either.
+
+**Vesting costs one division, and milestone signalling costs almost nothing.**
+`vested_at` is dominated by the single `mul_div` in the linear accrual, so a
+claim and a cancellation both land near 8,800 cycles regardless of schedule
+shape or elapsed time — the flatness again coming from the absence of an
+input-dependent branch. `signal_milestone` is **30 cycles**, because idempotence
+is a compare-and-set on a bitmap rather than a search through a list of
+already-signalled indices. Choosing the data structure was the whole
+optimisation.
 
 **The fractional power is expensive, and the reason is a design choice made
 for the wrong constraint.** `pow_frac` is dominated by 24 atanh terms, each

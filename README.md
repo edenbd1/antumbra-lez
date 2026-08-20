@@ -145,6 +145,26 @@ rate; and `weight_at` returns the correct weight **with no poke at all**, checke
 at every tick of a thousand-second schedule — which is the RFP's own wording,
 "regardless of how recently the last poke occurred".
 
+## Vesting
+
+`src/vesting.rs` covers [RFP-017](https://github.com/logos-co/rfp/blob/master/RFPs/RFP-017-token-vesting.md):
+three schedule shapes, the cancellation split, and milestone signalling. None of
+it needs an account model to be settled, so none of it waits for one.
+
+Two properties are worth more than the code. **Claims over a fully elapsed
+schedule sum to the total exactly** — rounding each step down would normally
+strand dust, so the final step returns the total directly rather than dividing
+again; the two agree mathematically, but routing the end through the general
+branch would make exactness depend on a division being exact, which it is not.
+And **the cancellation split is three-way**: already-claimed,
+vested-but-unclaimed and unvested all come from one `vested_at` call so they
+cannot drift, with the test sweeping every cancellation instant, with and
+without a prior claim, asserting the three sum to the original total.
+
+Nothing is cached. `vested_at` is a pure function of the schedule and a
+timestamp, the same choice `weight_at` makes, for the same reason: there is no
+stale value, so there is no stale-value bug.
+
 ## Status
 
 This is the pricing core, not the program. The SPEL program, the private
@@ -161,5 +181,6 @@ MIT OR Apache-2.0.
 `cycle_count()` deltas per operation; results and their reading are in
 [`zkvm/CYCLES.md`](zkvm/CYCLES.md). A constant-product buy is **10,622
 cycles**, flat across trade sizes, against LEZ's 32M public-execution cap.
-The fractional power is **314,248** — expensive, for a reason the document
-names and does not excuse.
+A vesting claim is **8,808** and a milestone signal is **30**. The fractional
+power is **314,248** — expensive, for a reason the document names and does not
+excuse.

@@ -10,6 +10,7 @@ use core::hint::black_box;
 use risc0_zkvm::guest::env;
 
 use antumbra_curve::weighted::{exp_neg, neg_ln, pow_frac, weight_at, weighted_buy, ONE};
+use antumbra_curve::vesting::Schedule;
 use antumbra_curve::Curve;
 
 /// `x` at 1e18, then the weight ratio `num/den`. Spans the range an LBP
@@ -130,6 +131,52 @@ fn main() {
         .collect();
     let (m, lo, hi) = stats(&v);
     out.push(("curve_sell", m, lo, hi, v.len()));
+
+    // Vesting, for RFP-017's per-operation cost table.
+    let v: Vec<u64> = (0..12u64)
+        .map(|i| {
+            let s = Schedule::linear(1_000, 1_000 + 7_919, 1_000_000 * ONE).unwrap();
+            timed(baseline, || s.vested_at(black_box(1_000 + i * 700)))
+        })
+        .collect();
+    let (m, lo, hi) = stats(&v);
+    out.push(("vested_at_linear", m, lo, hi, v.len()));
+
+    let v: Vec<u64> = (0..12u64)
+        .map(|i| {
+            let s = Schedule::cliff_linear(0, 365, 365 + 1_095, 1_000_000 * ONE).unwrap();
+            timed(baseline, || s.vested_at(black_box(i * 140)))
+        })
+        .collect();
+    let (m, lo, hi) = stats(&v);
+    out.push(("vested_at_cliff", m, lo, hi, v.len()));
+
+    let v: Vec<u64> = (0..12u64)
+        .map(|i| {
+            let mut s = Schedule::linear(1_000, 1_000 + 7_919, 1_000_000 * ONE).unwrap();
+            timed(baseline, || s.claim(black_box(1_000 + i * 700)))
+        })
+        .collect();
+    let (m, lo, hi) = stats(&v);
+    out.push(("vesting_claim", m, lo, hi, v.len()));
+
+    let v: Vec<u64> = (0..12u64)
+        .map(|i| {
+            let mut s = Schedule::linear(1_000, 1_000 + 7_919, 1_000_000 * ONE).unwrap();
+            timed(baseline, || s.cancel(black_box(1_000 + i * 700)))
+        })
+        .collect();
+    let (m, lo, hi) = stats(&v);
+    out.push(("vesting_cancel", m, lo, hi, v.len()));
+
+    let v: Vec<u64> = (0..12u32)
+        .map(|i| {
+            let mut s = Schedule::milestone(vec![ONE; 12]).unwrap();
+            timed(baseline, || s.signal_milestone(black_box(i)))
+        })
+        .collect();
+    let (m, lo, hi) = stats(&v);
+    out.push(("signal_milestone", m, lo, hi, v.len()));
 
     // A whole buy, start to finish, as the program would run it.
     let total = {
