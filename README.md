@@ -131,8 +131,9 @@ biased towards x within 1e-3 of one, x down at 1e-18, and weight ratios from
 
 | | worst absolute error, scale 1e18 |
 |---|---|
-| first version | 6,976,874 &nbsp;(7e-12) |
-| after both fixes | **86** &nbsp;(8.6e-17) |
+| first version, decimal scale | 6,976,874 &nbsp;(7e-12) |
+| after both fixes | 86 &nbsp;(8.6e-17) |
+| `binfixed`, binary scale | **13** &nbsp;(1.3e-17) |
 
 **The residual error points the safe way.** `pow` sits slightly above exact in
 about half the vectors; `tokens_out = Rt * (1 - pow)` then rounds a high `pow`
@@ -182,5 +183,7 @@ MIT OR Apache-2.0.
 [`zkvm/CYCLES.md`](zkvm/CYCLES.md). A constant-product buy is **10,622
 cycles**, flat across trade sizes, against LEZ's 32M public-execution cap.
 A vesting claim is **8,808** and a milestone signal is **30**. The fractional
-power is **314,248** — expensive, for a reason the document names and does not
-excuse.
+power went from **314,248** cycles to **27,181** by moving to a binary working
+scale — 11.6x faster and 6.6x more accurate at the same time, with the
+first attempt at that rewrite recorded alongside it because it was wrong in a
+way worth keeping.

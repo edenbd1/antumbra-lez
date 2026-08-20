@@ -265,3 +265,4 @@ impl Curve {
 pub mod weighted;
 
 pub mod vesting;
+pub mod binfixed;

@@ -13,7 +13,9 @@ The number that matters is LEZ's 32,000,000-cycle public-execution cap.
 
 | op | cases | median | min | max |
 |---|---:|---:|---:|---:|
-| `pow_frac` | 12 | 314,248 | 109 | 457,193 |
+| `pow_frac` (decimal scale) | 12 | 314,248 | 109 | 457,193 |
+| `pow_frac` (**binary scale**) | 12 | **27,181** | 117 | 32,029 |
+| `weighted_buy` (**binary scale**) | 6 | **48,269** | 18,778 | 49,506 |
 | `neg_ln` | 12 | 247,078 | 216,801 | 250,082 |
 | `exp_neg` | 12 | 162,641 | 110 | 196,388 |
 | `weighted_buy` | 6 | 275,830 | 18,789 | 462,772 |
@@ -51,15 +53,36 @@ is a compare-and-set on a bitmap rather than a search through a list of
 already-signalled indices. Choosing the data structure was the whole
 optimisation.
 
-**The fractional power is expensive, and the reason is a design choice made
-for the wrong constraint.** `pow_frac` is dominated by 24 atanh terms, each
-carrying a `mul_div` — a full 256-bit division by 1e18. Holding the working
-scale in decimal makes every series step a division instead of a shift.
+**The fractional power was expensive, and the fix was worth measuring rather
+than arguing.** The first version held its working scale in decimal, so each of
+its 24 atanh terms carried a `mul_div` — a full 256-bit division. Two changes,
+in `src/binfixed.rs`: work at 2^62 so dividing by the scale is a shift, and
+reduce symmetrically into `[1/sqrt(2), sqrt(2))` so the series argument is
+bounded at 0.1716 instead of 1/3 and thirteen terms suffice where
+twenty-four were needed.
 
-A binary working scale (2^62) with a symmetric reduction into `[√2/2, √2)`
-would bound the series argument at |t| ≤ 0.1716 instead of 1/3, cutting the
-term count by more than half *and* turning each remaining step into a shift.
-That is the right shape for a zkVM, and it is the first thing to change:
-correctness is settled at 8.6e-17, so the remaining work is cost, and this
-measurement is what says so. Accuracy was tuned before cost was measured,
-which is the wrong order — recorded here rather than quietly fixed.
+| | decimal | binary | |
+|---|---:|---:|---|
+| `pow_frac` cycles | 314,248 | **27,181** | 11.6x faster |
+| `weighted_buy` cycles | 275,811 | **48,269** | 5.7x faster |
+| worst error at 1e18 | 86 | **13** | 6.6x more accurate |
+| results above exact, of 2,500 | 1,381 | 77 | |
+
+Faster *and* more accurate, which is not the usual outcome and is the reason
+both kernels are kept: the decimal one is the control, and the differential
+test asserts the rewrite never loses to it on any of the 2,500 vectors.
+
+**The remaining cost is the public scale, not the algorithm.** Three divisions
+survive per call and none is in a loop: converting the argument in from 1e18,
+forming `t = (m-1)/(m+1)` once, and applying the weight ratio. The return trip
+is a multiply and a shift because 2^62 is a power of two. A kernel whose public
+scale were also binary would drop the first of those.
+
+**And the first attempt at the rewrite was wrong in an instructive way.**
+Converting straight from 1e18 to 2^62 is a factor of only 4.6, so a small
+argument arrives with almost no mantissa: `x = 19` (1.9e-17) became 87, six
+bits, and the error surviving the exponent was 1e-4 rather than 1e-16 — worse
+than the kernel it replaced. Normalising `x` into `[1e18/2, 1e18)` *before*
+converting, and carrying the shift count into `-ln x = j*ln2 + (-ln m)`, is
+what fixes it. The differential test caught this on the first run; reasoning
+about it did not.

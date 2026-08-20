@@ -10,6 +10,7 @@ use core::hint::black_box;
 use risc0_zkvm::guest::env;
 
 use antumbra_curve::weighted::{exp_neg, neg_ln, pow_frac, weight_at, weighted_buy, ONE};
+use antumbra_curve::binfixed;
 use antumbra_curve::vesting::Schedule;
 use antumbra_curve::Curve;
 
@@ -71,6 +72,34 @@ fn main() {
         .collect();
     let (m, lo, hi) = stats(&v);
     out.push(("pow_frac", m, lo, hi, v.len()));
+
+    let v: Vec<u64> = POW_CASES
+        .iter()
+        .map(|&(x, n, d)| {
+            timed(baseline, || {
+                binfixed::pow_frac(black_box(x), black_box(n), black_box(d))
+            })
+        })
+        .collect();
+    let (m, lo, hi) = stats(&v);
+    out.push(("pow_frac_binary", m, lo, hi, v.len()));
+
+    let v: Vec<u64> = BUY_CASES
+        .iter()
+        .map(|&(rt, rc, c, wt, wc)| {
+            timed(baseline, || {
+                binfixed::weighted_buy(
+                    black_box(rt),
+                    black_box(rc),
+                    black_box(c),
+                    black_box(wt),
+                    black_box(wc),
+                )
+            })
+        })
+        .collect();
+    let (m, lo, hi) = stats(&v);
+    out.push(("weighted_buy_binary", m, lo, hi, v.len()));
 
     let v: Vec<u64> = POW_CASES
         .iter()
