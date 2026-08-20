@@ -72,6 +72,63 @@ t=4959. The PDA `SqLgfYnsQ6STtHRvjNxj1MmXjM3EsUBbsCCvDCcpX9B` came back with
 `claimed = 499936860714736709180` — the same value as `total × (4959−1000) ÷
 (8919−1000)` computed off chain, to the unit.
 
+## The private path, run twice, with what it cost to learn
+
+RFP-015 and RFP-016 both ask for `deshield → buy → re-shield` through a fresh
+single-use public account. It was run end to end, twice, with a **different**
+ephemeral account each time — which is requirement Pr4, non-reuse, demonstrated
+rather than asserted.
+
+| Step | Transaction | Block |
+|---|---|---|
+| initialise ephemeral #1 | [`646f91b2…49a8880d`](https://explorer.testnet.lez.logos.co/transaction/646f91b21d8faf80a249ee8a6ad5ad1a1e07c74517ee03ff3f4e305b49a8880d) | 16467 |
+| deshield → ephemeral #1 | [`921b9e4f…75de83ec`](https://explorer.testnet.lez.logos.co/transaction/921b9e4f72425b65a5e0622e248ea7834de32215d785e24670d32ceb75de83ec) | 16473 |
+| buy signed by ephemeral #1 | [`70f19695…e1c95a29`](https://explorer.testnet.lez.logos.co/transaction/70f19695cd81be4210a304896090686529c0f5f547ad15aa062d1498e1c95a29) | 16474 |
+| initialise ephemeral #2 | [`6c57df67…40da71fd`](https://explorer.testnet.lez.logos.co/transaction/6c57df67d732854779e4f90e36a3c07339ead8f50a2117c86e1f4f1340da71fd) | 16475 |
+| deshield → ephemeral #2 | [`9da4fe4b…cd2167aa`](https://explorer.testnet.lez.logos.co/transaction/9da4fe4bf848c54d1b6324e05cb873ac4daa8312d41905ff2b31490ecd2167aa) | 16481 |
+| buy signed by ephemeral #2 | [`ab1d9564…625cbe832`](https://explorer.testnet.lez.logos.co/transaction/ab1d956440c3cc0c83527d0b08b85e6003caf5e17e5dca1251c935c625cbe832) | 16482 |
+
+Ephemeral #1 is `H2tR44XMAmS3a2Rt4HsowMrCwJmSomo56jM29rjhXcoS`, #2 is
+`6ADXxHqN9LitGPyi4gQQAWuLVTethRj13zAjNwkH5LRm`. Different addresses, so the two
+purchases share no on-chain handle.
+
+**Balances, read from the chain on both sides of each move**, which is the only
+form of this claim worth making:
+
+| | before | after |
+|---|---|---|
+| shield: funded public account | 10 | 4 |
+| shield: private account | 0 | 6 |
+| deshield: private account | 6 | 4 |
+| deshield: ephemeral #1 | 0 | 2 |
+
+The deshield is a genuine `PrivacyPreserving` transaction: its public side
+carries only the destination and the amount, while the source appears as a
+nullifier and a commitment with the account data encrypted. Nothing on the
+public side names the payer.
+
+### The thing the pattern does not do, which is worth more than those six transactions
+
+**A fresh public account cannot receive a deshield.** The first attempt failed
+inside the privacy circuit with `Cannot claim unauthorized account`, and the
+destination has to be initialised by its own separate transaction first.
+
+That matters for **U06**, which asks the app to enforce the deshield of
+collateral *and* gas as **one indivisible user action**. It can be one *user*
+action, but it is **two on-chain transactions**, and the first one is public.
+
+We checked what that first transaction reveals rather than assuming: decoding
+the init transaction's 197 bytes, the only account identifier in it is the
+ephemeral's own. **The buyer's funded account does not appear.** So there is no
+hard link — but there is a timing signal, because a freshly initialised account
+that immediately receives a deshield is a recognisable shape, and an
+implementation that ignores this is offering a privacy guarantee it has not
+measured. RFP-015's soft requirement on minimum sale duration points at the same
+latency from the price side.
+
+We would rather have found this now, at the cost of one failed transaction, than
+have written "atomic deshield" into a milestone and discovered it in month four.
+
 ## Check it yourself
 
 ```bash
