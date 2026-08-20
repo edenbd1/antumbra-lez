@@ -2,10 +2,12 @@
 
 Measured with the RISC0 3.0.5 executor (no proving), guest toolchain 1.97.0,
 guest built in release with `overflow-checks = true` — the same semantics an
-on-chain program would ship. Reproduce with `cd zkvm && cargo run --release`.
+on-chain program would ship. Reproduce with `cd zkvm && cargo run --release`. **The table below is
+regenerated from that command's output**, so a figure here and a figure on your
+screen cannot drift apart; if they do, the harness changed and the document is
+wrong.
 
-Counts are `env::cycle_count()` deltas taken inside the guest, with the
-90-cycle cost of the measurement itself subtracted from every row.
+Counts are `env::cycle_count()` deltas taken inside the guest, with the 90-cycle cost of the measurement itself subtracted from every row.
 `core::hint::black_box` wraps each call so the optimiser cannot hoist a pure
 function out of the timed region. Repeated runs are byte-identical.
 
@@ -15,12 +17,12 @@ The number that matters is LEZ's 32,000,000-cycle public-execution cap.
 |---|---:|---:|---:|---:|
 | `pow_frac` (decimal scale) | 12 | 314,248 | 109 | 457,193 |
 | `pow_frac` (**binary scale**) | 12 | **27,181** | 117 | 32,029 |
+| `weighted_buy` (decimal scale) | 6 | 275,811 | 18,770 | 462,753 |
 | `weighted_buy` (**binary scale**) | 6 | **48,269** | 18,778 | 49,506 |
 | `neg_ln` | 12 | 247,078 | 216,801 | 250,082 |
 | `exp_neg` | 12 | 162,641 | 110 | 196,388 |
-| `weighted_buy` | 6 | 275,830 | 18,789 | 462,772 |
-| `weight_at` | 12 | 8,810 | 98 | 8,810 |
-| `curve_buy` | 12 | 10,622 | 10,622 | 10,622 |
+| `weight_at` | 12 | 8,803 | 91 | 8,803 |
+| `curve_buy` | 12 | **10,622** | 10,622 | 10,622 |
 | `curve_sell` | 12 | 10,623 | 10,623 | 10,623 |
 | `vested_at` (linear) | 12 | 8,717 | 64 | 8,717 |
 | `vested_at` (cliff+linear) | 12 | 8,711 | 56 | 8,711 |
@@ -28,7 +30,7 @@ The number that matters is LEZ's 32,000,000-cycle public-execution cap.
 | `vesting_cancel` | 12 | 8,840 | 186 | 8,840 |
 | `signal_milestone` | 12 | **30** | 30 | 30 |
 
-A whole constant-product buy, from `Curve::new` through `buy`, is 10,710
+A whole constant-product buy, from `Curve::new` through `buy`, is 10,722
 cycles end to end.
 
 ## What the numbers say
@@ -39,7 +41,7 @@ path, so the worst case is the median. That is 0.03% of the execution cap; the
 budget will be spent on the account and proof machinery around the math, not
 on the math.
 
-**`weight_at` costs 8,810 cycles and never varies with staleness**, because it
+**`weight_at` costs 8,803 cycles and never varies with staleness**, because it
 recomputes from the schedule rather than reading a refreshed value. Removing
 the poke entirely is not a correctness risk here, and it is not a cost risk
 either.
