@@ -99,6 +99,52 @@ reserve in production.
   conservation and that the pool never pays out more than it took in, over
   24,000 randomised interleavings of buys and sells.
 
+## The weighted pool: a fractional power in integer arithmetic
+
+`src/weighted.rs` is the other half, for
+[RFP-016](https://github.com/logos-co/rfp/blob/master/RFPs/RFP-016-lbp-launchpad.md),
+whose swap formula carries a **rational exponent**:
+
+```
+tokens_out = Rt * (1 - (Rc / (Rc + C_in)) ^ (w_c / w_t))
+```
+
+`x^e = exp(e * ln x)` at a scale of 1e18, with argument reduction on both
+series. Two things in it are worth more than the code:
+
+**The reduction direction decides the precision.** Reducing into `[1, 2)` gives
+`-ln x = k*ln2 - ln m`, a subtraction of two numbers both near 0.693 whenever x
+is near 1. At x = 0.99974 the difference is 0.00025 — three significant digits
+destroyed by cancellation, then multiplied by an exponent of up to 99. The first
+version did that and measured a worst error of **7e-12**. Reducing into
+`[1/2, 1)` instead makes it `k*ln2 + (-ln m)`, both terms non-negative. An
+addition cannot cancel.
+
+**The series length is a cycle budget, so it is a named constant.** `z = 1/3`
+exactly at x = 1/2 — the worst case, reached by every halving. Twelve terms
+leaves a 1e-13 tail; twenty-four puts it below 1e-19, at twelve more 256-bit
+multiplications per call.
+
+Measured against 2,500 vectors from Python's `decimal` at 60 significant digits,
+biased towards x within 1e-3 of one, x down at 1e-18, and weight ratios from
+99/1 to 1/99:
+
+| | worst absolute error, scale 1e18 |
+|---|---|
+| first version | 6,976,874 &nbsp;(7e-12) |
+| after both fixes | **86** &nbsp;(8.6e-17) |
+
+**The residual error points the safe way.** `pow` sits slightly above exact in
+about half the vectors; `tokens_out = Rt * (1 - pow)` then rounds a high `pow`
+into a *low* payout. The pool keeps the difference, which is the same rule the
+bonding curve follows.
+
+Also asserted: `pow` is monotone in the exponent, so no weight in the schedule
+pays better than the weights either side of it; a bigger buy never gets a better
+rate; and `weight_at` returns the correct weight **with no poke at all**, checked
+at every tick of a thousand-second schedule — which is the RFP's own wording,
+"regardless of how recently the last poke occurred".
+
 ## Status
 
 This is the pricing core, not the program. The SPEL program, the private

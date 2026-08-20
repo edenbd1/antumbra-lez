@@ -262,3 +262,4 @@ impl Curve {
         self.sale_reserve == 0
     }
 }
+pub mod weighted;
