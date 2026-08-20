@@ -154,3 +154,12 @@ proposal this repository accompanies.
 ## Licence
 
 MIT OR Apache-2.0.
+
+## Cycle cost
+
+`zkvm/` runs the whole kernel under the RISC0 3.0.5 executor and reports
+`cycle_count()` deltas per operation; results and their reading are in
+[`zkvm/CYCLES.md`](zkvm/CYCLES.md). A constant-product buy is **10,622
+cycles**, flat across trade sizes, against LEZ's 32M public-execution cap.
+The fractional power is **314,248** — expensive, for a reason the document
+names and does not excuse.
