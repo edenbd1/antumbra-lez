@@ -1,0 +1,141 @@
+{
+  "version": "0.1.0",
+  "name": "antumbra_curve",
+  "instructions": [
+    {
+      "name": "create_sale",
+      "accounts": [
+        {
+          "name": "sale",
+          "writable": true,
+          "signer": false,
+          "init": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "sale_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": false,
+          "signer": true,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "sale_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "vt",
+          "type": "u128"
+        },
+        {
+          "name": "vc",
+          "type": "u128"
+        },
+        {
+          "name": "sale_reserve",
+          "type": "u128"
+        },
+        {
+          "name": "seed_reserve",
+          "type": "u128"
+        }
+      ]
+    },
+    {
+      "name": "execute_buy",
+      "accounts": [
+        {
+          "name": "sale",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "sale_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer",
+          "writable": false,
+          "signer": true,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "sale_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "collateral_in",
+          "type": "u128"
+        },
+        {
+          "name": "min_tokens_out",
+          "type": "u128"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Sale",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vt",
+            "type": "u128"
+          },
+          {
+            "name": "vc",
+            "type": "u128"
+          },
+          {
+            "name": "sale_reserve",
+            "type": "u128"
+          },
+          {
+            "name": "real_collateral",
+            "type": "u128"
+          },
+          {
+            "name": "seed_reserve",
+            "type": "u128"
+          },
+          {
+            "name": "creator",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

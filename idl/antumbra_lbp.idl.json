@@ -1,0 +1,205 @@
+{
+  "version": "0.1.0",
+  "name": "antumbra_lbp",
+  "instructions": [
+    {
+      "name": "create_pool",
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true,
+          "signer": false,
+          "init": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "pool_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": false,
+          "signer": true,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "pool_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "reserve_token",
+          "type": "u128"
+        },
+        {
+          "name": "reserve_collateral",
+          "type": "u128"
+        },
+        {
+          "name": "w_start",
+          "type": "u128"
+        },
+        {
+          "name": "w_end",
+          "type": "u128"
+        },
+        {
+          "name": "t_start",
+          "type": "u64"
+        },
+        {
+          "name": "t_end",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "execute_buy",
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "pool_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer",
+          "writable": false,
+          "signer": true,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "pool_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "now",
+          "type": "u64"
+        },
+        {
+          "name": "collateral_in",
+          "type": "u128"
+        },
+        {
+          "name": "min_tokens_out",
+          "type": "u128"
+        }
+      ]
+    },
+    {
+      "name": "set_paused",
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "pool_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": false,
+          "signer": true,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "pool_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "paused",
+          "type": "u8"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Pool",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "reserve_token",
+            "type": "u128"
+          },
+          {
+            "name": "reserve_collateral",
+            "type": "u128"
+          },
+          {
+            "name": "w_start",
+            "type": "u128"
+          },
+          {
+            "name": "w_end",
+            "type": "u128"
+          },
+          {
+            "name": "t_start",
+            "type": "u64"
+          },
+          {
+            "name": "t_end",
+            "type": "u64"
+          },
+          {
+            "name": "last_seen",
+            "type": "u64"
+          },
+          {
+            "name": "paused",
+            "type": "u8"
+          },
+          {
+            "name": "creator",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

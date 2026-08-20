@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Re-check every claim DEPLOYMENTS.md makes, against the public LEZ testnet.
+#
+# The point of the last line is the point of the whole script: a getTransaction
+# that returns data proves nothing until a hash that was never deployed is shown
+# to return null. Without that control, this only proves the endpoint answers.
+#
+# Needs curl and python3. Exits non-zero if any expected transaction is missing
+# or if the control unexpectedly resolves.
+set -uo pipefail
+RPC="${SEQUENCER_URL:-https://testnet.lez.logos.co}"
+
+fetch() {
+  curl -s -m 25 -X POST "$RPC" -H 'Content-Type: application/json' \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getTransaction\",\"params\":[\"$1\"]}"
+}
+
+fail=0
+check() { # program label tx expect_present
+  local body height
+  body="$(fetch "$3")"
+  if printf '%s' "$body" | grep -q '"result":\['; then
+    height="$(printf '%s' "$body" | python3 -c 'import json,sys;r=json.load(sys.stdin)["result"];b=r[1] if len(r)>1 else None;print(b.get("height") if isinstance(b,dict) else b)' 2>/dev/null)"
+    if [ "$4" = "yes" ]; then
+      printf '  ✅ %-8s %-16s block %-6s %s\n' "$1" "$2" "$height" "${3:0:16}…"
+    else
+      printf '  ❌ %-8s %-16s RESOLVED, and it must not\n' "$1" "$2"; fail=1
+    fi
+  else
+    if [ "$4" = "no" ]; then
+      printf '  ✅ %-8s %-16s returns null, as a never-deployed hash must\n' "$1" "$2"
+    else
+      printf '  ❌ %-8s %-16s MISSING %s\n' "$1" "$2" "$3"; fail=1
+    fi
+  fi
+}
+
+echo "Antumbra on the public LEZ testnet — $RPC"
+echo
+check curve   deploy          25a8f4051b60ff471cb30d9655217e7b172b9b43f3977be327956fd2b42f1718 yes
+check curve   create_sale     ec7f1bede8afebff0048d9dcd374e0e2bd73a937bed350ae61ff22ef9e7604ed yes
+check curve   execute_buy     1b886f82a9966e94fb2ba2d9181fe69945ceacbd6de4318e99e3d902fa4ba71a yes
+check lbp     deploy          f765ec06ae391c8d9e754f40947398cf15d66c9967f2fda23894d30098b4eac2 yes
+check lbp     create_pool     417d64e3ec33b71ea9ae5e6d4a354f063c6b91ee2f4405b6e788e9d69b5dd7af yes
+check lbp     execute_buy     45fa7b915283369d9c6eac61ae2a599a7a4b0042064f788ecb7540b2e2eda6b0 yes
+check vesting deploy          f45a7b2fc835e75e9633e6fe8cd00687146f2b05b22591ff38baeec80b928030 yes
+check vesting create_schedule dbe8c7538ca3c759e0668c9fa285e6fd343aab574fa92d861514e0bcb1bfa475 yes
+check vesting record_claim    3aff5549434a0573a4d98895e7fd28afbdc4353c90ebf217320e3e59ec203685 yes
+echo
+check CONTROL never-deployed  dededededededededededededededededededededededededededededededede no
+
+echo
+if [ "$fail" -eq 0 ]; then
+  echo "All nine transactions resolve; the control does not. "
+else
+  echo "Something above did not hold." >&2
+fi
+exit "$fail"
