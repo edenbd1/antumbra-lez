@@ -147,3 +147,31 @@ fn a_huge_amount_refuses_rather_than_wrapping() {
     );
     assert!(fee > u128::MAX / 200);
 }
+
+#[test]
+fn a_creation_fee_is_charged_on_top_of_the_escrow_never_out_of_it() {
+    let cfg = FeeConfig::new(10_000, CAP_AT_CREATION).unwrap(); // 1%
+    let total = 1_000 * ONE;
+    let (fee, debited) = creation_fee(&cfg, total).unwrap();
+    assert_eq!(fee, 10 * ONE);
+    assert_eq!(
+        debited,
+        total + fee,
+        "the creator pays total + fee; the escrow must still hold the full total"
+    );
+    // Taking it out of the escrow would promise the beneficiary `total` while
+    // holding less, and the shortfall would surface years later at the final
+    // claim as an unexplained failure.
+    assert!(debited > total);
+}
+
+#[test]
+fn a_zero_creation_fee_debits_exactly_the_schedule_total() {
+    let cfg = FeeConfig::zero(CAP_AT_CREATION).unwrap();
+    for total in [1u128, 999, ONE, 123_456 * ONE] {
+        let (fee, debited) = creation_fee(&cfg, total).unwrap();
+        assert_eq!(fee, 0);
+        assert_eq!(debited, total);
+    }
+    assert_eq!(creation_fee(&cfg, 0), Err(CurveError::ZeroAmount));
+}

@@ -44,6 +44,14 @@ pub const CAP_PER_SWAP: u128 = 10_000;
 /// charges and the figure the RFP cites.
 pub const CAP_AT_CLOSE: u128 = 50_000;
 
+/// RFP-017's cap: 1% of the schedule total, charged once at creation.
+///
+/// Creation rather than per claim, and the creator rather than the beneficiary,
+/// because a per-claim fee penalises exactly the beneficiary who claims in
+/// small amounts — which is the beneficiary trying not to signal an unlock, in
+/// a protocol whose whole purpose is that unlocks are not a public calendar.
+pub const CAP_AT_CREATION: u128 = 10_000;
+
 /// A rate and the ceiling it may never exceed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FeeConfig {
@@ -136,4 +144,23 @@ pub fn close_fee(cfg: &FeeConfig, collateral_balance: u128) -> Result<(u128, u12
         .checked_sub(fee)
         .ok_or(CurveError::Overflow)?;
     Ok((fee, paid))
+}
+
+/// RFP-017 creation: the fee is charged to the creator on the schedule total,
+/// on top of the escrowed amount rather than out of it. Returns
+/// `(fee, total_debited_from_creator)`.
+///
+/// Taking it out of the escrow would silently under-fund the schedule: the
+/// beneficiary would be promised `total` and the program would hold
+/// `total - fee`, and the shortfall would only surface at the final claim,
+/// years later, as an unexplained arithmetic failure.
+pub fn creation_fee(cfg: &FeeConfig, schedule_total: u128) -> Result<(u128, u128)> {
+    if schedule_total == 0 {
+        return Err(CurveError::ZeroAmount);
+    }
+    let fee = cfg.fee_on(schedule_total)?;
+    let debited = schedule_total
+        .checked_add(fee)
+        .ok_or(CurveError::Overflow)?;
+    Ok((fee, debited))
 }
