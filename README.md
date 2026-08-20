@@ -1,5 +1,7 @@
 # antumbra-curve
 
+[![CI](https://github.com/edenbd1/antumbra-curve/actions/workflows/ci.yml/badge.svg)](https://github.com/edenbd1/antumbra-curve/actions/workflows/ci.yml)
+
 Integer-only constant-product bonding curve math for the Logos Execution Zone,
 written for [λPrize RFP-015](https://github.com/logos-co/rfp/blob/master/RFPs/RFP-015-bonding-curve-launchpad.md).
 
@@ -165,6 +167,22 @@ without a prior claim, asserting the three sum to the original total.
 Nothing is cached. `vested_at` is a pure function of the schedule and a
 timestamp, the same choice `weight_at` makes, for the same reason: there is no
 stale value, so there is no stale-value bug.
+
+## What CI actually checks
+
+Not just that the tests pass.
+
+- `cargo fmt --check` and `cargo clippy -D warnings`.
+- The suite in **release**, because the release profile sets
+  `overflow-checks = true`; running it in debug would exercise different
+  arithmetic from the one that ships.
+- **The committed vectors are regenerated and diffed against their generators.**
+  A vector file quietly edited to make a failing test pass would not survive
+  this, and that is the failure mode a committed oracle actually has.
+- **The cycle table is re-measured and compared to `zkvm/CYCLES.md`.** The
+  document is quoted in grant proposals; a figure that drifts is a public claim
+  that stopped being true, and nobody notices until someone reproduces it. So
+  `zkvm/verify_cycles.py` fails the build instead.
 
 ## Status
 

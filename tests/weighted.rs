@@ -42,7 +42,7 @@ fn pow_matches_python_decimal_within_a_measured_bound() {
             Err(e) => panic!("pow_frac({x},{num},{den}) refused: {e:?}"),
         };
         checked += 1;
-        let diff = if got >= expected { got - expected } else { expected - got };
+        let diff = got.abs_diff(expected);
         if got > expected {
             over += 1;
         }
@@ -65,7 +65,9 @@ fn pow_matches_python_decimal_within_a_measured_bound() {
     assert!(
         worst_abs <= 100,
         "worst error {worst_abs} exceeds the claimed bound, at x={} {}/{}",
-        worst_case.0, worst_case.1, worst_case.2
+        worst_case.0,
+        worst_case.1,
+        worst_case.2
     );
 }
 
@@ -116,7 +118,10 @@ fn a_bigger_buy_never_gets_a_better_rate() {
     let rc = 100_000 * ONE;
     let a = weighted_buy(rt, rc, 1_000 * ONE, 80, 20).unwrap();
     let b = weighted_buy(rt, rc, 2_000 * ONE, 80, 20).unwrap();
-    assert!(b <= a * 2, "doubling the input more than doubled the output: {a} -> {b}");
+    assert!(
+        b <= a * 2,
+        "doubling the input more than doubled the output: {a} -> {b}"
+    );
     assert!(b > a, "doubling the input did not increase the output");
 }
 
@@ -125,11 +130,28 @@ fn weights_are_correct_with_no_poke_at_all() {
     // The RFP requires the correct weight at transaction time regardless of
     // when the last poke happened. Nothing is stored, so this is a function of
     // `now` alone — asserted at adversarial instants.
-    let (ws, we, t0, t1) = (990_000_000_000_000_000u128, 10_000_000_000_000_000u128, 1_000u64, 2_000u64);
-    assert_eq!(weight_at(ws, we, t0, t1, 0).unwrap(), ws, "before the start");
-    assert_eq!(weight_at(ws, we, t0, t1, 1_000).unwrap(), ws, "at the start");
+    let (ws, we, t0, t1) = (
+        990_000_000_000_000_000u128,
+        10_000_000_000_000_000u128,
+        1_000u64,
+        2_000u64,
+    );
+    assert_eq!(
+        weight_at(ws, we, t0, t1, 0).unwrap(),
+        ws,
+        "before the start"
+    );
+    assert_eq!(
+        weight_at(ws, we, t0, t1, 1_000).unwrap(),
+        ws,
+        "at the start"
+    );
     assert_eq!(weight_at(ws, we, t0, t1, 2_000).unwrap(), we, "at the end");
-    assert_eq!(weight_at(ws, we, t0, t1, 9_999).unwrap(), we, "long after the end");
+    assert_eq!(
+        weight_at(ws, we, t0, t1, 9_999).unwrap(),
+        we,
+        "long after the end"
+    );
     let mid = weight_at(ws, we, t0, t1, 1_500).unwrap();
     assert!(mid < ws && mid > we, "midpoint {mid} outside the schedule");
 
@@ -140,5 +162,8 @@ fn weights_are_correct_with_no_poke_at_all() {
         assert!(w <= prev, "weight rose at {now}: {w} > {prev}");
         prev = w;
     }
-    assert_eq!(weight_at(ws, we, 2_000, 1_000, 1_500), Err(CurveError::ZeroAmount));
+    assert_eq!(
+        weight_at(ws, we, 2_000, 1_000, 1_500),
+        Err(CurveError::ZeroAmount)
+    );
 }

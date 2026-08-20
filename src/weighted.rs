@@ -220,13 +220,7 @@ pub fn weighted_buy(
 /// The RFP requires the correct weight at transaction time "regardless of how
 /// recently the last poke occurred", so nothing is stored and refreshed: the
 /// weight is a function of `now` and the schedule, evaluated on each call.
-pub fn weight_at(
-    w_start: u128,
-    w_end: u128,
-    t_start: u64,
-    t_end: u64,
-    now: u64,
-) -> Result<u128> {
+pub fn weight_at(w_start: u128, w_end: u128, t_start: u64, t_end: u64, now: u64) -> Result<u128> {
     if t_end <= t_start {
         return Err(CurveError::ZeroAmount);
     }

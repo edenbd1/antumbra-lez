@@ -263,10 +263,7 @@ impl Schedule {
         let vested = self.vested_at(now);
         let already_claimed = self.claimed;
         let to_beneficiary = vested.saturating_sub(already_claimed);
-        let to_creator = self
-            .total
-            .checked_sub(vested)
-            .ok_or(CurveError::Overflow)?;
+        let to_creator = self.total.checked_sub(vested).ok_or(CurveError::Overflow)?;
         self.cancelled_at = Some(now);
         Ok(CancelSplit {
             already_claimed,

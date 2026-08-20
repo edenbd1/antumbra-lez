@@ -175,7 +175,12 @@ impl Curve {
         if vt <= sale_reserve {
             return Err(CurveError::VirtualTokenReserveTooSmall);
         }
-        Ok(Self { vt, vc, sale_reserve, real_collateral: 0 })
+        Ok(Self {
+            vt,
+            vc,
+            sale_reserve,
+            real_collateral: 0,
+        })
     }
 
     /// Spot price numerator/denominator, exact, no division: `p = Vc / Vt`.
@@ -237,9 +242,14 @@ impl Curve {
         }
         self.vt = self.vt.checked_sub(out).ok_or(CurveError::Overflow)?;
         self.vc = self.vc.checked_add(c_in).ok_or(CurveError::Overflow)?;
-        self.sale_reserve = self.sale_reserve.checked_sub(out).ok_or(CurveError::Overflow)?;
-        self.real_collateral =
-            self.real_collateral.checked_add(c_in).ok_or(CurveError::Overflow)?;
+        self.sale_reserve = self
+            .sale_reserve
+            .checked_sub(out)
+            .ok_or(CurveError::Overflow)?;
+        self.real_collateral = self
+            .real_collateral
+            .checked_add(c_in)
+            .ok_or(CurveError::Overflow)?;
         Ok(out)
     }
 
@@ -251,9 +261,14 @@ impl Curve {
         }
         self.vt = self.vt.checked_add(t_in).ok_or(CurveError::Overflow)?;
         self.vc = self.vc.checked_sub(out).ok_or(CurveError::Overflow)?;
-        self.sale_reserve = self.sale_reserve.checked_add(t_in).ok_or(CurveError::Overflow)?;
-        self.real_collateral =
-            self.real_collateral.checked_sub(out).ok_or(CurveError::Overflow)?;
+        self.sale_reserve = self
+            .sale_reserve
+            .checked_add(t_in)
+            .ok_or(CurveError::Overflow)?;
+        self.real_collateral = self
+            .real_collateral
+            .checked_sub(out)
+            .ok_or(CurveError::Overflow)?;
         Ok(out)
     }
 
@@ -264,5 +279,5 @@ impl Curve {
 }
 pub mod weighted;
 
-pub mod vesting;
 pub mod binfixed;
+pub mod vesting;

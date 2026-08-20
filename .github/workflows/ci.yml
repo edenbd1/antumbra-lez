@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  tests:
+    name: Tests, lints, and the differential oracles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+
+      - name: Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy, warnings are errors
+        run: cargo clippy --all-targets -- -D warnings
+
+      # Release, not debug: the release profile sets overflow-checks = true, so
+      # a missed checked_* panics here rather than wrapping in production. Running
+      # the suite in debug would test different arithmetic from the one that ships.
+      - name: Tests
+        run: cargo test --release --verbose
+
+      # The vectors are committed, but they are only trustworthy if the generator
+      # still produces them. Regenerating and diffing catches a vector file edited
+      # to make a failing test pass.
+      - name: The committed vectors still match their generators
+        run: |
+          python3 tests/gen_vectors.py > /tmp/mul_div.txt
+          python3 tests/gen_pow_vectors.py > /tmp/pow.txt
+          diff -q /tmp/mul_div.txt tests/vectors/mul_div.txt
+          diff -q /tmp/pow.txt tests/vectors/pow.txt
+          echo "both oracles reproduce byte for byte"
+
+  cycles:
+    name: Cycle counts still match CYCLES.md
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: RISC0
+        run: |
+          curl -L https://risczero.com/install | bash
+          echo "$HOME/.risc0/bin" >> "$GITHUB_PATH"
+
+      - name: Guest toolchain
+        run: rzup install
+
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            zkvm/target
+          key: zkvm-${{ hashFiles('zkvm/**/Cargo.toml', 'src/**') }}
+
+      # The executor only — no proving. These are the counts that decide whether
+      # an operation fits LEZ's public-execution budget, and they are
+      # deterministic, which is what makes them worth asserting rather than
+      # merely reporting.
+      - name: Measure, and fail if the published table has drifted
+        working-directory: zkvm
+        run: cargo run --release | tee /tmp/cycles.txt && python3 verify_cycles.py < /tmp/cycles.txt
+
+      - name: Publish the table to the run summary
+        if: always()
+        run: |
+          {
+            echo '## Measured cycle counts'
+            echo
+            sed -n '/^| op |/,/^$/p' /tmp/cycles.txt
+          } >> "$GITHUB_STEP_SUMMARY"

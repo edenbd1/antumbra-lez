@@ -16,7 +16,13 @@ fn claims_over_a_fully_elapsed_schedule_sum_to_the_total_exactly() {
     // Claim at every tick. Rounding down at each step must not strand dust:
     // by the end the beneficiary has every unit, not total-minus-epsilon.
     for span in [3u64, 7, 100, 7_919] {
-        for total in [1u128, 2, 999, 1_000_000_000_000_000_000_007, u64::MAX as u128] {
+        for total in [
+            1u128,
+            2,
+            999,
+            1_000_000_000_000_000_000_007,
+            u64::MAX as u128,
+        ] {
             let mut s = Schedule::linear(1_000, 1_000 + span, total).unwrap();
             let mut paid: u128 = 0;
             for t in 1_000..=(1_000 + span) {
@@ -175,10 +181,22 @@ fn degenerate_schedules_are_refused_at_construction() {
     assert!(Schedule::linear(10, 10, 100).is_err(), "zero span");
     assert!(Schedule::linear(11, 10, 100).is_err(), "inverted");
     assert!(Schedule::linear(0, 10, 0).is_err(), "zero total");
-    assert!(Schedule::cliff_linear(0, 10, 10, 100).is_err(), "cliff == end");
-    assert!(Schedule::cliff_linear(0, 11, 10, 100).is_err(), "cliff > end");
-    assert!(Schedule::cliff_linear(5, 4, 10, 100).is_err(), "cliff < start");
-    assert!(Schedule::cliff_linear(0, 0, 10, 100).is_ok(), "cliff at start");
+    assert!(
+        Schedule::cliff_linear(0, 10, 10, 100).is_err(),
+        "cliff == end"
+    );
+    assert!(
+        Schedule::cliff_linear(0, 11, 10, 100).is_err(),
+        "cliff > end"
+    );
+    assert!(
+        Schedule::cliff_linear(5, 4, 10, 100).is_err(),
+        "cliff < start"
+    );
+    assert!(
+        Schedule::cliff_linear(0, 0, 10, 100).is_ok(),
+        "cliff at start"
+    );
 }
 
 #[test]

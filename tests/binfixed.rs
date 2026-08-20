@@ -94,7 +94,12 @@ fn the_edges_are_exact() {
 fn it_is_monotone_in_the_exponent() {
     // A larger exponent on a base below one gives a smaller result. If this
     // fails, some weight in the schedule pays better than its neighbours.
-    for x in [999_999_999_999_999_999u128, 900_000_000_000_000_000, 500_000_000_000_000_000, 1_000_000] {
+    for x in [
+        999_999_999_999_999_999u128,
+        900_000_000_000_000_000,
+        500_000_000_000_000_000,
+        1_000_000,
+    ] {
         let mut prev = u128::MAX;
         for n in 1..=99u128 {
             let got = binfixed::pow_frac(x, n, 1).unwrap();

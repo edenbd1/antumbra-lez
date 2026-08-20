@@ -13,13 +13,24 @@
 
 use antumbra_curve::*;
 
-fn vectors() -> Vec<(u128, u128, u128, Option<u128>, Option<u128>)> {
+/// One line of the Python-generated oracle: `a`, `b`, `d`, then the exact
+/// floor and ceiling quotients, or `None` where the true quotient does not fit
+/// in 128 bits and the implementation must refuse by name rather than truncate.
+type Vector = (u128, u128, u128, Option<u128>, Option<u128>);
+
+fn vectors() -> Vec<Vector> {
     let raw = include_str!("vectors/mul_div.txt");
     raw.lines()
         .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
         .map(|l| {
             let f: Vec<&str> = l.split_whitespace().collect();
-            let p = |s: &str| if s == "-" { None } else { Some(s.parse::<u128>().unwrap()) };
+            let p = |s: &str| {
+                if s == "-" {
+                    None
+                } else {
+                    Some(s.parse::<u128>().unwrap())
+                }
+            };
             (
                 f[0].parse().unwrap(),
                 f[1].parse().unwrap(),
@@ -38,18 +49,27 @@ fn mul_div_matches_python_arbitrary_precision() {
     let (mut in_range, mut refused) = (0u32, 0u32);
     for (a, b, d, want_floor, want_ceil) in v {
         match (mul_div_floor(a, b, d), want_floor) {
-            (Ok(got), Some(w)) => { assert_eq!(got, w, "floor({a},{b},{d})"); in_range += 1 }
+            (Ok(got), Some(w)) => {
+                assert_eq!(got, w, "floor({a},{b},{d})");
+                in_range += 1
+            }
             (Err(CurveError::Overflow), None) => refused += 1,
-            (Ok(g), None) => panic!("returned {g} where the exact quotient exceeds u128: {a},{b},{d}"),
-            (Err(e), Some(w)) => panic!("refused {e:?} where the exact quotient is {w}: {a},{b},{d}"),
+            (Ok(g), None) => {
+                panic!("returned {g} where the exact quotient exceeds u128: {a},{b},{d}")
+            }
+            (Err(e), Some(w)) => {
+                panic!("refused {e:?} where the exact quotient is {w}: {a},{b},{d}")
+            }
             (Err(e), None) => panic!("wrong refusal {e:?} for {a},{b},{d}"),
         }
         if let (Ok(got), Some(w)) = (mul_div_ceil(a, b, d), want_ceil) {
             assert_eq!(got, w, "ceil({a},{b},{d})");
         }
     }
-    assert!(in_range > 1500 && refused > 1500,
-            "the vector set must exercise both sides: {in_range} in range, {refused} refused");
+    assert!(
+        in_range > 1500 && refused > 1500,
+        "the vector set must exercise both sides: {in_range} in range, {refused} refused"
+    );
 }
 
 #[test]
@@ -59,13 +79,15 @@ fn k_does_not_fit_in_u128_for_an_eighteen_decimal_pair() {
     // program that stores `k` as the RFP's reference text describes cannot be
     // written for this pair.
     let vt: u128 = 1_000_000_000 * 10u128.pow(18); // 1e9 tokens
-    let vc: u128 = 1_000_000 * 10u128.pow(18);     // 1e6 collateral
+    let vc: u128 = 1_000_000 * 10u128.pow(18); // 1e6 collateral
     assert!(vt.checked_mul(vc).is_none(), "k unexpectedly fit in u128");
 
     // The curve prices it regardless, because k is never materialised: each
     // formula folds into one mul_div with a 256-bit intermediate.
     let c = Curve::new(vt, vc, 500_000_000 * 10u128.pow(18)).unwrap();
-    let out = c.quote_buy(1_000 * 10u128.pow(18)).expect("pricing must not overflow");
+    let out = c
+        .quote_buy(1_000 * 10u128.pow(18))
+        .expect("pricing must not overflow");
     assert!(out > 0, "an 18-decimal pair must be priceable");
 }
 
@@ -102,10 +124,18 @@ fn a_buy_then_an_immediate_sell_never_profits() {
     let mut c = Curve::new(10u128.pow(24), 10u128.pow(21), 10u128.pow(23)).unwrap();
     for c_in in [10u128.pow(12), 10u128.pow(15), 10u128.pow(18)] {
         let mut probe = c;
-        let tokens = match probe.buy(c_in, 0) { Ok(t) => t, Err(_) => continue };
-        let back = match probe.sell(tokens, 0) { Ok(b) => b, Err(_) => continue };
-        assert!(back <= c_in,
-                "round trip returned {back} for {c_in} in — the pool paid the trader to trade");
+        let tokens = match probe.buy(c_in, 0) {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        let back = match probe.sell(tokens, 0) {
+            Ok(b) => b,
+            Err(_) => continue,
+        };
+        assert!(
+            back <= c_in,
+            "round trip returned {back} for {c_in} in — the pool paid the trader to trade"
+        );
     }
     let _ = c.buy(10u128.pow(15), 0);
 }
@@ -115,9 +145,20 @@ fn the_reserve_accounting_never_drifts() {
     struct Rng(u128);
     impl Rng {
         fn next(&mut self) -> u128 {
-            let mut x = self.0; x ^= x << 23; x ^= x >> 17; x ^= x << 5; self.0 = x; x
+            let mut x = self.0;
+            x ^= x << 23;
+            x ^= x >> 17;
+            x ^= x << 5;
+            self.0 = x;
+            x
         }
-        fn below(&mut self, n: u128) -> u128 { if n == 0 { 0 } else { self.next() % n } }
+        fn below(&mut self, n: u128) -> u128 {
+            if n == 0 {
+                0
+            } else {
+                self.next() % n
+            }
+        }
     }
     let mut rng = Rng(0x0bad_c0de_0bad_c0de);
     let d = 10u128.pow(23);
@@ -127,18 +168,31 @@ fn the_reserve_accounting_never_drifts() {
         let mut paid_in: u128 = 0;
         let mut paid_out: u128 = 0;
         for _ in 0..80 {
-            if rng.next() % 2 == 0 {
+            if rng.next().is_multiple_of(2) {
                 let amt = rng.below(10u128.pow(19)).max(1);
-                if let Ok(out) = c.buy(amt, 0) { held += out; paid_in += amt }
+                if let Ok(out) = c.buy(amt, 0) {
+                    held += out;
+                    paid_in += amt
+                }
             } else if held > 0 {
                 let amt = rng.below(held).max(1);
-                if let Ok(out) = c.sell(amt, 0) { held -= amt; paid_out += out }
+                if let Ok(out) = c.sell(amt, 0) {
+                    held -= amt;
+                    paid_out += out
+                }
             }
             // Tokens are conserved: what the pool no longer has, a trader holds.
             assert_eq!(c.sale_reserve + held, d, "token accounting drifted");
             // The pool never pays out more collateral than it took in.
-            assert!(paid_out <= paid_in, "pool paid out {paid_out} having taken {paid_in}");
-            assert_eq!(c.real_collateral, paid_in - paid_out, "collateral accounting drifted");
+            assert!(
+                paid_out <= paid_in,
+                "pool paid out {paid_out} having taken {paid_in}"
+            );
+            assert_eq!(
+                c.real_collateral,
+                paid_in - paid_out,
+                "collateral accounting drifted"
+            );
         }
     }
 }
@@ -155,13 +209,19 @@ fn dust_and_near_exhaustion() {
     // and the implementation was right; it is kept in this shape as the record.
     let one = c.quote_buy(1).unwrap();
     let exact_bound = vt - mul_div_floor(vt, vc, vc + 1).unwrap();
-    assert!(one <= exact_bound && one > 0, "1-unit buy returned {one}, bound {exact_bound}");
+    assert!(
+        one <= exact_bound && one > 0,
+        "1-unit buy returned {one}, bound {exact_bound}"
+    );
 
     // The whole sale reserve must be quotable, not overflow.
     assert!(c.quote_buy_exact_out(d).unwrap() > 0);
 
     // Beyond the sale reserve is refused by name, before any arithmetic.
-    assert_eq!(c.quote_buy_exact_out(d + 1), Err(CurveError::ExceedsSaleReserve));
+    assert_eq!(
+        c.quote_buy_exact_out(d + 1),
+        Err(CurveError::ExceedsSaleReserve)
+    );
 }
 
 #[test]
@@ -170,7 +230,11 @@ fn a_sell_can_never_drain_more_than_the_pool_holds() {
     let bought = c.buy(10u128.pow(18), 0).unwrap();
     match c.quote_sell(bought.saturating_mul(1_000)) {
         Err(CurveError::ExceedsRealCollateral) => {}
-        Ok(v) => assert!(v <= c.real_collateral, "sell would pay {v} from {}", c.real_collateral),
+        Ok(v) => assert!(
+            v <= c.real_collateral,
+            "sell would pay {v} from {}",
+            c.real_collateral
+        ),
         Err(e) => panic!("unexpected {e:?}"),
     }
 }
@@ -179,13 +243,19 @@ fn a_sell_can_never_drain_more_than_the_pool_holds() {
 fn slippage_refuses_before_state_moves() {
     let mut c = Curve::new(10u128.pow(24), 10u128.pow(21), 10u128.pow(23)).unwrap();
     let before = c;
-    assert_eq!(c.buy(10u128.pow(18), u128::MAX), Err(CurveError::SlippageExceeded));
+    assert_eq!(
+        c.buy(10u128.pow(18), u128::MAX),
+        Err(CurveError::SlippageExceeded)
+    );
     assert_eq!(c, before, "state moved on a refused buy");
 }
 
 #[test]
 fn creation_refuses_a_curve_that_prices_its_last_token_at_infinity() {
-    assert_eq!(Curve::new(100, 10, 100), Err(CurveError::VirtualTokenReserveTooSmall));
+    assert_eq!(
+        Curve::new(100, 10, 100),
+        Err(CurveError::VirtualTokenReserveTooSmall)
+    );
     assert_eq!(Curve::new(0, 10, 5), Err(CurveError::ZeroAmount));
     assert!(Curve::new(101, 10, 100).is_ok());
 }
