@@ -11,8 +11,8 @@
 //! bounded, that it is *reported* rather than assumed, and that it never
 //! rounds in the trader's favour.
 
-use antumbra_curve::weighted::*;
-use antumbra_curve::CurveError;
+use antumbra::weighted::*;
+use antumbra::CurveError;
 
 fn vectors() -> Vec<(u128, u128, u128, u128)> {
     include_str!("vectors/pow.txt")

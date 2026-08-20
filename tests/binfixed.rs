@@ -3,9 +3,9 @@
 //! two are comparable rather than merely both "tested". Same vectors, same
 //! bound, same rounding-direction question.
 
-use antumbra_curve::binfixed;
-use antumbra_curve::weighted;
-use antumbra_curve::CurveError;
+use antumbra::binfixed;
+use antumbra::weighted;
+use antumbra::CurveError;
 
 fn vectors() -> Vec<(u128, u128, u128, u128)> {
     include_str!("vectors/pow.txt")

@@ -2,8 +2,8 @@
 //! Every assertion here corresponds to a claim made about the vesting math.
 //! If a claim is not testable it should not be made.
 
-use antumbra_curve::vesting::{Kind, Schedule, MAX_MILESTONES};
-use antumbra_curve::CurveError;
+use antumbra::vesting::{Kind, Schedule, MAX_MILESTONES};
+use antumbra::CurveError;
 
 /// A schedule whose span does not divide its total, so every linear step has a
 /// residue and exactness is not free.

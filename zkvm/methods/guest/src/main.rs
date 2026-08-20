@@ -9,10 +9,10 @@
 use core::hint::black_box;
 use risc0_zkvm::guest::env;
 
-use antumbra_curve::weighted::{exp_neg, neg_ln, pow_frac, weight_at, weighted_buy, ONE};
-use antumbra_curve::binfixed;
-use antumbra_curve::vesting::Schedule;
-use antumbra_curve::Curve;
+use antumbra::weighted::{exp_neg, neg_ln, pow_frac, weight_at, weighted_buy, ONE};
+use antumbra::binfixed;
+use antumbra::vesting::Schedule;
+use antumbra::Curve;
 
 /// `x` at 1e18, then the weight ratio `num/den`. Spans the range an LBP
 /// actually sweeps: 99/1 down to 1/99, and `x` from just under one to 1e-18.

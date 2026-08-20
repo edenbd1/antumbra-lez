@@ -1,6 +1,6 @@
-# antumbra-curve
+# antumbra-lez
 
-[![CI](https://github.com/edenbd1/antumbra-curve/actions/workflows/ci.yml/badge.svg)](https://github.com/edenbd1/antumbra-curve/actions/workflows/ci.yml)
+[![CI](https://github.com/edenbd1/antumbra-lez/actions/workflows/ci.yml/badge.svg)](https://github.com/edenbd1/antumbra-lez/actions/workflows/ci.yml)
 
 Integer-only constant-product bonding curve math for the Logos Execution Zone,
 written for [λPrize RFP-015](https://github.com/logos-co/rfp/blob/master/RFPs/RFP-015-bonding-curve-launchpad.md).

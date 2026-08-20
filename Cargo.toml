@@ -1,9 +1,9 @@
 [package]
-name    = "antumbra-curve"
+name    = "antumbra"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "Integer-only constant-product bonding curve math for LEZ, with 256-bit intermediates and rounding that always favours the pool."
+description = "Integer-only arithmetic for LEZ launchpads and vesting: 256-bit intermediates, a binary-scale fractional power, and rounding that always favours the pool."
 
 [dependencies]
 

@@ -11,7 +11,7 @@
 //! bits. Those are the interesting ones: the implementation must refuse them
 //! by name rather than return a truncated number.
 
-use antumbra_curve::*;
+use antumbra::*;
 
 /// One line of the Python-generated oracle: `a`, `b`, `d`, then the exact
 /// floor and ceiling quotients, or `None` where the true quotient does not fit
