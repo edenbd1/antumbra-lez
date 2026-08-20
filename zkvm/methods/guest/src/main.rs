@@ -11,6 +11,7 @@ use risc0_zkvm::guest::env;
 
 use antumbra::weighted::{exp_neg, neg_ln, pow_frac, weight_at, weighted_buy, ONE};
 use antumbra::binfixed;
+use antumbra::fees::{buy_fee, close_fee, FeeConfig, CAP_AT_CLOSE, CAP_PER_SWAP};
 use antumbra::vesting::Schedule;
 use antumbra::Curve;
 
@@ -206,6 +207,21 @@ fn main() {
         .collect();
     let (m, lo, hi) = stats(&v);
     out.push(("signal_milestone", m, lo, hi, v.len()));
+
+    // Fees, for the per-operation tables both launchpad RFPs ask for.
+    let cfg = FeeConfig::new(10_000, CAP_PER_SWAP).unwrap();
+    let v: Vec<u64> = (1..13u128)
+        .map(|i| timed(baseline, || buy_fee(&cfg, black_box(i * ONE))))
+        .collect();
+    let (m, lo, hi) = stats(&v);
+    out.push(("buy_fee", m, lo, hi, v.len()));
+
+    let cfg2 = FeeConfig::new(50_000, CAP_AT_CLOSE).unwrap();
+    let v: Vec<u64> = (1..13u128)
+        .map(|i| timed(baseline, || close_fee(&cfg2, black_box(i * 1_000 * ONE))))
+        .collect();
+    let (m, lo, hi) = stats(&v);
+    out.push(("close_fee", m, lo, hi, v.len()));
 
     // A whole buy, start to finish, as the program would run it.
     let total = {

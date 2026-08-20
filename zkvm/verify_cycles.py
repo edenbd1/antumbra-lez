@@ -29,6 +29,8 @@ DOC_LABEL = {
     "vesting_claim":       "`vesting_claim`",
     "vesting_cancel":      "`vesting_cancel`",
     "signal_milestone":    "`signal_milestone`",
+    "buy_fee":             "`buy_fee`",
+    "close_fee":           "`close_fee`",
 }
 
 def main():

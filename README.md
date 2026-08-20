@@ -184,6 +184,26 @@ Not just that the tests pass.
   that stopped being true, and nobody notices until someone reproduces it. So
   `zkvm/verify_cycles.py` fails the build instead.
 
+## Fees
+
+`src/fees.rs` implements both collection models, because the two RFPs differ for
+a reason that decides the code. A bonding curve is demand-bounded — under 1.4%
+ever graduate — so its fee is per swap or it earns nothing. An LBP is
+time-bounded, so every sale reaches its end and an at-close fee is always
+collectible.
+
+Every fee rounds **up**, against the party paying: the trader on a swap, the
+creator at close. And the ordering on a buy is asserted rather than commented —
+the fee comes off *before* pricing, so the curve prices `c_in - fee`. Taking it
+after would credit the curve with collateral the treasury removes, inflating the
+reserve by the fee on every trade; the test constructs both and asserts the
+correct one ends with less.
+
+Both proposals ship at a zero rate with a governance switch, so the cap is
+compiled in: 1% per swap, 5% at close. A rate above it is **refused by name, not
+clamped** — silently clamping a misconfiguration hides it from the person who
+needs to see it.
+
 ## Status
 
 This is the pricing core, not the program. The SPEL program, the private

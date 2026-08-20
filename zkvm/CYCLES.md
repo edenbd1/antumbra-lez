@@ -29,6 +29,8 @@ The number that matters is LEZ's 32,000,000-cycle public-execution cap.
 | `vesting_claim` | 12 | 8,808 | 124 | 8,808 |
 | `vesting_cancel` | 12 | 8,840 | 186 | 8,840 |
 | `signal_milestone` | 12 | **30** | 30 | 30 |
+| `buy_fee` | 12 | 8,216 | 8,216 | 8,216 |
+| `close_fee` | 12 | 8,230 | 8,230 | 8,230 |
 
 A whole constant-product buy, from `Curve::new` through `buy`, is 10,722
 cycles end to end.
@@ -54,6 +56,12 @@ input-dependent branch. `signal_milestone` is **30 cycles**, because idempotence
 is a compare-and-set on a bitmap rather than a search through a list of
 already-signalled indices. Choosing the data structure was the whole
 optimisation.
+
+**Both fee paths cost one division and nothing else.** 8,216 and 8,230 cycles,
+flat, because a fee is a single `mul_div_ceil` and the rest is a subtraction.
+Whether the fee comes off before pricing (RFP-015's buy) or after (its sell, and
+RFP-016's close) changes the economics entirely and the cost not at all — so
+the ordering can be chosen on its merits rather than traded against a budget.
 
 **The fractional power was expensive, and the fix was worth measuring rather
 than arguing.** The first version held its working scale in decimal, so each of
