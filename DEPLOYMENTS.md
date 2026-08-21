@@ -247,6 +247,24 @@ equals the denominator and the whole total comes out with no residue to strand �
 the same exactness the linear path buys by special-casing its final step, here
 obtained for free.
 
+**Transferability and the one-way conversion, with the refusals that define
+them.** A transferable schedule
+([`a5c1eef1…`](https://explorer.testnet.lez.logos.co/transaction/a5c1eef17d852681b1e993fa0dff2ca55a370d48aa43fe6f1995e175ec53487b)):
+
+| attempt | outcome |
+|---|---|
+| the **creator** transfers the beneficiary | **refused** |
+| the **holder** transfers it | [`9b87fc9d…c372e4dd89`](https://explorer.testnet.lez.logos.co/transaction/9b87fc9d37839828733d736c4e1bf36f129fbe257d5e0b8bf5ed63c372e4dd89) — the account reads the new beneficiary |
+| `make_non_cancelable` | [`ced7d77e…68cefffe`](https://explorer.testnet.lez.logos.co/transaction/ced7d77ea0495943cb2faac477212cd8699d6cb28aebf63ccb7a65da68cefffe) — the flag reads 0 |
+| `cancel` afterwards | **refused**, and `cancelled_at` still reads 0 |
+| `make_non_cancelable` again | **refused** |
+
+The first row is the one worth having. A creator who could reassign a
+beneficiary could redirect vested compensation to themselves, so the holder moves
+the position and nobody else — and the transferability flag is read on that path
+and written on none, which is what **F4**'s "cannot be changed after creation"
+requires.
+
 **And `record_claim` was deleted rather than kept.** It advanced a schedule
 without paying, from before the payout worked. Shipping it beside
 `claim_and_pay` would offer two instructions where one records a claim that never

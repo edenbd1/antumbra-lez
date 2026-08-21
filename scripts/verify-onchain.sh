@@ -76,6 +76,10 @@ check vest    ms-claim-1      a47a1d3383abaa17e9cdff57977b2d18e542ba711fe5f0de77
 check vest    ms-signal-1     9b2d01803ea362c61e4f1a87d0305d8d3da3c53ebf2023234836062a4a82b278 yes
 check vest    ms-claim-2      7e7b87ab9e97a2cce98bab3cb11156ef0bb66d8811940fa84e18080186921e4e yes
 
+check vest    xfer-create     a5c1eef17d852681b1e993fa0dff2ca55a370d48aa43fe6f1995e175ec53487b yes
+check vest    xfer-by-holder  9b87fc9d37839828733d736c4e1bf36f129fbe257d5e0b8bf5ed63c372e4dd89 yes
+check vest    make-noncancel  ced7d77ea0495943cb2faac477212cd8699d6cb28aebf63ccb7a65da68cefffe yes
+
 echo
 echo "  -- the per-swap fee: accrued on the buy, swept on its own --"
 check fee     deploy          53e149f997a343c91af6223b101889330cca46a1ad4ec92dadd5d8d9ba72bc91 yes
@@ -107,9 +111,9 @@ check CONTROL never-deployed  dedededededededededededededededededededededededede
 echo
 if [ "$fail" -eq 0 ]; then
   {
-  echo "All forty-four expected transactions resolve."
+  echo "All forty-seven expected transactions resolve."
   echo "Neither the never-deployed hash nor the refused vesting payout does, which is"
-  echo "what makes the other forty-four mean something."
+  echo "what makes the other forty-seven mean something."
 }
 else
   echo "Something above did not hold." >&2
