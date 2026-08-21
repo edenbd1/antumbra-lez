@@ -13,11 +13,21 @@ sides of the transaction that changed it, and
 in one command — including two that must **not** resolve, because a check with
 no negative control is not a check.
 
-**The current deployments.** Each is content-addressed —
-`SHA256(u32_le(len) ‖ bytecode)` — so the ImageID *is* the version, and
-rebuilding from the same source reproduces the same address whoever runs the
-build. That also means the earlier ImageIDs quoted further down are not stale
-links but earlier *programs*, each one still on chain and still fetchable.
+**The current deployments.** Each is content-addressed, so the ImageID *is* the
+version: rebuilding from the same source reproduces the same program id whoever
+runs the build. That also means the earlier ImageIDs quoted further down are not
+stale links but earlier *programs*, each one still on chain and still fetchable.
+
+Two digests are involved and this document previously ran them together, so they
+are worth separating. The **ImageID** is what a program is called by, derived by
+RISC0 from the guest ELF; `spel program-id` prints it, and it is the number in
+the table below. `SHA256(u32_le(len) ‖ bytecode)` over the packaged `.bin` is a
+different number — it is what the **deploy transaction** hashes to. For
+`antumbra_curve` those are `49db0fc9…` and `f074ffe1…` respectively, and the
+second is exactly the deploy hash in the table, for all three programs. Both are
+useful: the ImageID identifies the program, the digest lets you check that a file
+you hold is the file that was deployed without asking an explorer to vouch for
+it. Neither substitutes for the other.
 
 | Program | RFP | ImageID | Deploy | Block |
 |---|---|---|---|---|
@@ -28,6 +38,21 @@ links but earlier *programs*, each one still on chain and still fetchable.
 The four facts in that table — freeze commit, ImageID, deploy transaction,
 block — are the convention `logos-co/lez-payment-streams` sets for its own live
 program. They are what makes a deployment checkable rather than asserted.
+
+**The builds the RFP issues cite, and where they went.** The three proposals
+quote the deployments that were *driven*, which are the earlier programs, not the
+top table. Both sets are live and neither supersedes the other on chain, so the
+earlier ImageIDs are recorded here rather than left for a reviewer to reconcile:
+
+| Program | RFP | ImageID | Deploy | Block | Driven by |
+|---|---|---|---|---|---|
+| `antumbra_curve` | [015](https://github.com/logos-co/rfp/issues/179) | `bcd6d07d27bb0d2ea8c237c46125018e5115815173025a1a24aca505835f1a23` | [`25a8f405…b42f1718`](https://explorer.testnet.lez.logos.co/transaction/25a8f4051b60ff471cb30d9655217e7b172b9b43f3977be327956fd2b42f1718) | 16339 | `create_sale`, `execute_buy` |
+| `antumbra_lbp` | [016](https://github.com/logos-co/rfp/issues/180) | `249648dcf6e2fe70e81c0315bdc5737037d3f343e3362697575dd0a30bbe0e08` | [`f765ec06…98b4eac2`](https://explorer.testnet.lez.logos.co/transaction/f765ec06ae391c8d9e754f40947398cf15d66c9967f2fda23894d30098b4eac2) | 16342 | `create_pool`, `execute_buy` |
+| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/178) | `26134c7901b2cb8c2dac5889155ef17be988d5cd7b77f2af8df10e39a6c235be` | [`f45a7b2f…0b928030`](https://explorer.testnet.lez.logos.co/transaction/f45a7b2fc835e75e9633e6fe8cd00687146f2b05b22591ff38baeec80b928030) | 16335 | `create_schedule`, `record_claim` |
+
+Each ImageID there is checkable without trusting this table: fetch any driven
+transaction and read its `program_id` field, which is the ImageID that executed
+it. `scripts/verify-onchain.sh` covers the deploy hashes.
 
 **These three carry a fix for an attack the earlier ones were open to.** LEZ
 deployment is permissionless, so anyone may deploy a program and own accounts
