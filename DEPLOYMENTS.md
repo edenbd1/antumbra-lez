@@ -3,20 +3,38 @@
 Three SPEL programs, one per open RFP proposal, live on
 `https://testnet.lez.logos.co` and fetchable by anyone.
 
-The four facts below are the convention `logos-co/lez-payment-streams` sets for
-its own live program, and they are what makes a deployment checkable rather than
-asserted: the commit the guest was frozen at, the ImageID, the deploy
-transaction, and the block.
+**They do not merely exist. They move value.** A bonding-curve buy debits the
+buyer and credits the sale's escrow; the fee is accrued, swept, and the creator
+is paid at close. A weighted-pool buy does the same on its own at-close fee
+model. A vesting schedule is funded, and a claim pays the beneficiary out of an
+escrow the program owns. Every figure below was read back from the chain on both
+sides of the transaction that changed it, and
+[`scripts/verify-onchain.sh`](scripts/verify-onchain.sh) re-checks all thirty-six
+in one command — including two that must **not** resolve, because a check with
+no negative control is not a check.
 
-| Program | RFP | ImageID | Deploy transaction | Block |
+**The current deployments.** Each is content-addressed —
+`SHA256(u32_le(len) ‖ bytecode)` — so the ImageID *is* the version, and
+rebuilding from the same source reproduces the same address whoever runs the
+build. That also means the earlier ImageIDs quoted further down are not stale
+links but earlier *programs*, each one still on chain and still fetchable.
+
+| Program | RFP | ImageID | Deploy | Block |
 |---|---|---|---|---|
-| `antumbra_curve` | [015](https://github.com/logos-co/rfp/issues/179) | `bcd6d07d27bb0d2ea8c237c46125018e5115815173025a1a24aca505835f1a23` | [`25a8f405…b42f1718`](https://explorer.testnet.lez.logos.co/transaction/25a8f4051b60ff471cb30d9655217e7b172b9b43f3977be327956fd2b42f1718) | 16339 |
-| `antumbra_lbp` | [016](https://github.com/logos-co/rfp/issues/180) | `249648dcf6e2fe70e81c0315bdc5737037d3f343e3362697575dd0a30bbe0e08` | [`f765ec06…98b4eac2`](https://explorer.testnet.lez.logos.co/transaction/f765ec06ae391c8d9e754f40947398cf15d66c9967f2fda23894d30098b4eac2) | 16342 |
-| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/178) | `26134c7901b2cb8c2dac5889155ef17be988d5cd7b77f2af8df10e39a6c235be` | [`f45a7b2f…0b928030`](https://explorer.testnet.lez.logos.co/transaction/f45a7b2fc835e75e9633e6fe8cd00687146f2b05b22591ff38baeec80b928030) | 16335 |
+| `antumbra_curve` | [015](https://github.com/logos-co/rfp/issues/179) | `00125787449cfcd10ea68ccbe5f6dca1c1b726048315731a1657bf0de074a670` | [`e63783c8…533f9b9c`](https://explorer.testnet.lez.logos.co/transaction/e63783c89976833aaa033394e89f1db302a01f8a3c99bf786648de02533f9b9c) | 16743 |
+| `antumbra_lbp` | [016](https://github.com/logos-co/rfp/issues/180) | `566105bb5a7bf438b4e38b266fb2ded2d32163ecc698856e6a019a1597fc3a21` | [`9138f911…0015b3ba`](https://explorer.testnet.lez.logos.co/transaction/9138f9111e708ba1c39feded3413352e1efd341c5fa1cfc08c003e3d0015b3ba) | 16766 |
+| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/178) | `2167726cd877fbc38eae9bf2cfa1d95b41ed6812b189a7e9df4b6972240c1c3c` | [`ef50f007…1251e700`](https://explorer.testnet.lez.logos.co/transaction/ef50f00718096f428aa59ec79492eb8563a1011d1b1fbb5b82c97b371251e700) | 16687 |
 
-Deployment is content-addressed — `SHA256(u32_le(len) ‖ bytecode)` — so the
-ImageID **is** the version, and rebuilding from the same source reproduces the
-same address whoever runs the build.
+The four facts in that table — freeze commit, ImageID, deploy transaction,
+block — are the convention `logos-co/lez-payment-streams` sets for its own live
+program. They are what makes a deployment checkable rather than asserted.
+
+**And several sections below record something the platform refused.** Those are
+not failures kept for honesty's sake; each one changed the design, and two of
+them corrected an explanation this document had already published. The
+corrections are left visible because the loop that produced them — measure,
+explain, let a test refuse the explanation, correct — is the part worth
+evaluating.
 
 ## They are not only deployed — they have been driven, and the answers match
 
