@@ -207,6 +207,29 @@ than in policy.
 The sale's `real_collateral` reads **1**, not 2 — the curve was priced on what it
 received after the fee, which is the ordering §8 argues, visible on chain.
 
+### And the sale closes and pays the creator
+
+A second sale was sized so that a single buy exhausts its reserve, which is
+**F4**'s automatic close, and then the creator withdrew — which is **F5**.
+
+| step | transaction | effect |
+|---|---|---|
+| deploy (`00125787…`) | [`e63783c8…533f9b9c`](https://explorer.testnet.lez.logos.co/transaction/e63783c89976833aaa033394e89f1db302a01f8a3c99bf786648de02533f9b9c) | block 16743 |
+| `create_sale` (Vt 1000, Vc 1, reserve 500) | [`6fedb9b3…af2822c0`](https://explorer.testnet.lez.logos.co/transaction/6fedb9b30ce2f702dc0733f612563315f2770e042467f2945a04638eaf2822c0) | |
+| `withdraw` **before** the close | — | **refused**, tokens remain unsold |
+| `execute_buy` of 1 | [`554ed18d…66ef680d`](https://explorer.testnet.lez.logos.co/transaction/554ed18d74ac875077be52a39308b1440e5707bf269f299317c73aac66ef680d) | buys exactly 500, reserve → 0 |
+| `withdraw` **after** | [`ad96e838…7f6c2bce`](https://explorer.testnet.lez.logos.co/transaction/ad96e838b802d9e998944e9e67f5717c8490bfeef64b028d7f4484bc7f6c2bce) | holding **1 → 0**, creator **0 → 1** |
+| `withdraw` a second time | — | **refused**, nothing left |
+
+Two refusals bracket the payout, and they are the reason to trust it. A creator
+who could withdraw mid-sale would be taking collateral that still backs unsold
+tokens, and one who could withdraw twice would be taking it from the next sale.
+
+`withdraw` also pays **the holding less the accrued fee**, explicitly rather
+than by arithmetic accident: the fee is the protocol's and `collect_fees` moves
+it, so paying out the whole holding would quietly hand over revenue already
+earned.
+
 ### Two things the platform taught us here, both by refusing something
 
 **A transaction cannot both chain a call that credits an account and write that

@@ -230,6 +230,78 @@ mod antumbra_curve {
         ))
     }
 
+    /// Close the sale and pay the creator the collateral raised.
+    ///
+    /// Only once the sale reserve is exhausted, which is **F4**'s close
+    /// condition: a creator who could withdraw mid-sale would be withdrawing
+    /// collateral that still backs unsold tokens.
+    ///
+    /// The accrued fee is deliberately **not** included. It is the protocol's,
+    /// not the creator's, and `collect_fees` moves it; paying out the whole
+    /// holding here would quietly hand over revenue that was already earned.
+    /// The check is explicit rather than implied by arithmetic, because a
+    /// rounding change elsewhere should not be able to turn it into a payout.
+    #[instruction]
+    pub fn withdraw(
+        ctx: ProgramContext,
+        #[account(pda = [arg("sale_id")])] sale: AccountWithMetadata,
+        #[account(mut, pda = [arg("sale_id"), literal("holding")])]
+        mut holding: AccountWithMetadata,
+        #[account(mut, signer)] mut creator: AccountWithMetadata,
+        sale_id: [u8; 32],
+    ) -> SpelResult {
+        let _ = sale_id;
+        if sale.account.program_owner != ctx.self_program_id
+            || holding.account.program_owner != ctx.self_program_id
+        {
+            return Err(SpelError::custom(
+                E_NOT_ANCHORED,
+                "sale or holding is not owned by this program",
+            ));
+        }
+        let state = Sale::try_from_slice(&sale.account.data)
+            .map_err(|_| SpelError::custom(E_BAD_SALE, "sale failed to deserialize"))?;
+
+        if &state.creator != creator.account_id.value() {
+            return Err(SpelError::custom(
+                E_TREASURY_MISMATCH,
+                "signer is not the creator of this sale",
+            ));
+        }
+        if state.sale_reserve != 0 {
+            return Err(SpelError::custom(
+                E_CLOSED,
+                "the sale has not closed: tokens remain unsold",
+            ));
+        }
+
+        // Whatever the holding carries, less what the protocol has earned and
+        // not yet swept.
+        let payable = holding
+            .account
+            .balance
+            .checked_sub(state.fees_accrued)
+            .ok_or_else(|| {
+                SpelError::custom(E_TREASURY_OVERFLOW, "holding is short of the accrued fee")
+            })?;
+        if payable == 0 {
+            return Err(SpelError::custom(E_PRICING_REFUSED, "nothing to withdraw"));
+        }
+
+        holding.account.balance = holding
+            .account
+            .balance
+            .checked_sub(payable)
+            .ok_or_else(|| SpelError::custom(E_TREASURY_OVERFLOW, "holding underflow"))?;
+        creator.account.balance = creator
+            .account
+            .balance
+            .checked_add(payable)
+            .ok_or_else(|| SpelError::custom(E_TREASURY_OVERFLOW, "creator balance overflow"))?;
+
+        Ok(SpelOutput::execute(vec![sale, holding, creator], vec![]))
+    }
+
     /// Price and record a buy.
     ///
     /// The arithmetic is `antumbra::Curve::buy`: `tokens_out` rounds down, so the
