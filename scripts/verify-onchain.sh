@@ -65,6 +65,10 @@ check paid    vest-payout     a84e5ff1efda083de4f94f2ec9f89dc800e0ea4d864e071efd
 # debits the program's own holding PDA instead, and is checked above.
 check REFUSED vesting-payout  b97945c950df1134dcbdf14700b572f026b4446eb289b5054448a35f457ee29a no
 
+echo "  -- pause, and what it cannot pause --"
+check pause   set-paused      f51fa03e27edc9fad0ec62cd4a702532e73eef16772d37293933c78f2bc8fe8a yes
+check pause   resume          117ca8eeadc8f5afa889ca5c5675265ec152a2ab18e84c092135922b52dfccad yes
+
 echo
 echo "  -- vesting: cancellation and milestones --"
 check vest    cancel-create   85316f14c130cc58cd08a6b6f76ced688220203cc9188ff1b4de11159a20aa76 yes
@@ -111,9 +115,9 @@ check CONTROL never-deployed  dedededededededededededededededededededededededede
 echo
 if [ "$fail" -eq 0 ]; then
   {
-  echo "All forty-seven expected transactions resolve."
+  echo "All forty-nine expected transactions resolve."
   echo "Neither the never-deployed hash nor the refused vesting payout does, which is"
-  echo "what makes the other forty-seven mean something."
+  echo "what makes the other forty-nine mean something."
 }
 else
   echo "Something above did not hold." >&2

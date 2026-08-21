@@ -379,6 +379,26 @@ read account state to know what happened, never the transaction hash.** That is
 the same lesson as the silent refusals above, arriving from the opposite
 direction: on this platform, the hash tells you much less than you would expect.
 
+## Two refusals that are requirements in their own right
+
+**Slippage, checked the strongest way there is.** A buy demanding more tokens
+than the curve would give is refused — and the sale account is **byte-identical
+before and after**, compared as a whole rather than field by field. A partial
+write here would be the kind of corruption that only shows up three trades
+later.
+
+**Emergency stop, and the thing it cannot stop.** Pausing the pool
+([`f51fa03e…2bc8fe8a`](https://explorer.testnet.lez.logos.co/transaction/f51fa03e27edc9fad0ec62cd4a702532e73eef16772d37293933c78f2bc8fe8a))
+makes the account read `paused = 1` and the next buy is refused; resuming
+([`117ca8ee…52dfccad`](https://explorer.testnet.lez.logos.co/transaction/117ca8eeadc8f5afa889ca5c5675265ec152a2ab18e84c092135922b52dfccad))
+lets it through again.
+
+But the **weight schedule keeps moving**: 0.745 at t = 3500, 0.500 at 6000,
+0.206 at 9000, paused or not. A program cannot pause the clock, and the weight
+is a function of the clock. So a creator who pauses expecting the price schedule
+to freeze will find it did not — which is stated in the mini-app and in the docs
+rather than discovered during the incident the pause was reached for.
+
 ## The private path, run twice, with what it cost to learn
 
 RFP-015 and RFP-016 both ask for `deshield → buy → re-shield` through a fresh
