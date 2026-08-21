@@ -54,12 +54,15 @@ check paid    execute_buy     ea0eeb936cd43850354f44989d6dd1cda15e1e7353ee1f5a53
 check paid    lbp-deploy      65ccfc975bf88f589f91a1440fa5b40de4f9ee9f052dd59929f5ea36d6bea8e5 yes
 check paid    lbp-create      583aa01747742f7db3f2fdbf0632b2ddd7c09c3f1dd13df5e774ea4b6536e8f4 yes
 check paid    lbp-buy         9d981f120ec4b75d0b189691b014cff38c31bcd14df41833c509eb45e867d34c yes
-check paid    vesting-deploy  68421847bb411e82b4ef7ee75fc6b12d6b3e567b9e082bbb54246e56893bc4eb yes
-check paid    vesting-create  77c69dc394abc001b7be7780fca125e37f0e545ce362a99044379ddf1df52b1f yes
+check paid    vest-deploy     ef50f00718096f428aa59ec79492eb8563a1011d1b1fbb5b82c97b371251e700 yes
+check paid    vest-create     f54e045da3acc684fa94561fcc7d649f614b9824a05e5615cb41cd24b1bcfc21 yes
+check paid    vest-fund       9d9f0a9256b0893b2cdae7899d51a55bafedf1913361d4850003de99778fb2d9 yes
+check paid    vest-payout     a84e5ff1efda083de4f94f2ec9f89dc800e0ea4d864e071efda2ec0883b647e2 yes
 
-# The vesting payout is refused because the escrow did not sign, which is the
-# authority LP-0013 defines. Asserting it stays absent is a claim about the
-# platform, and it should fail loudly the day the platform changes.
+# The FIRST payout design chained a transfer out of an account that had signed
+# nothing, and was refused. Keeping the assertion keeps the fact: an unauthorized
+# third-party account cannot be debited by a chained call. The working design
+# debits the program's own holding PDA instead, and is checked above.
 check REFUSED vesting-payout  b97945c950df1134dcbdf14700b572f026b4446eb289b5054448a35f457ee29a no
 
 echo
@@ -77,9 +80,9 @@ check CONTROL never-deployed  dedededededededededededededededededededededededede
 echo
 if [ "$fail" -eq 0 ]; then
   {
-  echo "All twenty-three expected transactions resolve."
+  echo "All twenty-five expected transactions resolve."
   echo "Neither the never-deployed hash nor the refused vesting payout does, which is"
-  echo "what makes the other twenty-three mean something."
+  echo "what makes the other twenty-five mean something."
 }
 else
   echo "Something above did not hold." >&2

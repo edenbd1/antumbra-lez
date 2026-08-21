@@ -20,6 +20,24 @@
           }
         },
         {
+          "name": "holding",
+          "writable": true,
+          "signer": false,
+          "init": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "schedule_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
+        },
+        {
           "name": "creator",
           "writable": false,
           "signer": true,
@@ -58,15 +76,6 @@
         },
         {
           "name": "beneficiary",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "escrow",
           "type": {
             "array": [
               "u8",
@@ -117,6 +126,64 @@
       ]
     },
     {
+      "name": "fund_schedule",
+      "accounts": [
+        {
+          "name": "schedule",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "schedule_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holding",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "schedule_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "schedule_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u128"
+        }
+      ]
+    },
+    {
       "name": "claim_and_pay",
       "accounts": [
         {
@@ -134,15 +201,27 @@
           }
         },
         {
-          "name": "beneficiary",
-          "writable": false,
-          "signer": true,
-          "init": false
+          "name": "holding",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "schedule_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
         },
         {
-          "name": "escrow",
-          "writable": false,
-          "signer": false,
+          "name": "beneficiary",
+          "writable": true,
+          "signer": true,
           "init": false
         }
       ],

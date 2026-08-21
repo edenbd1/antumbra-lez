@@ -76,8 +76,9 @@ pub struct VestingSchedule {
     pub claimed: u128,
     pub last_seen: u64,
     pub beneficiary: [u8; 32],
-    /// The account holding the escrowed balance. Fixed at creation, so a claim
-    /// cannot name a different source.
+    /// The holding PDA's own address, recorded so a claim cannot name a
+    /// different source. It is derived from `[schedule_id, "holding"]`, so it is
+    /// this program's account and this program may debit it directly.
     pub escrow: [u8; 32],
 }
 
@@ -116,6 +117,8 @@ mod antumbra_vesting {
     #[instruction]
     pub fn create_schedule(
         #[account(init, pda = [arg("schedule_id")])] mut schedule: AccountWithMetadata,
+        #[account(init, pda = [arg("schedule_id"), literal("holding")])]
+        holding: AccountWithMetadata,
         #[account(signer)] creator: AccountWithMetadata,
         schedule_id: [u8; 32],
         kind: u8,
@@ -124,9 +127,9 @@ mod antumbra_vesting {
         end: u64,
         total: u128,
         beneficiary: [u8; 32],
-        escrow: [u8; 32],
     ) -> SpelResult {
         let _ = schedule_id;
+        let escrow = *holding.account_id.value();
         let state = VestingSchedule {
             kind,
             start,
@@ -142,7 +145,16 @@ mod antumbra_vesting {
         // is refused at creation rather than discovered at the first claim.
         rebuild(&state)?;
         write(&mut schedule.account, &state)?;
-        Ok(SpelOutput::execute(vec![schedule, creator], vec![]))
+
+        // The holding is created here and funded by `fund_schedule`, in a second
+        // transaction. Not a choice: an account cannot be initialised and paid
+        // into at once, because the chained transfer reads a pre-state the
+        // initialisation has not written yet. `lez-payment-streams` splits
+        // initialize_vault from deposit for the same reason.
+        Ok(SpelOutput::execute(
+            vec![schedule, holding, creator],
+            vec![],
+        ))
     }
 
     /// Record a claim of everything vested at `now`.
@@ -208,37 +220,80 @@ mod antumbra_vesting {
         Ok(SpelOutput::execute(vec![schedule, beneficiary], vec![]))
     }
 
-    /// Claim, and actually pay, by chaining a transfer out of the escrow.
+    /// Move `amount` from the creator into the schedule's holding.
     ///
-    /// THIS IS THE INSTRUCTION LP-0013 EXISTS FOR, AND IT IS HERE TO BE TRIED
+    /// The creator is not this program's account to debit, so the decrease is
+    /// declared as a chained call into the program that owns their balance —
+    /// they signed this transaction, which is what authorises it. The increase
+    /// on the holding needs no authority: any program may raise any balance.
+    #[instruction]
+    pub fn fund_schedule(
+        ctx: ProgramContext,
+        #[account(pda = [arg("schedule_id")])] schedule: AccountWithMetadata,
+        #[account(mut, pda = [arg("schedule_id"), literal("holding")])]
+        holding: AccountWithMetadata,
+        #[account(mut, signer)] creator: AccountWithMetadata,
+        schedule_id: [u8; 32],
+        amount: u128,
+    ) -> SpelResult {
+        let _ = schedule_id;
+        if schedule.account.program_owner != ctx.self_program_id {
+            return Err(SpelError::custom(
+                E_NOT_ANCHORED,
+                "no schedule is committed at this id",
+            ));
+        }
+        if holding.account.program_owner != ctx.self_program_id {
+            return Err(SpelError::custom(
+                E_ESCROW_UNOWNED,
+                "the holding account is not owned by this program",
+            ));
+        }
+        if amount == 0 {
+            return Err(SpelError::custom(E_ESCROW_SHORT, "zero funding amount"));
+        }
+        if creator.account.balance < amount {
+            return Err(SpelError::custom(
+                E_ESCROW_SHORT,
+                "the creator cannot cover this funding",
+            ));
+        }
+        let funding = nssa_core::program::ChainedCall::new(
+            creator.account.program_owner,
+            vec![creator.clone(), holding.clone()],
+            &AuthTransfer::Transfer { amount },
+        );
+        Ok(SpelOutput::execute(
+            vec![schedule, holding, creator],
+            vec![funding],
+        ))
+    }
+
+    /// Claim, and pay, by debiting this program's own holding account.
     ///
-    /// The launchpad programs next door take payment happily, because there the
-    /// payer is the buyer and **the buyer signs the transaction**: the runtime
-    /// marks a signer's account authorized, and `authenticated_transfer` will
-    /// debit an authorized account on a program's behalf.
+    /// WHY THIS WORKS TODAY, WITHOUT LP-0013
     ///
-    /// Vesting runs the other way. The payer is the escrow and the signer is the
-    /// beneficiary, so the escrow is not authorized — and it cannot be, because
-    /// requiring the escrow to sign every claim would mean the creator has to be
-    /// present for each one, which is the thing vesting exists to avoid.
+    /// LEZ rule 5 forbids a program from *decreasing* a balance it does not own.
+    /// It says nothing about increasing one — the RFP states the same thing from
+    /// the other side: "any program may increase any account's balance". So a
+    /// payout does not need an authority over the payer at all, provided the
+    /// payer is the program itself.
     ///
-    /// That gap is precisely what LP-0013's transfer authorities define: the
-    /// power to move a balance whose owner did not sign. It is awarded, merged
-    /// into the prize repository, and absent from the runtime — at tag v0.2.4
-    /// `lez/programs/token/src/` carries initialize, mint, burn, transfer,
-    /// new_definition and print_nft, and no authority module.
+    /// The holding is a PDA of this program, so debiting it is this program
+    /// debiting itself, and crediting the beneficiary is the permitted
+    /// direction. No chained call, no signature from the escrow, and nothing
+    /// waiting on LP-0013 — which would be needed only to move a balance held by
+    /// a *different* program, such as an SPL-style token account.
     ///
-    /// So this instruction is shipped deliberately and it is expected to be
-    /// refused on chain today. Its refusal is the measurement: it turns "LP-0013
-    /// is missing" from a sentence in a proposal into a transaction hash. When
-    /// the authority lands, this is the entry point that starts working, and
-    /// nothing else about the schedule changes.
+    /// This is the shape `logos-co/lez-payment-streams` uses for its own live
+    /// withdrawals, and payment streams are continuous vesting.
     #[instruction]
     pub fn claim_and_pay(
         ctx: ProgramContext,
         #[account(pda = [arg("schedule_id")])] mut schedule: AccountWithMetadata,
-        #[account(signer)] beneficiary: AccountWithMetadata,
-        escrow: AccountWithMetadata,
+        #[account(mut, pda = [arg("schedule_id"), literal("holding")])]
+        mut holding: AccountWithMetadata,
+        #[account(mut, signer)] mut beneficiary: AccountWithMetadata,
         schedule_id: [u8; 32],
         now: u64,
     ) -> SpelResult {
@@ -250,6 +305,15 @@ mod antumbra_vesting {
                 "no schedule is committed at this id",
             ));
         }
+        // The holding must be ours as well. A holding this program does not own
+        // is one it may not debit, and finding that out at the subtraction is
+        // finding it out too late.
+        if holding.account.program_owner != ctx.self_program_id {
+            return Err(SpelError::custom(
+                E_ESCROW_UNOWNED,
+                "the holding account is not owned by this program",
+            ));
+        }
         let mut state = VestingSchedule::try_from_slice(&schedule.account.data)
             .map_err(|_| SpelError::custom(E_BAD_SCHEDULE, "schedule failed to deserialize"))?;
 
@@ -259,10 +323,10 @@ mod antumbra_vesting {
                 "signer is not the beneficiary this schedule names",
             ));
         }
-        if &state.escrow != escrow.account_id.value() {
+        if &state.escrow != holding.account_id.value() {
             return Err(SpelError::custom(
                 E_ESCROW_MISMATCH,
-                "escrow is not the account this schedule was created with",
+                "holding is not the account this schedule was created with",
             ));
         }
         if now < state.last_seen {
@@ -271,36 +335,33 @@ mod antumbra_vesting {
                 "now is earlier than a timestamp this schedule has already seen",
             ));
         }
-        if escrow.account.program_owner == nssa_core::program::DEFAULT_PROGRAM_ID {
-            return Err(SpelError::custom(
-                E_ESCROW_UNOWNED,
-                "the escrow account is held by no program and cannot pay",
-            ));
-        }
 
         let mut sched = rebuild(&state)?;
         let amount = sched.claim(now).map_err(|_| {
             SpelError::custom(E_NOTHING_CLAIMABLE, "nothing is claimable at this time")
         })?;
-        if escrow.account.balance < amount {
-            return Err(SpelError::custom(
-                E_ESCROW_SHORT,
-                "the escrow cannot cover this claim",
-            ));
-        }
+
+        // Debit ours, credit theirs. Both are checked rather than saturating: an
+        // underflow here would mean the schedule promised more than the holding
+        // ever received, which is a bug to surface, not to absorb.
+        holding.account.balance = holding
+            .account
+            .balance
+            .checked_sub(amount)
+            .ok_or_else(|| SpelError::custom(E_ESCROW_SHORT, "the holding cannot cover this claim"))?;
+        beneficiary.account.balance = beneficiary
+            .account
+            .balance
+            .checked_add(amount)
+            .ok_or_else(|| SpelError::custom(E_ESCROW_SHORT, "beneficiary balance would overflow"))?;
 
         state.claimed = sched.claimed;
         state.last_seen = now;
         write(&mut schedule.account, &state)?;
 
-        let payout = nssa_core::program::ChainedCall::new(
-            escrow.account.program_owner,
-            vec![escrow.clone(), beneficiary.clone()],
-            &AuthTransfer::Transfer { amount },
-        );
         Ok(SpelOutput::execute(
-            vec![schedule, beneficiary, escrow],
-            vec![payout],
+            vec![schedule, holding, beneficiary],
+            vec![],
         ))
     }
 }

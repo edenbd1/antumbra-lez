@@ -123,7 +123,7 @@ end to end. The token path is one seam away, not one dependency away.
 The treasury address is fixed at `create_sale` and checked on every buy, so a
 buyer cannot redirect the proceeds by naming a different account.
 
-## The weighted pool pays too, and the vesting payout does not — which is the sharpest thing here
+## All three programs move real value now, and the last one corrected us
 
 `antumbra_lbp` was given the same chained-call escrow and behaves the same way:
 buyer **2 → 1**, treasury **2 → 3**, and the pool advanced to
@@ -137,44 +137,58 @@ with the weight 0.745 derived from the schedule rather than stored.
 | `create_pool` with a treasury | [`583aa017…6536e8f4`](https://explorer.testnet.lez.logos.co/transaction/583aa01747742f7db3f2fdbf0632b2ddd7c09c3f1dd13df5e774ea4b6536e8f4) | |
 | `execute_buy`, paid | [`9d981f12…e867d34c`](https://explorer.testnet.lez.logos.co/transaction/9d981f120ec4b75d0b189691b014cff38c31bcd14df41833c509eb45e867d34c) | |
 
-### And then the same pattern was tried on vesting, and refused
+### The vesting payout works too — and getting there corrected a claim we had already published
 
-`antumbra_vesting` ships a `claim_and_pay` that chains a transfer **out of the
-escrow** to the beneficiary. It is expected to fail, and it does. That refusal is
-the point: it turns "LP-0013 is missing" from a sentence in a proposal into
-something a reader can reproduce.
+The first attempt chained a transfer **out of the escrow**, and it was refused.
+The reading at the time was that this is what LP-0013 exists for. **That reading
+was wrong**, and the transaction that disproves it is below.
 
-**Why the launchpads pay and vesting cannot.** A chained transfer debits an
-account only if that account is *authorized*, and the runtime authorizes an
-account because **it signed the transaction**. On a buy, the payer is the buyer
-and the buyer signs — so it works. On a claim, the payer is the escrow and the
-signer is the beneficiary. The escrow is not authorized, and it cannot be:
-requiring it to sign every claim would mean the creator is present for each one,
-which is the thing vesting exists to avoid.
+**Why the first attempt failed.** A chained transfer debits an account only if
+that account is *authorized*, and the runtime authorizes an account because it
+signed. On a buy the payer is the buyer and the buyer signs. On a claim the payer
+was a plain account that had signed nothing. So the transfer was refused —
+correctly.
 
-That gap is exactly what LP-0013's transfer authorities define — the power to
-move a balance whose owner did not sign.
+**Why that does not mean vesting is blocked.** LEZ rule 5 forbids a program from
+**decreasing** a balance it does not own. It says nothing about increasing one,
+and RFP-017 states the same thing from the other side: *"any program may increase
+any account's balance"*. So make the escrow **a PDA of the vesting program
+itself**, and the payout needs no authority over anyone: the program debits its
+own account and credits the beneficiary, directly, with no chained call at all.
 
-**What the attempt actually did**, all read back from the chain:
+That is precisely how `logos-co/lez-payment-streams` performs its own live
+withdrawals — and payment streams are continuous vesting. The answer was in the
+ecosystem's own reference program the whole time.
 
-| | |
-|---|---|
-| submitted | `b97945c9…f457ee29a` |
-| on chain | **no** — `getTransaction` returns `null` |
-| escrow balance | 2 → **2** |
-| beneficiary balance | 1 → **1** |
-| schedule `claimed` | 0 → **0** |
-| schedule `last_seen` | 1000 → **1000** |
+**One structural detail, learned by failing at it.** An account cannot be
+initialised and paid into in the same transaction: the chained transfer reads a
+pre-state the initialisation has not written yet. `create_schedule` therefore
+creates the holding and `fund_schedule` fills it, exactly as
+`lez-payment-streams` splits `initialize_vault` from `deposit`.
 
-So the refusal is **whole**: no partial state, no half-paid claim. That is worth
-knowing on its own, because the alternative — a claim recorded but not paid —
-is the failure that loses a beneficiary's tokens.
+**The full lifecycle, on chain, balances read at every step:**
 
-**And the refusal is silent.** The wallet reports only *"Transaction not found in
-preconfigured amount of blocks"*; there is no rejection reason anywhere, because
-this revision has no event or receipt mechanism to carry one. An operator
-watching only the CLI cannot distinguish a refused transaction from a slow one.
-That is the same missing-events gap recorded above, met from the other side.
+| step | transaction | effect |
+|---|---|---|
+| deploy (`2167726c…`) | [`ef50f007…1251e700`](https://explorer.testnet.lez.logos.co/transaction/ef50f00718096f428aa59ec79492eb8563a1011d1b1fbb5b82c97b371251e700) | block 16687 |
+| `create_schedule` | [`f54e045d…b1bcfc21`](https://explorer.testnet.lez.logos.co/transaction/f54e045da3acc684fa94561fcc7d649f614b9824a05e5615cb41cd24b1bcfc21) | schedule + holding created |
+| `fund_schedule` | [`9d9f0a92…778fb2d9`](https://explorer.testnet.lez.logos.co/transaction/9d9f0a9256b0893b2cdae7899d51a55bafedf1913361d4850003de99778fb2d9) | creator **3 → 1**, holding **0 → 2** |
+| `claim_and_pay` | [`a84e5ff1…83b647e2`](https://explorer.testnet.lez.logos.co/transaction/a84e5ff1efda083de4f94f2ec9f89dc800e0ea4d864e071efda2ec0883b647e2) | holding **2 → 0**, beneficiary **1 → 3** |
+
+The schedule afterwards reads `total = 2`, `claimed = 2`, `last_seen = 2000`, and
+a **second** claim at the same timestamp is refused, because nothing is
+claimable. Paid once, recorded once.
+
+**So what is LP-0013 actually for, then?** Moving a balance held by a *different*
+program — an SPL-style token account — where the payer is neither the signer nor
+the program. Native-collateral vesting does not need it. A token-denominated
+sale still does, and that distinction is now measured rather than assumed, which
+is the only reason it is worth stating at all.
+
+The earlier refused transaction `b97945c9…f457ee29a` is kept and still asserted
+to return `null`, because the fact it establishes — an unauthorized third-party
+account cannot be debited by a chained call — is true and worth keeping. What
+changed is the conclusion drawn from it.
 
 ## The private path, run twice, with what it cost to learn
 
