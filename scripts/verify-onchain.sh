@@ -51,6 +51,18 @@ check paid    deploy-paying   b6ea6b6d79ac7e32ee52982426255412471d15d156ab197b73
 check paid    create_sale     7fa6b18cf81eb91624ecd9fa5e4e4d10ea8bd1da353a0a08c9786902866071b8 yes
 check paid    execute_buy     ea0eeb936cd43850354f44989d6dd1cda15e1e7353ee1f5a5348da3af581ddb9 yes
 
+check paid    lbp-deploy      65ccfc975bf88f589f91a1440fa5b40de4f9ee9f052dd59929f5ea36d6bea8e5 yes
+check paid    lbp-create      583aa01747742f7db3f2fdbf0632b2ddd7c09c3f1dd13df5e774ea4b6536e8f4 yes
+check paid    lbp-buy         9d981f120ec4b75d0b189691b014cff38c31bcd14df41833c509eb45e867d34c yes
+check paid    vesting-deploy  68421847bb411e82b4ef7ee75fc6b12d6b3e567b9e082bbb54246e56893bc4eb yes
+check paid    vesting-create  77c69dc394abc001b7be7780fca125e37f0e545ce362a99044379ddf1df52b1f yes
+
+# The vesting payout is refused because the escrow did not sign, which is the
+# authority LP-0013 defines. Asserting it stays absent is a claim about the
+# platform, and it should fail loudly the day the platform changes.
+check REFUSED vesting-payout  b97945c950df1134dcbdf14700b572f026b4446eb289b5054448a35f457ee29a no
+
+echo
 echo "  -- the private path, run twice with distinct ephemeral accounts --"
 check private init-eph-1     646f91b21d8faf80a249ee8a6ad5ad1a1e07c74517ee03ff3f4e305b49a8880d yes
 check private deshield-1     921b9e4f72425b65a5e0622e248ea7834de32215d785e24670d32ceb75de83ec yes
@@ -64,7 +76,11 @@ check CONTROL never-deployed  dedededededededededededededededededededededededede
 
 echo
 if [ "$fail" -eq 0 ]; then
-  echo "All eighteen transactions resolve; the control does not."
+  {
+  echo "All twenty-three expected transactions resolve."
+  echo "Neither the never-deployed hash nor the refused vesting payout does, which is"
+  echo "what makes the other twenty-three mean something."
+}
 else
   echo "Something above did not hold." >&2
 fi

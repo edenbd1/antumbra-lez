@@ -64,6 +64,15 @@
               32
             ]
           }
+        },
+        {
+          "name": "escrow",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         }
       ]
     },
@@ -88,6 +97,52 @@
           "name": "beneficiary",
           "writable": false,
           "signer": true,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "schedule_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "now",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "claim_and_pay",
+      "accounts": [
+        {
+          "name": "schedule",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "schedule_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "beneficiary",
+          "writable": false,
+          "signer": true,
+          "init": false
+        },
+        {
+          "name": "escrow",
+          "writable": false,
+          "signer": false,
           "init": false
         }
       ],
@@ -144,6 +199,15 @@
           },
           {
             "name": "beneficiary",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "escrow",
             "type": {
               "array": [
                 "u8",

@@ -59,6 +59,15 @@
         {
           "name": "t_end",
           "type": "u64"
+        },
+        {
+          "name": "treasury",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         }
       ]
     },
@@ -83,6 +92,12 @@
           "name": "buyer",
           "writable": false,
           "signer": true,
+          "init": false
+        },
+        {
+          "name": "treasury",
+          "writable": false,
+          "signer": false,
           "init": false
         }
       ],
@@ -191,6 +206,15 @@
           },
           {
             "name": "creator",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "treasury",
             "type": {
               "array": [
                 "u8",

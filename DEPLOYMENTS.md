@@ -123,6 +123,59 @@ end to end. The token path is one seam away, not one dependency away.
 The treasury address is fixed at `create_sale` and checked on every buy, so a
 buyer cannot redirect the proceeds by naming a different account.
 
+## The weighted pool pays too, and the vesting payout does not — which is the sharpest thing here
+
+`antumbra_lbp` was given the same chained-call escrow and behaves the same way:
+buyer **2 → 1**, treasury **2 → 3**, and the pool advanced to
+`reserve_token = 999658`, `reserve_collateral = 1001`, paying out **342**
+tokens — the number `binfixed::weighted_buy` returns on the host, to the unit,
+with the weight 0.745 derived from the schedule rather than stored.
+
+| | transaction | block |
+|---|---|---|
+| paying LBP, deploy (`321c6a1e…`) | [`65ccfc97…d6bea8e5`](https://explorer.testnet.lez.logos.co/transaction/65ccfc975bf88f589f91a1440fa5b40de4f9ee9f052dd59929f5ea36d6bea8e5) | 16653 |
+| `create_pool` with a treasury | [`583aa017…6536e8f4`](https://explorer.testnet.lez.logos.co/transaction/583aa01747742f7db3f2fdbf0632b2ddd7c09c3f1dd13df5e774ea4b6536e8f4) | |
+| `execute_buy`, paid | [`9d981f12…e867d34c`](https://explorer.testnet.lez.logos.co/transaction/9d981f120ec4b75d0b189691b014cff38c31bcd14df41833c509eb45e867d34c) | |
+
+### And then the same pattern was tried on vesting, and refused
+
+`antumbra_vesting` ships a `claim_and_pay` that chains a transfer **out of the
+escrow** to the beneficiary. It is expected to fail, and it does. That refusal is
+the point: it turns "LP-0013 is missing" from a sentence in a proposal into
+something a reader can reproduce.
+
+**Why the launchpads pay and vesting cannot.** A chained transfer debits an
+account only if that account is *authorized*, and the runtime authorizes an
+account because **it signed the transaction**. On a buy, the payer is the buyer
+and the buyer signs — so it works. On a claim, the payer is the escrow and the
+signer is the beneficiary. The escrow is not authorized, and it cannot be:
+requiring it to sign every claim would mean the creator is present for each one,
+which is the thing vesting exists to avoid.
+
+That gap is exactly what LP-0013's transfer authorities define — the power to
+move a balance whose owner did not sign.
+
+**What the attempt actually did**, all read back from the chain:
+
+| | |
+|---|---|
+| submitted | `b97945c9…f457ee29a` |
+| on chain | **no** — `getTransaction` returns `null` |
+| escrow balance | 2 → **2** |
+| beneficiary balance | 1 → **1** |
+| schedule `claimed` | 0 → **0** |
+| schedule `last_seen` | 1000 → **1000** |
+
+So the refusal is **whole**: no partial state, no half-paid claim. That is worth
+knowing on its own, because the alternative — a claim recorded but not paid —
+is the failure that loses a beneficiary's tokens.
+
+**And the refusal is silent.** The wallet reports only *"Transaction not found in
+preconfigured amount of blocks"*; there is no rejection reason anywhere, because
+this revision has no event or receipt mechanism to carry one. An operator
+watching only the CLI cannot distinguish a refused transaction from a slow one.
+That is the same missing-events gap recorded above, met from the other side.
+
 ## The private path, run twice, with what it cost to learn
 
 RFP-015 and RFP-016 both ask for `deshield → buy → re-shield` through a fresh

@@ -42,6 +42,23 @@ const E_NOT_ANCHORED: u32 = 7002;
 const E_NOTHING_CLAIMABLE: u32 = 7003;
 const E_NOT_BENEFICIARY: u32 = 7004;
 const E_TIME_WENT_BACKWARDS: u32 = 7005;
+const E_ESCROW_MISMATCH: u32 = 7006;
+const E_ESCROW_UNOWNED: u32 = 7007;
+const E_ESCROW_SHORT: u32 = 7008;
+
+/// The native transfer program's instruction, mirrored rather than imported:
+/// that crate is `edition = "2024"`, which the pinned risc0 guest toolchain does
+/// not build. The wire format is a risc0 `serde` enum — variant index first — so
+/// the variant ORDER here is the ABI and must not be reordered. `Initialize` is
+/// never constructed here; it exists so `Transfer` keeps index 0.
+#[derive(serde::Serialize)]
+enum AuthTransfer {
+    /// Move `amount` of native balance. Accounts: `[sender, recipient]`.
+    Transfer { amount: u128 },
+    #[allow(dead_code)]
+    Initialize,
+}
+
 
 /// On-chain schedule state. `last_seen` is the newest timestamp any claim has
 /// presented; a claim carrying an older one is rejected rather than served,
@@ -59,6 +76,9 @@ pub struct VestingSchedule {
     pub claimed: u128,
     pub last_seen: u64,
     pub beneficiary: [u8; 32],
+    /// The account holding the escrowed balance. Fixed at creation, so a claim
+    /// cannot name a different source.
+    pub escrow: [u8; 32],
 }
 
 #[lez_program]
@@ -104,6 +124,7 @@ mod antumbra_vesting {
         end: u64,
         total: u128,
         beneficiary: [u8; 32],
+        escrow: [u8; 32],
     ) -> SpelResult {
         let _ = schedule_id;
         let state = VestingSchedule {
@@ -115,6 +136,7 @@ mod antumbra_vesting {
             claimed: 0,
             last_seen: start,
             beneficiary,
+            escrow,
         };
         // Constructed through the audited constructors, so a degenerate schedule
         // is refused at creation rather than discovered at the first claim.
@@ -184,5 +206,101 @@ mod antumbra_vesting {
         let _ = amount;
 
         Ok(SpelOutput::execute(vec![schedule, beneficiary], vec![]))
+    }
+
+    /// Claim, and actually pay, by chaining a transfer out of the escrow.
+    ///
+    /// THIS IS THE INSTRUCTION LP-0013 EXISTS FOR, AND IT IS HERE TO BE TRIED
+    ///
+    /// The launchpad programs next door take payment happily, because there the
+    /// payer is the buyer and **the buyer signs the transaction**: the runtime
+    /// marks a signer's account authorized, and `authenticated_transfer` will
+    /// debit an authorized account on a program's behalf.
+    ///
+    /// Vesting runs the other way. The payer is the escrow and the signer is the
+    /// beneficiary, so the escrow is not authorized — and it cannot be, because
+    /// requiring the escrow to sign every claim would mean the creator has to be
+    /// present for each one, which is the thing vesting exists to avoid.
+    ///
+    /// That gap is precisely what LP-0013's transfer authorities define: the
+    /// power to move a balance whose owner did not sign. It is awarded, merged
+    /// into the prize repository, and absent from the runtime — at tag v0.2.4
+    /// `lez/programs/token/src/` carries initialize, mint, burn, transfer,
+    /// new_definition and print_nft, and no authority module.
+    ///
+    /// So this instruction is shipped deliberately and it is expected to be
+    /// refused on chain today. Its refusal is the measurement: it turns "LP-0013
+    /// is missing" from a sentence in a proposal into a transaction hash. When
+    /// the authority lands, this is the entry point that starts working, and
+    /// nothing else about the schedule changes.
+    #[instruction]
+    pub fn claim_and_pay(
+        ctx: ProgramContext,
+        #[account(pda = [arg("schedule_id")])] mut schedule: AccountWithMetadata,
+        #[account(signer)] beneficiary: AccountWithMetadata,
+        escrow: AccountWithMetadata,
+        schedule_id: [u8; 32],
+        now: u64,
+    ) -> SpelResult {
+        let _ = schedule_id;
+
+        if schedule.account.program_owner != ctx.self_program_id {
+            return Err(SpelError::custom(
+                E_NOT_ANCHORED,
+                "no schedule is committed at this id",
+            ));
+        }
+        let mut state = VestingSchedule::try_from_slice(&schedule.account.data)
+            .map_err(|_| SpelError::custom(E_BAD_SCHEDULE, "schedule failed to deserialize"))?;
+
+        if &state.beneficiary != beneficiary.account_id.value() {
+            return Err(SpelError::custom(
+                E_NOT_BENEFICIARY,
+                "signer is not the beneficiary this schedule names",
+            ));
+        }
+        if &state.escrow != escrow.account_id.value() {
+            return Err(SpelError::custom(
+                E_ESCROW_MISMATCH,
+                "escrow is not the account this schedule was created with",
+            ));
+        }
+        if now < state.last_seen {
+            return Err(SpelError::custom(
+                E_TIME_WENT_BACKWARDS,
+                "now is earlier than a timestamp this schedule has already seen",
+            ));
+        }
+        if escrow.account.program_owner == nssa_core::program::DEFAULT_PROGRAM_ID {
+            return Err(SpelError::custom(
+                E_ESCROW_UNOWNED,
+                "the escrow account is held by no program and cannot pay",
+            ));
+        }
+
+        let mut sched = rebuild(&state)?;
+        let amount = sched.claim(now).map_err(|_| {
+            SpelError::custom(E_NOTHING_CLAIMABLE, "nothing is claimable at this time")
+        })?;
+        if escrow.account.balance < amount {
+            return Err(SpelError::custom(
+                E_ESCROW_SHORT,
+                "the escrow cannot cover this claim",
+            ));
+        }
+
+        state.claimed = sched.claimed;
+        state.last_seen = now;
+        write(&mut schedule.account, &state)?;
+
+        let payout = nssa_core::program::ChainedCall::new(
+            escrow.account.program_owner,
+            vec![escrow.clone(), beneficiary.clone()],
+            &AuthTransfer::Transfer { amount },
+        );
+        Ok(SpelOutput::execute(
+            vec![schedule, beneficiary, escrow],
+            vec![payout],
+        ))
     }
 }

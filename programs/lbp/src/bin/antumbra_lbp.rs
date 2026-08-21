@@ -36,6 +36,24 @@ const E_PRICING_REFUSED: u32 = 6003;
 const E_SLIPPAGE: u32 = 6004;
 const E_PAUSED: u32 = 6005;
 const E_TIME_WENT_BACKWARDS: u32 = 6006;
+const E_BUYER_UNOWNED: u32 = 6007;
+const E_INSUFFICIENT: u32 = 6008;
+const E_TREASURY_OVERFLOW: u32 = 6009;
+const E_TREASURY_MISMATCH: u32 = 6010;
+
+/// The native transfer program's instruction, mirrored rather than imported:
+/// that crate is `edition = "2024"`, which the pinned risc0 guest toolchain does
+/// not build. The wire format is a risc0 `serde` enum — variant index first — so
+/// the variant ORDER here is the ABI and must not be reordered. `Initialize` is
+/// never constructed here; it exists so `Transfer` keeps index 0.
+#[derive(serde::Serialize)]
+enum AuthTransfer {
+    /// Move `amount` of native balance. Accounts: `[sender, recipient]`.
+    Transfer { amount: u128 },
+    #[allow(dead_code)]
+    Initialize,
+}
+
 
 /// On-chain pool state. Note what is *not* here: a current weight. The schedule
 /// is stored; the weight is derived.
@@ -51,6 +69,9 @@ pub struct Pool {
     pub last_seen: u64,
     pub paused: u8,
     pub creator: [u8; 32],
+    /// Where buyers' collateral is sent, fixed at creation so a buy cannot
+    /// redirect the proceeds.
+    pub treasury: [u8; 32],
 }
 
 #[lez_program]
@@ -83,6 +104,7 @@ mod antumbra_lbp {
         w_end: u128,
         t_start: u64,
         t_end: u64,
+        treasury: [u8; 32],
     ) -> SpelResult {
         let _ = pool_id;
         // The schedule must be well formed before anyone can trade against it:
@@ -103,6 +125,7 @@ mod antumbra_lbp {
             last_seen: t_start,
             paused: 0,
             creator: *creator.account_id.value(),
+            treasury,
         };
         write(&mut pool.account, &state)?;
         Ok(SpelOutput::execute(vec![pool, creator], vec![]))
@@ -114,6 +137,7 @@ mod antumbra_lbp {
         ctx: ProgramContext,
         #[account(pda = [arg("pool_id")])] mut pool: AccountWithMetadata,
         #[account(signer)] buyer: AccountWithMetadata,
+        treasury: AccountWithMetadata,
         pool_id: [u8; 32],
         now: u64,
         collateral_in: u128,
@@ -187,9 +211,56 @@ mod antumbra_lbp {
             .checked_add(collateral_in)
             .ok_or_else(|| SpelError::custom(E_PRICING_REFUSED, "collateral reserve overflows"))?;
         state.last_seen = now;
+
+        // Pay. Same route as the bonding curve: the buyer is not ours to debit,
+        // so the transfer is declared as a chained call and the runtime runs it
+        // in this transaction. The checks below are not the enforcement — the
+        // transfer program does its own checked arithmetic — they are here so a
+        // buyer who cannot pay gets a named error from this program rather than
+        // a panic inside one they did not write.
+        if &state.treasury != treasury.account_id.value() {
+            return Err(SpelError::custom(
+                E_TREASURY_MISMATCH,
+                "treasury is not the account this pool was created with",
+            ));
+        }
+        if buyer.account.program_owner == nssa_core::program::DEFAULT_PROGRAM_ID {
+            return Err(SpelError::custom(
+                E_BUYER_UNOWNED,
+                "the buyer account is held by no program and cannot pay",
+            ));
+        }
+        if buyer.account.balance < collateral_in {
+            return Err(SpelError::custom(
+                E_INSUFFICIENT,
+                "the buyer cannot cover this purchase",
+            ));
+        }
+        if treasury
+            .account
+            .balance
+            .checked_add(collateral_in)
+            .is_none()
+        {
+            return Err(SpelError::custom(
+                E_TREASURY_OVERFLOW,
+                "the treasury balance would overflow",
+            ));
+        }
+        let payment = nssa_core::program::ChainedCall::new(
+            buyer.account.program_owner,
+            vec![buyer.clone(), treasury.clone()],
+            &AuthTransfer::Transfer {
+                amount: collateral_in,
+            },
+        );
+
         write(&mut pool.account, &state)?;
 
-        Ok(SpelOutput::execute(vec![pool, buyer], vec![]))
+        Ok(SpelOutput::execute(
+            vec![pool, buyer, treasury],
+            vec![payment],
+        ))
     }
 
     /// Emergency stop. Buying halts; the weight schedule does not, because the
