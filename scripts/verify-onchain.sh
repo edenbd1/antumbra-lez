@@ -119,6 +119,23 @@ check private buy-eph-2      ab1d956440c3cc0c83527d0b08b85e6003caf5e17e5dca1251c
 echo
 check CONTROL never-deployed  dededededededededededededededededededededededededededededededede no
 
+# The absence of the event mechanism is a claim this repository makes in several
+# places, so it is asserted here rather than left as prose. LP-0012's awarded
+# implementation added a getTransactionReceipt RPC; if it ever lands, this stops
+# failing quietly and starts failing loudly, which is the point.
+echo
+echo "  -- the event mechanism LP-0012 delivered, which the runtime does not carry --"
+for method in getTransactionReceipt getEvents getLogs; do
+  body="$(curl -s -m 25 -X POST "$RPC" -H 'Content-Type: application/json' \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"$method\",\"params\":[]}")"
+  if printf '%s' "$body" | grep -q 'Method not found'; then
+    printf '  ✅ %-8s %-16s absent, as documented\n' rpc "$method"
+  else
+    printf '  ❌ %-8s %-16s ANSWERS — the runtime gained events; update the docs\n' rpc "$method"
+    fail=1
+  fi
+done
+
 echo
 if [ "$fail" -eq 0 ]; then
   {
