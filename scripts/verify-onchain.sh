@@ -72,6 +72,10 @@ check fee     create_sale     679ec10a355bf65722bc20fe3ed1e17c05d77f6f439bf17c02
 check fee     execute_buy     9512887af1df329d7d9a201ebf550be9ee6a551e77ce14988b7ea03d2a21d9d8 yes
 check fee     collect_fees    63e4e5f22214bbc57a92648e9b9a3a34080bdb8abeaa5757cd6d2eab690337d8 yes
 
+check lbpclose deploy         9138f9111e708ba1c39feded3413352e1efd341c5fa1cfc08c003e3d0015b3ba yes
+check lbpclose create_pool    e25299d867b147a6904f6a09eb61ca91b65d78b1eb5412b8498e0e22b929af8d yes
+check lbpclose buy            37c6cf16765809ad6091749e8b9e181d660d18e2a3dbb1f3561baa8027e3b1fa yes
+
 check close   deploy          e63783c89976833aaa033394e89f1db302a01f8a3c99bf786648de02533f9b9c yes
 check close   create_sale     6fedb9b30ce2f702dc0733f612563315f2770e042467f2945a04638eaf2822c0 yes
 check close   closing_buy     554ed18d74ac875077be52a39308b1440e5707bf269f299317c73aac66ef680d yes
@@ -92,9 +96,9 @@ check CONTROL never-deployed  dedededededededededededededededededededededededede
 echo
 if [ "$fail" -eq 0 ]; then
   {
-  echo "All thirty-three expected transactions resolve."
+  echo "All thirty-six expected transactions resolve."
   echo "Neither the never-deployed hash nor the refused vesting payout does, which is"
-  echo "what makes the other thirty-three mean something."
+  echo "what makes the other thirty-six mean something."
 }
 else
   echo "Something above did not hold." >&2

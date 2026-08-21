@@ -69,9 +69,14 @@ pub struct Pool {
     pub last_seen: u64,
     pub paused: u8,
     pub creator: [u8; 32],
-    /// Where buyers' collateral is sent, fixed at creation so a buy cannot
-    /// redirect the proceeds.
+    /// This pool's holding PDA — the program's own account, so it can split the
+    /// fee out at close. Recorded so a buy cannot name a different one.
     pub treasury: [u8; 32],
+    /// Where the at-close fee goes.
+    pub fee_treasury: [u8; 32],
+    /// Fee rate in millionths, capped in the program at 5% — the rate Fjord
+    /// Foundry charges and the figure the RFP cites.
+    pub fee_rate: u128,
 }
 
 #[lez_program]
@@ -96,6 +101,8 @@ mod antumbra_lbp {
     #[instruction]
     pub fn create_pool(
         #[account(init, pda = [arg("pool_id")])] mut pool: AccountWithMetadata,
+        #[account(init, pda = [arg("pool_id"), literal("holding")])]
+        holding: AccountWithMetadata,
         #[account(signer)] creator: AccountWithMetadata,
         pool_id: [u8; 32],
         reserve_token: u128,
@@ -104,9 +111,13 @@ mod antumbra_lbp {
         w_end: u128,
         t_start: u64,
         t_end: u64,
-        treasury: [u8; 32],
+        fee_treasury: [u8; 32],
+        fee_rate: u128,
     ) -> SpelResult {
         let _ = pool_id;
+        let treasury = *holding.account_id.value();
+        antumbra::fees::FeeConfig::new(fee_rate, antumbra::fees::CAP_AT_CLOSE)
+            .map_err(|_| SpelError::custom(E_BAD_POOL, "fee rate exceeds the 5% cap"))?;
         // The schedule must be well formed before anyone can trade against it:
         // weight_at refuses an inverted or zero-length schedule, so ask it now.
         antumbra::weighted::weight_at(w_start, w_end, t_start, t_end, t_start)
@@ -126,9 +137,11 @@ mod antumbra_lbp {
             paused: 0,
             creator: *creator.account_id.value(),
             treasury,
+            fee_treasury,
+            fee_rate,
         };
         write(&mut pool.account, &state)?;
-        Ok(SpelOutput::execute(vec![pool, creator], vec![]))
+        Ok(SpelOutput::execute(vec![pool, holding, creator], vec![]))
     }
 
     /// Price and record a buy at the weight the schedule dictates for `now`.
@@ -136,8 +149,9 @@ mod antumbra_lbp {
     pub fn execute_buy(
         ctx: ProgramContext,
         #[account(pda = [arg("pool_id")])] mut pool: AccountWithMetadata,
-        #[account(signer)] buyer: AccountWithMetadata,
-        treasury: AccountWithMetadata,
+        #[account(mut, signer)] buyer: AccountWithMetadata,
+        #[account(mut, pda = [arg("pool_id"), literal("holding")])]
+        holding: AccountWithMetadata,
         pool_id: [u8; 32],
         now: u64,
         collateral_in: u128,
@@ -218,10 +232,12 @@ mod antumbra_lbp {
         // transfer program does its own checked arithmetic — they are here so a
         // buyer who cannot pay gets a named error from this program rather than
         // a panic inside one they did not write.
-        if &state.treasury != treasury.account_id.value() {
+        if &state.treasury != holding.account_id.value()
+            || holding.account.program_owner != ctx.self_program_id
+        {
             return Err(SpelError::custom(
                 E_TREASURY_MISMATCH,
-                "treasury is not the account this pool was created with",
+                "holding is not this pool's account, or is not owned by this program",
             ));
         }
         if buyer.account.program_owner == nssa_core::program::DEFAULT_PROGRAM_ID {
@@ -236,20 +252,15 @@ mod antumbra_lbp {
                 "the buyer cannot cover this purchase",
             ));
         }
-        if treasury
-            .account
-            .balance
-            .checked_add(collateral_in)
-            .is_none()
-        {
+        if holding.account.balance.checked_add(collateral_in).is_none() {
             return Err(SpelError::custom(
                 E_TREASURY_OVERFLOW,
-                "the treasury balance would overflow",
+                "the holding balance would overflow",
             ));
         }
         let payment = nssa_core::program::ChainedCall::new(
             buyer.account.program_owner,
-            vec![buyer.clone(), treasury.clone()],
+            vec![buyer.clone(), holding.clone()],
             &AuthTransfer::Transfer {
                 amount: collateral_in,
             },
@@ -257,9 +268,82 @@ mod antumbra_lbp {
 
         write(&mut pool.account, &state)?;
 
+        Ok(SpelOutput::execute(vec![pool, buyer, holding], vec![payment]))
+    }
+
+    /// Close: pay the creator the collateral raised, net of the at-close fee.
+    ///
+    /// RFP-016's fee is taken **here**, not per swap, and the reason is in the
+    /// mechanism rather than in taste: an LBP is time-bounded, so every sale
+    /// reaches its end and the fee is always collectible. A bonding curve is
+    /// demand-bounded — under 1.4% ever graduate — so the same model there would
+    /// earn nothing on 98% of launches, which is why the sibling program takes
+    /// its fee per swap instead.
+    ///
+    /// Only after `t_end`. A creator withdrawing mid-sale would be taking
+    /// collateral that still backs a pool people are trading against.
+    #[instruction]
+    pub fn withdraw(
+        ctx: ProgramContext,
+        #[account(pda = [arg("pool_id")])] pool: AccountWithMetadata,
+        #[account(mut, pda = [arg("pool_id"), literal("holding")])]
+        mut holding: AccountWithMetadata,
+        #[account(mut, signer)] mut creator: AccountWithMetadata,
+        #[account(mut)] mut fee_treasury: AccountWithMetadata,
+        pool_id: [u8; 32],
+        now: u64,
+    ) -> SpelResult {
+        let _ = pool_id;
+        if pool.account.program_owner != ctx.self_program_id
+            || holding.account.program_owner != ctx.self_program_id
+        {
+            return Err(SpelError::custom(E_NOT_ANCHORED, "pool or holding is not ours"));
+        }
+        let state = Pool::try_from_slice(&pool.account.data)
+            .map_err(|_| SpelError::custom(E_BAD_POOL, "pool failed to deserialize"))?;
+
+        if &state.creator != creator.account_id.value() {
+            return Err(SpelError::custom(E_BAD_POOL, "signer is not the creator"));
+        }
+        if &state.fee_treasury != fee_treasury.account_id.value() {
+            return Err(SpelError::custom(
+                E_TREASURY_MISMATCH,
+                "fee treasury is not the account this pool was created with",
+            ));
+        }
+        if now < state.t_end {
+            return Err(SpelError::custom(
+                E_PRICING_REFUSED,
+                "the sale has not reached its end timestamp",
+            ));
+        }
+
+        let raised = holding.account.balance;
+        if raised == 0 {
+            return Err(SpelError::custom(E_PRICING_REFUSED, "nothing to withdraw"));
+        }
+        let cfg = antumbra::fees::FeeConfig::new(state.fee_rate, antumbra::fees::CAP_AT_CLOSE)
+            .map_err(|_| SpelError::custom(E_BAD_POOL, "stored fee rate exceeds the cap"))?;
+        let (fee, to_creator) = antumbra::fees::close_fee(&cfg, raised)
+            .map_err(|_| SpelError::custom(E_PRICING_REFUSED, "fee arithmetic refused"))?;
+
+        holding.account.balance = 0;
+        creator.account.balance = creator
+            .account
+            .balance
+            .checked_add(to_creator)
+            .ok_or_else(|| SpelError::custom(E_TREASURY_OVERFLOW, "creator balance overflow"))?;
+        if fee > 0 {
+            fee_treasury.account.balance = fee_treasury
+                .account
+                .balance
+                .checked_add(fee)
+                .ok_or_else(|| SpelError::custom(E_TREASURY_OVERFLOW, "fee treasury overflow"))?;
+        }
+
         Ok(SpelOutput::execute(
-            vec![pool, buyer, treasury],
-            vec![payment],
+            vec![pool, holding, creator, fee_treasury],
+            vec![],
         ))
     }
 

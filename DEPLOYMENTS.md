@@ -207,6 +207,38 @@ than in policy.
 The sale's `real_collateral` reads **1**, not 2 — the curve was priced on what it
 received after the fee, which is the ordering §8 argues, visible on chain.
 
+### The pool closes on its own model, and the rounding shows its teeth
+
+RFP-016 takes its fee **at close**, not per swap, because an LBP is
+time-bounded — every sale reaches its end timestamp, so the fee is always
+collectible. A bonding curve is demand-bounded, under 1.4% ever graduate, which
+is why the sibling program charges per swap instead. Same codebase, different
+fee model, and the difference is in the mechanism rather than in taste.
+
+| step | transaction | effect |
+|---|---|---|
+| deploy (`566105bb…`) | [`9138f911…0015b3ba`](https://explorer.testnet.lez.logos.co/transaction/9138f9111e708ba1c39feded3413352e1efd341c5fa1cfc08c003e3d0015b3ba) | block 16766 |
+| `create_pool` at 5% | [`e25299d8…b929af8d`](https://explorer.testnet.lez.logos.co/transaction/e25299d867b147a6904f6a09eb61ca91b65d78b1eb5412b8498e0e22b929af8d) | |
+| `execute_buy` at `now = 3500` | [`37c6cf16…27e3b1fa`](https://explorer.testnet.lez.logos.co/transaction/37c6cf16765809ad6091749e8b9e181d660d18e2a3dbb1f3561baa8027e3b1fa) | holding **0 → 1** |
+| `withdraw` **before** `t_end` | — | **refused** |
+| `withdraw` after | | holding **1 → 0**, fee treasury **2 → 3**, creator **0 → 0** |
+
+**And that last row is worth staring at.** The pool raised 1 unit. A 5% fee
+rounded **up** is 1 unit. So the fee took all of it and the creator received
+nothing — arithmetically correct, and rounding in the direction the design
+demands, but an outcome no creator would expect.
+
+It is not a bug to fix in the arithmetic; rounding the other way would let a
+raise of 1 pay no fee at all, and the same logic applied at scale is what keeps
+a protocol solvent. It is a **minimum-raise question**, and a production
+deployment should either enforce one or state plainly that below `1/fee_rate`
+the fee consumes the raise. We would rather have found that at a raise of 1 unit
+on testnet than at a real one.
+
+The CLI also reported nothing for this transaction — it timed out polling —
+while the transaction landed. Third instance of the same lesson: **read the
+account state, never the client's verdict.**
+
 ### And the sale closes and pays the creator
 
 A second sale was sized so that a single buy exhausts its reserve, which is

@@ -20,6 +20,24 @@
           }
         },
         {
+          "name": "holding",
+          "writable": true,
+          "signer": false,
+          "init": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "pool_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
+        },
+        {
           "name": "creator",
           "writable": false,
           "signer": true,
@@ -61,13 +79,17 @@
           "type": "u64"
         },
         {
-          "name": "treasury",
+          "name": "fee_treasury",
           "type": {
             "array": [
               "u8",
               32
             ]
           }
+        },
+        {
+          "name": "fee_rate",
+          "type": "u128"
         }
       ]
     },
@@ -90,15 +112,27 @@
         },
         {
           "name": "buyer",
-          "writable": false,
+          "writable": true,
           "signer": true,
           "init": false
         },
         {
-          "name": "treasury",
-          "writable": false,
+          "name": "holding",
+          "writable": true,
           "signer": false,
-          "init": false
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "pool_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -122,6 +156,70 @@
         {
           "name": "min_tokens_out",
           "type": "u128"
+        }
+      ]
+    },
+    {
+      "name": "withdraw",
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "pool_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holding",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "pool_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "init": false
+        },
+        {
+          "name": "fee_treasury",
+          "writable": true,
+          "signer": false,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "pool_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "now",
+          "type": "u64"
         }
       ]
     },
@@ -221,6 +319,19 @@
                 32
               ]
             }
+          },
+          {
+            "name": "fee_treasury",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "fee_rate",
+            "type": "u128"
           }
         ]
       }
