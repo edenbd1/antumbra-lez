@@ -82,46 +82,18 @@
               32
             ]
           }
-        }
-      ]
-    },
-    {
-      "name": "record_claim",
-      "accounts": [
-        {
-          "name": "schedule",
-          "writable": false,
-          "signer": false,
-          "init": false,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "arg",
-                "path": "schedule_id"
-              }
-            ]
-          }
         },
         {
-          "name": "beneficiary",
-          "writable": false,
-          "signer": true,
-          "init": false
-        }
-      ],
-      "args": [
-        {
-          "name": "schedule_id",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
+          "name": "cancelable",
+          "type": "u8"
         },
         {
-          "name": "now",
-          "type": "u64"
+          "name": "transferable",
+          "type": "u8"
+        },
+        {
+          "name": "tranches",
+          "type": "u32"
         }
       ]
     },
@@ -180,6 +152,185 @@
         {
           "name": "amount",
           "type": "u128"
+        }
+      ]
+    },
+    {
+      "name": "cancel",
+      "accounts": [
+        {
+          "name": "schedule",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "schedule_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holding",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "schedule_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "schedule_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "now",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "make_non_cancelable",
+      "accounts": [
+        {
+          "name": "schedule",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "schedule_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": false,
+          "signer": true,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "schedule_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "transfer_beneficiary",
+      "accounts": [
+        {
+          "name": "schedule",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "schedule_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "beneficiary",
+          "writable": false,
+          "signer": true,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "schedule_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "new_beneficiary",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "signal_milestone",
+      "accounts": [
+        {
+          "name": "schedule",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "schedule_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": false,
+          "signer": true,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "schedule_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "index",
+          "type": "u32"
         }
       ]
     },
@@ -293,6 +444,35 @@
                 32
               ]
             }
+          },
+          {
+            "name": "creator",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "cancelable",
+            "type": "u8"
+          },
+          {
+            "name": "transferable",
+            "type": "u8"
+          },
+          {
+            "name": "cancelled_at",
+            "type": "u64"
+          },
+          {
+            "name": "signalled",
+            "type": "u64"
+          },
+          {
+            "name": "tranches",
+            "type": "u32"
           }
         ]
       }

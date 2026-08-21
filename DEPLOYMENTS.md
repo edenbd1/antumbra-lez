@@ -208,6 +208,50 @@ to return `null`, because the fact it establishes — an unauthorized third-part
 account cannot be debited by a chained call — is true and worth keeping. What
 changed is the conclusion drawn from it.
 
+## The rest of the vesting lifecycle: cancellation, milestones, and what each refusal proves
+
+The launchpad requirements were backed by transactions while the vesting ones
+rested on host tests. That asymmetry is gone.
+
+**Cancellation, and the half of it that is easy to get wrong.** A linear schedule
+of 2 over `t = 1000…3000`, cancelled at the midpoint:
+
+| step | transaction | effect |
+|---|---|---|
+| create + fund | [`85316f14…9a20aa76`](https://explorer.testnet.lez.logos.co/transaction/85316f14c130cc58cd08a6b6f76ced688220203cc9188ff1b4de11159a20aa76) · [`190fcdda…e5ba3297`](https://explorer.testnet.lez.logos.co/transaction/190fcddad8c722107f538397492639f2a454380eb9ec831887078cfce5ba3297) | creator **3 → 1**, holding **0 → 2** |
+| `cancel` at t = 2000 | [`1d4935cd…c493fca1`](https://explorer.testnet.lez.logos.co/transaction/1d4935cd06a03feaec9bd421bd89209224b8b7b31d8b59d1726ad8b0c493fca1) | creator **1 → 2**, holding **2 → 1** |
+| `claim_and_pay` **after** cancelling, at t = 9999 | [`708978b0…5b0db84a`](https://explorer.testnet.lez.logos.co/transaction/708978b02411b78b8115d3911a5f30ee468f7b57937ab7d49f0af9855b0db84a) | beneficiary **0 → 1**, holding **1 → 0** |
+
+That last row is the requirement most implementations get wrong. The RFP says
+tokens already vested but unclaimed **remain claimable after cancellation** — so
+the beneficiary claims, and receives **1**: the amount vested at the instant of
+cancellation, not the total, even though they asked at `t = 9999`. Accrual is
+frozen where the cancellation put it. The three parts close exactly: 0 already
+claimed, 1 vested and paid, 1 unvested and returned, summing to the original 2.
+
+**Milestones, where idempotence is the whole requirement.** A schedule of 2 in
+two equal tranches:
+
+| step | outcome |
+|---|---|
+| claim before any signal | **refused** — nothing released |
+| `signal_milestone(0)` | [`3ae1ffc4…c354ee54`](https://explorer.testnet.lez.logos.co/transaction/3ae1ffc4862cf0afcc757c1e23bc03ebccb2941f554b24fb2805b85fc354ee54) |
+| `signal_milestone(0)` **again** | **refused** — the bit is already set |
+| claim | [`a47a1d33…78753422`](https://explorer.testnet.lez.logos.co/transaction/a47a1d3383abaa17e9cdff57977b2d18e542ba711fe5f0de77e5ab8178753422) — beneficiary **1 → 2**, exactly one tranche |
+| `signal_milestone(1)` + claim | [`9b2d0180…4a82b278`](https://explorer.testnet.lez.logos.co/transaction/9b2d01803ea362c61e4f1a87d0305d8d3da3c53ebf2023234836062a4a82b278) · [`7e7b87ab…86921e4e`](https://explorer.testnet.lez.logos.co/transaction/7e7b87ab9e97a2cce98bab3cb11156ef0bb66d8811940fa84e18080186921e4e) — holding **→ 0** |
+| `signal_milestone(2)` | **refused** — past the tranche count |
+
+The holding reaching exactly **zero** is not luck. Released is
+`total × signalled / tranches` floored, so when every bit is set the numerator
+equals the denominator and the whole total comes out with no residue to strand —
+the same exactness the linear path buys by special-casing its final step, here
+obtained for free.
+
+**And `record_claim` was deleted rather than kept.** It advanced a schedule
+without paying, from before the payout worked. Shipping it beside
+`claim_and_pay` would offer two instructions where one records a claim that never
+happened — precisely the state a vesting program exists to make impossible.
+
 ## Fees are charged, swept, and taught us two things about the platform
 
 The bonding curve now charges the per-swap fee RFP-015 specifies: rounded **up**

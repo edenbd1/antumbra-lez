@@ -66,6 +66,17 @@ check paid    vest-payout     a84e5ff1efda083de4f94f2ec9f89dc800e0ea4d864e071efd
 check REFUSED vesting-payout  b97945c950df1134dcbdf14700b572f026b4446eb289b5054448a35f457ee29a no
 
 echo
+echo "  -- vesting: cancellation and milestones --"
+check vest    cancel-create   85316f14c130cc58cd08a6b6f76ced688220203cc9188ff1b4de11159a20aa76 yes
+check vest    cancel-fund     190fcddad8c722107f538397492639f2a454380eb9ec831887078cfce5ba3297 yes
+check vest    cancel          1d4935cd06a03feaec9bd421bd89209224b8b7b31d8b59d1726ad8b0c493fca1 yes
+check vest    claim-post-canc 708978b02411b78b8115d3911a5f30ee468f7b57937ab7d49f0af9855b0db84a yes
+check vest    ms-signal-0     3ae1ffc4862cf0afcc757c1e23bc03ebccb2941f554b24fb2805b85fc354ee54 yes
+check vest    ms-claim-1      a47a1d3383abaa17e9cdff57977b2d18e542ba711fe5f0de77e5ab8178753422 yes
+check vest    ms-signal-1     9b2d01803ea362c61e4f1a87d0305d8d3da3c53ebf2023234836062a4a82b278 yes
+check vest    ms-claim-2      7e7b87ab9e97a2cce98bab3cb11156ef0bb66d8811940fa84e18080186921e4e yes
+
+echo
 echo "  -- the per-swap fee: accrued on the buy, swept on its own --"
 check fee     deploy          53e149f997a343c91af6223b101889330cca46a1ad4ec92dadd5d8d9ba72bc91 yes
 check fee     create_sale     679ec10a355bf65722bc20fe3ed1e17c05d77f6f439bf17c02b629592479a406 yes
@@ -96,9 +107,9 @@ check CONTROL never-deployed  dedededededededededededededededededededededededede
 echo
 if [ "$fail" -eq 0 ]; then
   {
-  echo "All thirty-six expected transactions resolve."
+  echo "All forty-four expected transactions resolve."
   echo "Neither the never-deployed hash nor the refused vesting payout does, which is"
-  echo "what makes the other thirty-six mean something."
+  echo "what makes the other forty-four mean something."
 }
 else
   echo "Something above did not hold." >&2
