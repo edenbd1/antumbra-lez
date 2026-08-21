@@ -164,14 +164,21 @@ Item {
 
     Connections {
         target: bridge
-        function onSaleUpdated(vt, vc, sr, rc, seed) {
+        function onSaleUpdated(vt, vc, sr, rc, seed, accrued) {
             saleCard.rows = [
                 { k: "virtual token reserve",  v: root.human(vt) },
                 { k: "virtual collateral",     v: root.human(vc) },
                 { k: "sale reserve left",      v: root.human(sr) },
                 { k: "collateral raised",      v: root.human(rc) },
                 { k: "DEX seed reserve",       v: root.human(seed) + "  (untouched until close)" },
+                { k: "fee accrued, unswept",   v: root.human(accrued) },
             ]
+        }
+        function onEscrowUpdated(which, balance) {
+            var card = which === "sale" ? saleCard : schedCard
+            var rows = card.rows.slice()
+            rows.push({ k: "escrowed on chain", v: balance + "  (native balance actually held)" })
+            card.rows = rows
         }
         function onPoolUpdated(rt, rc, ws, we, last) {
             poolCard.rows = [

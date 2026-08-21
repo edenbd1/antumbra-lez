@@ -5,6 +5,12 @@ programs, fetched from a LEZ sequencer over JSON-RPC and decoded from the borsh
 account data. It holds no keys and signs nothing — giving an analytics surface
 signing power would make it a custody risk for no gain.
 
+It shows two things a cached copy would misrepresent most: the **native balance
+each holding PDA actually escrows**, read straight from the account rather than
+inferred from the program's own bookkeeping, and the **fee accrued but not yet
+swept**. When those two disagree with the decoded state, the decoded state is
+wrong, and a panel that only rendered one of them would never say so.
+
 `antumbra-lez.lgx` is the package. It carries one variant, `darwin-arm64`.
 
 ## It loads, and here is the control that makes that mean something

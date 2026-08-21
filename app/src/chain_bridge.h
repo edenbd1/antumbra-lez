@@ -35,7 +35,10 @@ public:
 signals:
     void saleUpdated(const QString& vt, const QString& vc,
                      const QString& saleReserve, const QString& realCollateral,
-                     const QString& seedReserve);
+                     const QString& seedReserve, const QString& feesAccrued);
+    /// Native balance actually escrowed, per holding. `which` is "sale" or
+    /// "schedule".
+    void escrowUpdated(const QString& which, const QString& balance);
     void poolUpdated(const QString& reserveToken, const QString& reserveCollateral,
                      const QString& weightStart, const QString& weightEnd,
                      const QString& lastSeen);
