@@ -190,6 +190,48 @@ to return `null`, because the fact it establishes — an unauthorized third-part
 account cannot be debited by a chained call — is true and worth keeping. What
 changed is the conclusion drawn from it.
 
+## Fees are charged, swept, and taught us two things about the platform
+
+The bonding curve now charges the per-swap fee RFP-015 specifies: rounded **up**
+against the trader, taken **before** pricing so the constant product sees what
+the pool actually receives, with the rate capped at **1% in the program** rather
+than in policy.
+
+| step | transaction | effect |
+|---|---|---|
+| deploy (`112284cf…`) | [`53e149f9…ba72bc91`](https://explorer.testnet.lez.logos.co/transaction/53e149f997a343c91af6223b101889330cca46a1ad4ec92dadd5d8d9ba72bc91) | block 16729 |
+| `create_sale` at 1% | [`679ec10a…2479a406`](https://explorer.testnet.lez.logos.co/transaction/679ec10a355bf65722bc20fe3ed1e17c05d77f6f439bf17c02b629592479a406) | sale + holding created |
+| `execute_buy` of 2 | [`9512887a…2a21d9d8`](https://explorer.testnet.lez.logos.co/transaction/9512887af1df329d7d9a201ebf550be9ee6a551e77ce14988b7ea03d2a21d9d8) | buyer **3 → 1**, holding **0 → 2** |
+| `collect_fees` | [`63e4e5f2…690337d8`](https://explorer.testnet.lez.logos.co/transaction/63e4e5f22214bbc57a92648e9b9a3a34080bdb8abeaa5757cd6d2eab690337d8) | holding **2 → 1**, fee treasury **2 → 3** |
+
+The sale's `real_collateral` reads **1**, not 2 — the curve was priced on what it
+received after the fee, which is the ordering §8 argues, visible on chain.
+
+### Two things the platform taught us here, both by refusing something
+
+**A transaction cannot both chain a call that credits an account and write that
+account's balance itself.** The first fee design did exactly that — chained the
+net payment to the holding and moved the fee out of it in the same instruction —
+and every buy was refused, silently. Two competing post-states for one account.
+So the buy **accrues** the fee into the sale's state and `collect_fees` sweeps
+it in its own transaction. Not a workaround: it is also how a protocol should
+account for revenue it has not yet taken.
+
+**Two chained calls that both name the same payer are refused too**, for the
+same reason from the other side: each carries its own pre-state for that
+account. That killed an earlier design paying the sale and the fee treasury in
+one buy. The holding PDA solves it — one call in, and the program splits
+afterwards out of an account it owns.
+
+**And a permissionless instruction has no signer, so it has no nonce.** Calling
+`collect_fees` twice builds a **byte-identical transaction with the same hash**.
+The chain includes it once, so the sweep is idempotent for free — the balances
+above did not move on the second call — but `getTransaction` on that hash finds
+the *first* transaction and a client reports success. **An SDK built here must
+read account state to know what happened, never the transaction hash.** That is
+the same lesson as the silent refusals above, arriving from the opposite
+direction: on this platform, the hash tells you much less than you would expect.
+
 ## The private path, run twice, with what it cost to learn
 
 RFP-015 and RFP-016 both ask for `deshield → buy → re-shield` through a fresh

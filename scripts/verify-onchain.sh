@@ -66,6 +66,13 @@ check paid    vest-payout     a84e5ff1efda083de4f94f2ec9f89dc800e0ea4d864e071efd
 check REFUSED vesting-payout  b97945c950df1134dcbdf14700b572f026b4446eb289b5054448a35f457ee29a no
 
 echo
+echo "  -- the per-swap fee: accrued on the buy, swept on its own --"
+check fee     deploy          53e149f997a343c91af6223b101889330cca46a1ad4ec92dadd5d8d9ba72bc91 yes
+check fee     create_sale     679ec10a355bf65722bc20fe3ed1e17c05d77f6f439bf17c02b629592479a406 yes
+check fee     execute_buy     9512887af1df329d7d9a201ebf550be9ee6a551e77ce14988b7ea03d2a21d9d8 yes
+check fee     collect_fees    63e4e5f22214bbc57a92648e9b9a3a34080bdb8abeaa5757cd6d2eab690337d8 yes
+
+echo
 echo "  -- the private path, run twice with distinct ephemeral accounts --"
 check private init-eph-1     646f91b21d8faf80a249ee8a6ad5ad1a1e07c74517ee03ff3f4e305b49a8880d yes
 check private deshield-1     921b9e4f72425b65a5e0622e248ea7834de32215d785e24670d32ceb75de83ec yes
@@ -80,9 +87,9 @@ check CONTROL never-deployed  dedededededededededededededededededededededededede
 echo
 if [ "$fail" -eq 0 ]; then
   {
-  echo "All twenty-five expected transactions resolve."
+  echo "All twenty-nine expected transactions resolve."
   echo "Neither the never-deployed hash nor the refused vesting payout does, which is"
-  echo "what makes the other twenty-five mean something."
+  echo "what makes the other twenty-nine mean something."
 }
 else
   echo "Something above did not hold." >&2
