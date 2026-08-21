@@ -46,6 +46,11 @@ check lbp     execute_buy     45fa7b915283369d9c6eac61ae2a599a7a4b0042064f788ecb
 check vesting deploy          f45a7b2fc835e75e9633e6fe8cd00687146f2b05b22591ff38baeec80b928030 yes
 check vesting create_schedule dbe8c7538ca3c759e0668c9fa285e6fd343aab574fa92d861514e0bcb1bfa475 yes
 check vesting record_claim    3aff5549434a0573a4d98895e7fd28afbdc4353c90ebf217320e3e59ec203685 yes
+echo "  -- the paying buy: collateral moved by a chained call --"
+check paid    deploy-paying   b6ea6b6d79ac7e32ee52982426255412471d15d156ab197b73896aa2acf0211d yes
+check paid    create_sale     7fa6b18cf81eb91624ecd9fa5e4e4d10ea8bd1da353a0a08c9786902866071b8 yes
+check paid    execute_buy     ea0eeb936cd43850354f44989d6dd1cda15e1e7353ee1f5a5348da3af581ddb9 yes
+
 echo "  -- the private path, run twice with distinct ephemeral accounts --"
 check private init-eph-1     646f91b21d8faf80a249ee8a6ad5ad1a1e07c74517ee03ff3f4e305b49a8880d yes
 check private deshield-1     921b9e4f72425b65a5e0622e248ea7834de32215d785e24670d32ceb75de83ec yes
@@ -59,7 +64,7 @@ check CONTROL never-deployed  dedededededededededededededededededededededededede
 
 echo
 if [ "$fail" -eq 0 ]; then
-  echo "All fifteen transactions resolve; the control does not."
+  echo "All eighteen transactions resolve; the control does not."
 else
   echo "Something above did not hold." >&2
 fi

@@ -6,13 +6,24 @@
 // grant exists: the curve state machine and the pricing arithmetic, running on
 // chain, in a real program, against real accounts.
 //
-// It does **not** custody collateral. LEZ rule 5 refuses a post-state that
-// debits an account the executing program does not own, so a real escrow is a
-// chained call into the program that owns the balance, and that depends on
-// LP-0013's transfer authorities — awarded, but absent from the runtime: at tag
-// v0.2.4 `lez/programs/token/src/` carries initialize, mint, burn, transfer,
-// new_definition and print_nft, and no authority module. What is proved here is
-// everything that does not depend on it.
+// COLLATERAL ACTUALLY MOVES, AND HERE IS WHY THAT IS POSSIBLE
+//
+// LEZ rule 5 refuses any post-state that debits an account the executing program
+// does not own, so this program cannot move the buyer's balance itself. It
+// declares a **chained call** into the program that does own it — the native
+// `authenticated_transfer` — and the runtime executes that call as part of the
+// same transaction. The buyer is debited and the sale treasury credited, or the
+// whole transaction fails; there is no intermediate state where the tokens are
+// priced but not paid.
+//
+// This is the escrow pattern the RFP needs, and it does **not** wait on
+// LP-0013. Those authorities are awarded and merged into the prize repository
+// but absent from the runtime — at tag v0.2.4 `lez/programs/token/src/` carries
+// initialize, mint, burn, transfer, new_definition and print_nft, and no
+// authority module. LP-0013 would let a program move a *token* balance it does
+// not own. Chaining into `authenticated_transfer` moves the *native* balance
+// today, which is enough to prove the composition works end to end and enough to
+// run a native-collateral sale. The token path is one seam away.
 //
 // THE POINT OF DEPLOYING IT
 //
@@ -32,6 +43,23 @@ const E_BAD_SALE: u32 = 5001;
 const E_NOT_ANCHORED: u32 = 5002;
 const E_PRICING_REFUSED: u32 = 5003;
 const E_CLOSED: u32 = 5004;
+const E_BUYER_UNOWNED: u32 = 5005;
+const E_INSUFFICIENT: u32 = 5006;
+const E_TREASURY_OVERFLOW: u32 = 5007;
+const E_TREASURY_MISMATCH: u32 = 5008;
+
+/// The native transfer program's instruction, mirrored rather than imported:
+/// that crate is `edition = "2024"`, which the pinned risc0 guest toolchain does
+/// not build. The wire format is a risc0 `serde` enum — variant index first — so
+/// the variant ORDER here is the ABI and must not be reordered. `Initialize` is
+/// never constructed here; it exists so `Transfer` keeps index 0.
+#[derive(serde::Serialize)]
+enum AuthTransfer {
+    /// Move `amount` of native balance. Accounts: `[sender, recipient]`.
+    Transfer { amount: u128 },
+    #[allow(dead_code)]
+    Initialize,
+}
 
 /// On-chain sale state. The two reserve buckets are separate fields with
 /// separate invariants, because conflating the sale reserve with the DEX seed
@@ -45,6 +73,9 @@ pub struct Sale {
     pub real_collateral: u128,
     pub seed_reserve: u128,
     pub creator: [u8; 32],
+    /// Where buyers' collateral is sent. Fixed at creation, so a buy cannot
+    /// redirect the proceeds by naming a different account.
+    pub treasury: [u8; 32],
 }
 
 #[lez_program]
@@ -77,6 +108,7 @@ mod antumbra_curve {
         vc: u128,
         sale_reserve: u128,
         seed_reserve: u128,
+        treasury: [u8; 32],
     ) -> SpelResult {
         let _ = sale_id;
         // Constructed through the audited constructor, so a virtual reserve that
@@ -92,6 +124,7 @@ mod antumbra_curve {
             real_collateral: 0,
             seed_reserve,
             creator: *creator.account_id.value(),
+            treasury,
         };
         write(&mut sale.account, &state)?;
         Ok(SpelOutput::execute(vec![sale, creator], vec![]))
@@ -103,15 +136,21 @@ mod antumbra_curve {
     /// residue stays with the pool, and slippage refuses **before** any state
     /// moves rather than after.
     ///
+    /// The collateral is moved by a chained call into the program that owns the
+    /// buyer's balance, so the payment and the state change are one transaction.
+    ///
     /// Accounts:
     /// - `sale` (PDA seeded by `[sale_id]`): required to be owned by this
     ///   program, which rejects a fabricated sale id.
-    /// - `buyer` (signer).
+    /// - `buyer` (signer): debited by the chained transfer.
+    /// - `treasury`: credited. Checked against the address fixed at creation, so
+    ///   a buyer cannot redirect the proceeds to themselves.
     #[instruction]
     pub fn execute_buy(
         ctx: ProgramContext,
         #[account(pda = [arg("sale_id")])] mut sale: AccountWithMetadata,
         #[account(signer)] buyer: AccountWithMetadata,
+        treasury: AccountWithMetadata,
         sale_id: [u8; 32],
         collateral_in: u128,
         min_tokens_out: u128,
@@ -147,12 +186,61 @@ mod antumbra_curve {
             .buy(collateral_in, min_tokens_out)
             .map_err(|_| SpelError::custom(E_PRICING_REFUSED, "buy refused: slippage, size or reserve"))?;
 
+        // Pay for it. The buyer is not ours to debit, so this is declared as a
+        // chained call into the program that does own the balance; the runtime
+        // executes it inside this transaction, and if it fails nothing here
+        // lands either.
+        //
+        // The three checks below are not the enforcement — authenticated_transfer
+        // does its own checked_sub and checked_add. They exist so that a buyer
+        // who cannot pay gets a named error from this program rather than a
+        // guest panic inside a program they did not write.
+        if &state.treasury != treasury.account_id.value() {
+            return Err(SpelError::custom(
+                E_TREASURY_MISMATCH,
+                "treasury is not the account this sale was created with",
+            ));
+        }
+        if buyer.account.program_owner == nssa_core::program::DEFAULT_PROGRAM_ID {
+            return Err(SpelError::custom(
+                E_BUYER_UNOWNED,
+                "the buyer account is held by no program and cannot pay",
+            ));
+        }
+        if buyer.account.balance < collateral_in {
+            return Err(SpelError::custom(
+                E_INSUFFICIENT,
+                "the buyer cannot cover this purchase",
+            ));
+        }
+        if treasury
+            .account
+            .balance
+            .checked_add(collateral_in)
+            .is_none()
+        {
+            return Err(SpelError::custom(
+                E_TREASURY_OVERFLOW,
+                "the treasury balance would overflow",
+            ));
+        }
+        let payment = nssa_core::program::ChainedCall::new(
+            buyer.account.program_owner,
+            vec![buyer.clone(), treasury.clone()],
+            &AuthTransfer::Transfer {
+                amount: collateral_in,
+            },
+        );
+
         state.vt = curve.vt;
         state.vc = curve.vc;
         state.sale_reserve = curve.sale_reserve;
         state.real_collateral = curve.real_collateral;
         write(&mut sale.account, &state)?;
 
-        Ok(SpelOutput::execute(vec![sale, buyer], vec![]))
+        Ok(SpelOutput::execute(
+            vec![sale, buyer, treasury],
+            vec![payment],
+        ))
     }
 }

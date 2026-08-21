@@ -79,6 +79,50 @@ t=4959. The PDA `SqLgfYnsQ6STtHRvjNxj1MmXjM3EsUBbsCCvDCcpX9B` came back with
 `claimed = 499936860714736709180` — the same value as `total × (4959−1000) ÷
 (8919−1000)` computed off chain, to the unit.
 
+## The buy now takes payment, and that changes what these programs are
+
+The first version of `antumbra_curve` priced a buy and moved nothing, because
+LEZ rule 5 forbids a program from debiting an account it does not own. That is
+still true — so the program stops trying to, and instead **declares a chained
+call into the program that does own the balance**, the native
+`authenticated_transfer`. The runtime executes that call inside the same
+transaction, so the buyer is debited and the sale treasury credited, or nothing
+happens at all. There is no state where the tokens are priced but not paid.
+
+| | | |
+|---|---|---|
+| paying program | ImageID | `e6003fae1a29e1537ff91174f48d985129853d690ff91957addc9a038e716d19` |
+| deploy | [`b6ea6b6d…acf0211d`](https://explorer.testnet.lez.logos.co/transaction/b6ea6b6d79ac7e32ee52982426255412471d15d156ab197b73896aa2acf0211d) | block 16644 |
+| `create_sale` bound to a treasury | [`7fa6b18c…866071b8`](https://explorer.testnet.lez.logos.co/transaction/7fa6b18cf81eb91624ecd9fa5e4e4d10ea8bd1da353a0a08c9786902866071b8) | |
+| `execute_buy`, paid | [`ea0eeb93…f581ddb9`](https://explorer.testnet.lez.logos.co/transaction/ea0eeb936cd43850354f44989d6dd1cda15e1e7353ee1f5a5348da3af581ddb9) | |
+
+**Balances read from the chain on both sides:**
+
+| | before | after |
+|---|---|---|
+| buyer | 4 | **2** |
+| sale treasury | 0 | **2** |
+
+And the curve advanced to `vt = 998004`, `vc = 1002`, `sale_reserve = 798004`,
+`real_collateral = 2` — which is what `antumbra::Curve::buy(2, 0)` returns on
+the host, to the unit.
+
+**One token in that result is worth pointing at.** A naive reading gives 1997
+tokens out; the program paid **1996**. The difference is the rounding rule:
+`tokens_out = Vt − ceil(Vt·Vc / (Vc + C))`, so the residue stays with the pool.
+An implementation that floored the subtrahend would have paid one token too many
+on this trade, and one token too many on every trade after it. That is the
+solvency argument, visible in a single on-chain result.
+
+**This does not wait on LP-0013.** Those authorities would let a program move a
+*token* balance it does not own, and they are still absent from the runtime.
+Chaining into `authenticated_transfer` moves the *native* balance today, which
+is enough to run a native-collateral sale and enough to prove the composition
+end to end. The token path is one seam away, not one dependency away.
+
+The treasury address is fixed at `create_sale` and checked on every buy, so a
+buyer cannot redirect the proceeds by naming a different account.
+
 ## The private path, run twice, with what it cost to learn
 
 RFP-015 and RFP-016 both ask for `deshield → buy → re-shield` through a fresh
