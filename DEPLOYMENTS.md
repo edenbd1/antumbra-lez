@@ -21,13 +21,28 @@ links but earlier *programs*, each one still on chain and still fetchable.
 
 | Program | RFP | ImageID | Deploy | Block |
 |---|---|---|---|---|
-| `antumbra_curve` | [015](https://github.com/logos-co/rfp/issues/179) | `00125787449cfcd10ea68ccbe5f6dca1c1b726048315731a1657bf0de074a670` | [`e63783c8…533f9b9c`](https://explorer.testnet.lez.logos.co/transaction/e63783c89976833aaa033394e89f1db302a01f8a3c99bf786648de02533f9b9c) | 16743 |
-| `antumbra_lbp` | [016](https://github.com/logos-co/rfp/issues/180) | `566105bb5a7bf438b4e38b266fb2ded2d32163ecc698856e6a019a1597fc3a21` | [`9138f911…0015b3ba`](https://explorer.testnet.lez.logos.co/transaction/9138f9111e708ba1c39feded3413352e1efd341c5fa1cfc08c003e3d0015b3ba) | 16766 |
-| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/178) | `2167726cd877fbc38eae9bf2cfa1d95b41ed6812b189a7e9df4b6972240c1c3c` | [`ef50f007…1251e700`](https://explorer.testnet.lez.logos.co/transaction/ef50f00718096f428aa59ec79492eb8563a1011d1b1fbb5b82c97b371251e700) | 16687 |
+| `antumbra_curve` | [015](https://github.com/logos-co/rfp/issues/179) | `49db0fc91883668a5ccb85242aa1cdf923a557a7327f7c0613ad526fa56fc510` | [`f074ffe1…4d8c3855`](https://explorer.testnet.lez.logos.co/transaction/f074ffe110131ed108d7ea37d6445d7492ff36842ed63399b005dc364d8c3855) | 17265 |
+| `antumbra_lbp` | [016](https://github.com/logos-co/rfp/issues/180) | `51f28557602ae6daff97e51127ba6dbc5ddfe6048ea7cd89ca5e170ab6c7a82d` | [`fbfe7e39…7bbe4859`](https://explorer.testnet.lez.logos.co/transaction/fbfe7e3960cd787a26699cd2690d6a663f88c895f4a68ee6bf7dffa47bbe4859) | 17266 |
+| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/178) | `4c6e62a585934f87ef919c63a252fb33faef14d9ed1af2bd17da62deaf93ea7f` | [`9b35fc31…d1691ee2`](https://explorer.testnet.lez.logos.co/transaction/9b35fc31a93a276d13a354863f0ed3c870f6b957a90086775a943837d1691ee2) | 17267 |
 
 The four facts in that table — freeze commit, ImageID, deploy transaction,
 block — are the convention `logos-co/lez-payment-streams` sets for its own live
 program. They are what makes a deployment checkable rather than asserted.
+
+**These three carry a fix for an attack the earlier ones were open to.** LEZ
+deployment is permissionless, so anyone may deploy a program and own accounts
+with it. The buy path used to chain into `buyer.account.program_owner` — the
+program owning whatever account the caller supplied. A caller could therefore
+pass an account owned by a program they wrote, and this program would obediently
+chain into it; that program could decline to move anything while the curve state
+here still advanced, and the buyer would leave with tokens and keep their money.
+
+The `authenticated_transfer` program id is now **pinned as a constant**, verified
+against `artifacts/lez/programs/authenticated_transfer.bin` at tag v0.2.4
+(ImageID `fe96c422…5eef875a`, reproducible with `spel program-id`), and every
+payer is checked against it. The question is no longer "is this account owned by
+something" but "is it owned by *the* transfer program", and on a permissionless
+chain those are very different questions.
 
 **And several sections below record something the platform refused.** Those are
 not failures kept for honesty's sake; each one changed the design, and two of

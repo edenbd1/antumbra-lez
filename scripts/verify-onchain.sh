@@ -37,6 +37,13 @@ check() { # program label tx expect_present
 
 echo "Antumbra on the public LEZ testnet — $RPC"
 echo
+echo "  -- the hardened programs, with the transfer program id pinned --"
+echo
+check hard    curve-deploy    f074ffe110131ed108d7ea37d6445d7492ff36842ed63399b005dc364d8c3855 yes
+check hard    lbp-deploy      fbfe7e3960cd787a26699cd2690d6a663f88c895f4a68ee6bf7dffa47bbe4859 yes
+check hard    vesting-deploy  9b35fc31a93a276d13a354863f0ed3c870f6b957a90086775a943837d1691ee2 yes
+
+echo
 check curve   deploy          25a8f4051b60ff471cb30d9655217e7b172b9b43f3977be327956fd2b42f1718 yes
 check curve   create_sale     ec7f1bede8afebff0048d9dcd374e0e2bd73a937bed350ae61ff22ef9e7604ed yes
 check curve   execute_buy     1b886f82a9966e94fb2ba2d9181fe69945ceacbd6de4318e99e3d902fa4ba71a yes
@@ -115,9 +122,9 @@ check CONTROL never-deployed  dedededededededededededededededededededededededede
 echo
 if [ "$fail" -eq 0 ]; then
   {
-  echo "All forty-nine expected transactions resolve."
+  echo "All fifty-two expected transactions resolve."
   echo "Neither the never-deployed hash nor the refused vesting payout does, which is"
-  echo "what makes the other forty-nine mean something."
+  echo "what makes the other fifty-two mean something."
 }
 else
   echo "Something above did not hold." >&2

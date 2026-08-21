@@ -41,6 +41,26 @@ const E_INSUFFICIENT: u32 = 6008;
 const E_TREASURY_OVERFLOW: u32 = 6009;
 const E_TREASURY_MISMATCH: u32 = 6010;
 
+/// The native `authenticated_transfer` program, **pinned** rather than read off
+/// whatever account the caller handed us.
+///
+/// This is a security boundary, not a convenience. LEZ deployment is
+/// permissionless, so anyone may deploy a program and own accounts with it. If
+/// the chained call targeted `buyer.account.program_owner`, a caller could pass
+/// an account owned by a program they wrote, and this program would obediently
+/// chain into it — which could decline to move anything while the curve state
+/// here still advanced. The buyer would leave with tokens and keep their money.
+///
+/// Pinning the id closes that: the program invoked is the one whose bytecode
+/// hashes to this value, and the check below refuses any payer the real
+/// transfer program does not own. Verified against
+/// `artifacts/lez/programs/authenticated_transfer.bin` at tag v0.2.4 —
+/// ImageID `fe96c4228babbe8bc578e3e25b884cacb07f8c86541f27ed676789875eef875a`.
+/// Reproduce with `spel program-id authenticated_transfer.bin`.
+const AUTH_TRANSFER_PROGRAM_ID: nssa_core::program::ProgramId = [
+    583309054, 2344528779, 3806558405, 2890696795, 2257354672, 3978764116, 2273929063, 1518858078,
+];
+
 /// The native transfer program's instruction, mirrored rather than imported:
 /// that crate is `edition = "2024"`, which the pinned risc0 guest toolchain does
 /// not build. The wire format is a risc0 `serde` enum — variant index first — so
@@ -240,7 +260,9 @@ mod antumbra_lbp {
                 "holding is not this pool's account, or is not owned by this program",
             ));
         }
-        if buyer.account.program_owner == nssa_core::program::DEFAULT_PROGRAM_ID {
+        // Not "is it owned by something" but "is it owned by *the* transfer
+        // program". A permissionless chain makes those very different questions.
+        if buyer.account.program_owner != AUTH_TRANSFER_PROGRAM_ID {
             return Err(SpelError::custom(
                 E_BUYER_UNOWNED,
                 "the buyer account is held by no program and cannot pay",
@@ -259,7 +281,7 @@ mod antumbra_lbp {
             ));
         }
         let payment = nssa_core::program::ChainedCall::new(
-            buyer.account.program_owner,
+            AUTH_TRANSFER_PROGRAM_ID,
             vec![buyer.clone(), holding.clone()],
             &AuthTransfer::Transfer {
                 amount: collateral_in,
