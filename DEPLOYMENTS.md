@@ -228,12 +228,24 @@ rounded **up** is 1 unit. So the fee took all of it and the creator received
 nothing — arithmetically correct, and rounding in the direction the design
 demands, but an outcome no creator would expect.
 
-It is not a bug to fix in the arithmetic; rounding the other way would let a
-raise of 1 pay no fee at all, and the same logic applied at scale is what keeps
-a protocol solvent. It is a **minimum-raise question**, and a production
-deployment should either enforce one or state plainly that below `1/fee_rate`
-the fee consumes the raise. We would rather have found that at a raise of 1 unit
-on testnet than at a real one.
+It is not a bug to fix in the arithmetic: rounding the other way would let a
+one-unit raise pay no fee at all, and the same leniency at scale is what makes a
+protocol insolvent.
+
+**The first explanation written here was wrong, and the test that replaced it
+says so.** It claimed the raise is consumed below `1/fee_rate` — 20 units at 5%.
+It is not. The creator receives nothing exactly when `ceil(a·r/ONE) == a`, which
+solves to `a < ONE / (ONE − r)`; at any rate a sane protocol would charge, that
+is **only a raise of 1**. What is true more generally is that the **effective**
+rate is worst at the smallest raises and reaches 100% at a raise of one unit —
+the nominal rate is a ceiling on large raises and a floor on small ones. Three
+tests in `tests/fees.rs` now pin the exact boundary, because a UI quoting the
+intuitive formula would misinform every creator who read it.
+
+So it is a **minimum-raise question**, and a deployment should either enforce a
+floor or state the real threshold. We would rather have met this at a raise of 1
+unit on testnet, and been wrong about it in a document we could still fix, than
+at a real raise.
 
 The CLI also reported nothing for this transaction — it timed out polling —
 while the transaction landed. Third instance of the same lesson: **read the

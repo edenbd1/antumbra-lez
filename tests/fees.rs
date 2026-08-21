@@ -175,3 +175,79 @@ fn a_zero_creation_fee_debits_exactly_the_schedule_total() {
     }
     assert_eq!(creation_fee(&cfg, 0), Err(CurveError::ZeroAmount));
 }
+
+#[test]
+fn a_raise_of_one_unit_pays_its_whole_self_in_fee_at_any_rate() {
+    // Found on the public testnet, not by reading the code: a pool that raised
+    // one unit at 5% paid the entire unit as fee and the creator received zero.
+    //
+    // The first explanation written down was wrong — it claimed the raise is
+    // consumed below `1/rate`, which at 5% would be 20 units. It is not. The
+    // creator receives nothing exactly when `ceil(a·r/ONE) == a`, which solves
+    // to `a < ONE / (ONE − r)`. At any rate a sane protocol would charge that
+    // is only `a = 1`.
+    //
+    // The arithmetic is right and rounding the other way would be worse: a
+    // one-unit raise would pay no fee at all, and the same leniency at scale is
+    // what makes a protocol insolvent.
+    for rate in [1u128, 100, 10_000, 50_000] {
+        let cfg = FeeConfig::new(rate, RATE_ONE).unwrap();
+        let (fee, to_creator) = close_fee(&cfg, 1).unwrap();
+        assert_eq!(fee, 1, "a one-unit raise pays one unit at rate {rate}");
+        assert_eq!(
+            to_creator, 0,
+            "so the creator receives nothing at rate {rate}"
+        );
+    }
+}
+
+#[test]
+fn the_threshold_is_one_over_one_minus_the_rate_not_one_over_the_rate() {
+    // The exact boundary, asserted because the intuitive formula is wrong and
+    // a UI that quotes the wrong one misinforms every creator who reads it.
+    for rate in [50_000u128, 500_000, 900_000] {
+        let cfg = FeeConfig::new(rate, RATE_ONE).unwrap();
+        let last_consumed = RATE_ONE.div_ceil(RATE_ONE - rate) - 1;
+
+        let (_, at) = close_fee(&cfg, last_consumed).unwrap();
+        assert_eq!(
+            at, 0,
+            "at {last_consumed} the fee still takes everything (rate {rate})"
+        );
+
+        let (_, above) = close_fee(&cfg, last_consumed + 1).unwrap();
+        assert!(
+            above > 0,
+            "at {} the creator must receive something (rate {rate})",
+            last_consumed + 1
+        );
+    }
+}
+
+#[test]
+fn the_effective_rate_is_worst_at_the_smallest_raises() {
+    // The nominal rate is a ceiling on large raises and a floor on small ones.
+    // This is the property a minimum-raise rule exists to bound, and it is the
+    // honest way to state what the testnet run showed.
+    let cfg = FeeConfig::new(50_000, RATE_ONE).unwrap(); // 5%
+    let mut previous = u128::MAX;
+    for raise in [1u128, 2, 5, 10, 100, 1_000, 1_000_000] {
+        let fee = cfg.fee_on(raise).unwrap();
+        // effective rate in millionths, rounded down
+        let effective = fee * RATE_ONE / raise;
+        assert!(
+            effective <= previous,
+            "effective rate must not rise with the raise: {raise} gave {effective}"
+        );
+        assert!(
+            effective >= 50_000 - 1,
+            "and never falls below the nominal rate"
+        );
+        previous = effective;
+    }
+    assert_eq!(
+        cfg.fee_on(1).unwrap() * RATE_ONE,
+        RATE_ONE,
+        "at a raise of 1 it is 100%"
+    );
+}
