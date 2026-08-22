@@ -32,7 +32,16 @@ Item {
         if (s.length <= 18) s = "0".repeat(19 - s.length) + s
         var whole = s.slice(0, s.length - 18)
         var frac  = s.slice(s.length - 18).replace(/0+$/, "")
-        return frac.length ? whole + "." + frac.slice(0, 6) : whole
+        var shown = frac.length ? whole + "." + frac.slice(0, 6) : whole
+        // Six decimals of an eighteen-decimal amount round a small balance to
+        // "0.000000", which a reader cannot tell from nothing at all. A total of
+        // 2 base units rendered as zero is a false statement about the chain, so
+        // an amount that is not zero never renders as zero: below the display
+        // precision it is shown in base units instead.
+        if (Number(shown) === 0 && !/^0*$/.test(s)) {
+            return String(raw) + (String(raw) === "1" ? " base unit" : " base units")
+        }
+        return shown
     }
 
     // Weights are stored at 1e18 as a fraction of unity.
