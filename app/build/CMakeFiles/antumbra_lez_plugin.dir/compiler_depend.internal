@@ -2455,6 +2455,7 @@ CMakeFiles/antumbra_lez_plugin.dir/src/chain_bridge.cpp.o
  /tmp/Qt/6.9.2/macos/lib/QtCore.framework/Headers/qxptype_traits.h
  /tmp/Qt/6.9.2/macos/lib/QtCore.framework/Headers/qyieldcpu.h
  /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/QNetworkAccessManager
+ /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/QNetworkProxy
  /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/QNetworkReply
  /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/QNetworkRequest
  /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/QSslConfiguration
@@ -2463,6 +2464,7 @@ CMakeFiles/antumbra_lez_plugin.dir/src/chain_bridge.cpp.o
  /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qhostaddress.h
  /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qhttpheaders.h
  /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qnetworkaccessmanager.h
+ /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qnetworkproxy.h
  /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qnetworkreply.h
  /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qnetworkrequest.h
  /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qssl.h

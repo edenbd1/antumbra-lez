@@ -16,11 +16,15 @@ QWidget* AntumbraPlugin::createWidget(LogosAPI* /*api*/) {
     // It holds no keys and signs nothing: this panel is read-only by design.
     m_bridge = new ChainBridge(this);
 
+    // Qt's resource system is process-global: two modules that both register
+    // /qml/Main.qml resolve to whichever registered first, so a second
+    // Antumbra module rendered the first one's UI over its own data. The
+    // prefix is this module's name, which cannot collide.
     auto* view = new QQuickWidget();
     view->engine()->rootContext()->setContextProperty(
         QStringLiteral("bridge"), m_bridge);
     view->setResizeMode(QQuickWidget::SizeRootObjectToView);
-    view->setSource(QUrl(QStringLiteral("qrc:/qml/Main.qml")));
+    view->setSource(QUrl(QStringLiteral("qrc:/antumbra_lez/Main.qml")));
     return view;
 }
 

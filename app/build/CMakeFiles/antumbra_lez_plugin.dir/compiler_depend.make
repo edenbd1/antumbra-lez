@@ -2452,6 +2452,7 @@ CMakeFiles/antumbra_lez_plugin.dir/src/chain_bridge.cpp.o: /Users/eden/data/ns.c
   /tmp/Qt/6.9.2/macos/lib/QtCore.framework/Headers/qxptype_traits.h \
   /tmp/Qt/6.9.2/macos/lib/QtCore.framework/Headers/qyieldcpu.h \
   /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/QNetworkAccessManager \
+  /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/QNetworkProxy \
   /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/QNetworkReply \
   /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/QNetworkRequest \
   /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/QSslConfiguration \
@@ -2460,6 +2461,7 @@ CMakeFiles/antumbra_lez_plugin.dir/src/chain_bridge.cpp.o: /Users/eden/data/ns.c
   /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qhostaddress.h \
   /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qhttpheaders.h \
   /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qnetworkaccessmanager.h \
+  /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qnetworkproxy.h \
   /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qnetworkreply.h \
   /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qnetworkrequest.h \
   /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qssl.h \
@@ -3861,6 +3863,8 @@ CMakeFiles/antumbra_lez_plugin.dir/src/plugin.cpp.o: /Users/eden/data/ns.com/ant
 
 /Users/eden/data/ns.com/antumbra-lez/app/src/plugin.cpp:
 
+/tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qnetworkproxy.h:
+
 /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/QNetworkRequest:
 
 /tmp/Qt/6.9.2/macos/lib/QtCore.framework/Headers/qjsonarray.h:
@@ -4366,6 +4370,8 @@ antumbra_lez_plugin_autogen/UVLADIE3JM/moc_plugin.cpp:
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__utility/priority_tag.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__utility/piecewise_construct.h:
+
+/tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/QNetworkProxy:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__utility/pair.h:
 

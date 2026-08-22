@@ -1,5 +1,5 @@
 <RCC>
-  <qresource prefix="/qml">
+  <qresource prefix="/antumbra_lez">
     <file alias="Main.qml">/Users/eden/data/ns.com/antumbra-lez/app/qml/Main.qml</file>
     <file alias="qmldir">/Users/eden/data/ns.com/antumbra-lez/app/qml/qmldir</file>
   </qresource>

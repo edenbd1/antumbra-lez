@@ -47,7 +47,7 @@ if(DEFINED ENV{LOGOS_MODULE_BUILDER_ROOT})
     )
 
     qt_add_resources(antumbra_lez_module_plugin "qml"
-        PREFIX "/qml"
+        PREFIX "/antumbra_lez"
         BASE "qml"
         FILES qml/Main.qml qml/qmldir
     )
@@ -75,7 +75,7 @@ else()
     )
 
     qt_add_resources(antumbra_lez_plugin "qml"
-        PREFIX "/qml"
+        PREFIX "/antumbra_lez"
         BASE "qml"
         FILES qml/Main.qml qml/qmldir
     )
