@@ -172,6 +172,7 @@ for method in getTransactionReceipt getEvents getLogs; do
     -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"$method\",\"params\":[]}")"
   if printf '%s' "$body" | grep -q 'Method not found'; then
     printf '  ✅ %-8s %-16s absent, as documented\n' rpc "$method"
+    ran=$((ran + 1))
   else
     printf '  ❌ %-8s %-16s ANSWERS — the runtime gained events; update the docs\n' rpc "$method"
     fail=1
