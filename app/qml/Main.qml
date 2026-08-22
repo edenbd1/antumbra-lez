@@ -51,6 +51,11 @@ Item {
         return (v * 100).toFixed(2) + "%"
     }
 
+    // Which program the panel is showing. "all" is the default and the honest
+    // one; the others exist so a walkthrough of one program is not sharing the
+    // screen with two it is not about.
+    property string only: "all"
+
     Rectangle { anchors.fill: parent; color: root.bg }
 
     ColumnLayout {
@@ -70,12 +75,26 @@ Item {
                     font.weight: Font.DemiBold
                 }
                 Text {
-                    text: "live state of three deployed programs, read from the sequencer"
+                    text: root.only === "all"
+                          ? "live state of three deployed programs, read from the sequencer"
+                          : "live state, read from the sequencer"
                     color: root.muted
                     font.pixelSize: 12
                 }
             }
             Item { Layout.fillWidth: true }
+            Row {
+                spacing: 6
+                Repeater {
+                    model: ["all", "curve", "pool", "vesting"]
+                    Button {
+                        text: modelData
+                        checkable: true
+                        checked: root.only === modelData
+                        onClicked: root.only = modelData
+                    }
+                }
+            }
             Button {
                 text: "Refresh"
                 onClicked: bridge.refresh()
@@ -87,6 +106,7 @@ Item {
         // ---- bonding curve, RFP-015 ----
         Card {
             id: saleCard
+            visible: root.only === "all" || root.only === "curve"
             title: "Bonding curve — RFP-015"
             subtitle: "k = Vt · Vc is 1e45 here, thirteen orders past u128::MAX, and is never materialised"
         }
@@ -94,6 +114,7 @@ Item {
         // ---- LBP, RFP-016 ----
         Card {
             id: poolCard
+            visible: root.only === "all" || root.only === "pool"
             title: "Weighted pool — RFP-016"
             subtitle: "the account stores the schedule, never a current weight"
         }
@@ -101,6 +122,7 @@ Item {
         // ---- vesting, RFP-017 ----
         Card {
             id: schedCard
+            visible: root.only === "all" || root.only === "vesting"
             title: "Vesting schedule — RFP-017"
             subtitle: "accrual recomputed from the terms on every claim"
         }

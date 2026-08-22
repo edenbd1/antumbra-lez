@@ -16,8 +16,55 @@ fetch() {
 }
 
 fail=0
+ran=0
+# `--only curve|lbp|vesting` narrows the run to one program, plus the controls.
+#
+# The three programs live in one repository and one script, which is right for the
+# repository and wrong for a demo: a film about the bonding curve should not spend
+# twenty lines on vesting cancellation. The controls are never filtered out — the
+# never-deployed hash and the refused payout are what make any of the other lines
+# mean something, and a run that dropped them would be a worse check, not a
+# shorter one.
+ONLY="${ONLY:-}"
+case "${1:-}" in
+  --only) ONLY="${2:?--only needs curve, lbp or vesting}" ;;
+  "") ;;
+  *) echo "usage: $0 [--only curve|lbp|vesting]" >&2; exit 2 ;;
+esac
+case "$ONLY" in
+  ""|curve|lbp|vesting) ;;
+  *) echo "--only takes curve, lbp or vesting; got '$ONLY'" >&2; exit 2 ;;
+esac
+
+# Which program a line belongs to, from the two labels it already carries. The
+# labels were written for a human reading the output; this reuses them rather
+# than adding a fourth column nobody would keep in step.
+belongs() { # section label -> program, or "shared"
+  case "$1 $2" in
+    *lbp*|*pool*|*pause*|*weight*)                       echo lbp ;;
+    *vest*|*schedule*|*claim*|*milestone*|*cancel*)      echo vesting ;;
+    *curve*|*sale*|*buy*|*fee*|*close*|*sell*)           echo curve ;;
+    *)                                                    echo shared ;;
+  esac
+}
+
+SECTION=""
+section() { SECTION="$1"; }         # remembered, not printed
+flush_section() {
+  [ -n "$SECTION" ] || return 0
+  echo; echo "  $SECTION"; SECTION=""
+}
+
 check() { # program label tx expect_present
-  local body height
+  local body height mine
+  if [ -n "$ONLY" ]; then
+    mine="$(belongs "$1" "$2")"
+    # CONTROL and REFUSED are the negative controls; they always run.
+    case "$1" in CONTROL|rpc) mine=shared ;; REFUSED) mine=vesting ;; esac
+    [ "$mine" = "$ONLY" ] || [ "$mine" = shared ] || return 0
+  fi
+  flush_section
+  ran=$((ran + 1))
   body="$(fetch "$3")"
   if printf '%s' "$body" | grep -q '"result":\['; then
     height="$(printf '%s' "$body" | python3 -c 'import json,sys;r=json.load(sys.stdin)["result"];b=r[1] if len(r)>1 else None;print(b.get("height") if isinstance(b,dict) else b)' 2>/dev/null)"
@@ -36,8 +83,7 @@ check() { # program label tx expect_present
 }
 
 echo "Antumbra on the public LEZ testnet — $RPC"
-echo
-echo "  -- the hardened programs, with the transfer program id pinned --"
+section "-- the hardened programs, with the transfer program id pinned --"
 echo
 check hard    curve-deploy    f074ffe110131ed108d7ea37d6445d7492ff36842ed63399b005dc364d8c3855 yes
 check hard    lbp-deploy      fbfe7e3960cd787a26699cd2690d6a663f88c895f4a68ee6bf7dffa47bbe4859 yes
@@ -53,7 +99,7 @@ check lbp     execute_buy     45fa7b915283369d9c6eac61ae2a599a7a4b0042064f788ecb
 check vesting deploy          f45a7b2fc835e75e9633e6fe8cd00687146f2b05b22591ff38baeec80b928030 yes
 check vesting create_schedule dbe8c7538ca3c759e0668c9fa285e6fd343aab574fa92d861514e0bcb1bfa475 yes
 check vesting record_claim    3aff5549434a0573a4d98895e7fd28afbdc4353c90ebf217320e3e59ec203685 yes
-echo "  -- the paying buy: collateral moved by a chained call --"
+section "-- the paying buy: collateral moved by a chained call --"
 check paid    deploy-paying   b6ea6b6d79ac7e32ee52982426255412471d15d156ab197b73896aa2acf0211d yes
 check paid    create_sale     7fa6b18cf81eb91624ecd9fa5e4e4d10ea8bd1da353a0a08c9786902866071b8 yes
 check paid    execute_buy     ea0eeb936cd43850354f44989d6dd1cda15e1e7353ee1f5a5348da3af581ddb9 yes
@@ -72,12 +118,11 @@ check paid    vest-payout     a84e5ff1efda083de4f94f2ec9f89dc800e0ea4d864e071efd
 # debits the program's own holding PDA instead, and is checked above.
 check REFUSED vesting-payout  b97945c950df1134dcbdf14700b572f026b4446eb289b5054448a35f457ee29a no
 
-echo "  -- pause, and what it cannot pause --"
+section "-- pause, and what it cannot pause --"
 check pause   set-paused      f51fa03e27edc9fad0ec62cd4a702532e73eef16772d37293933c78f2bc8fe8a yes
 check pause   resume          117ca8eeadc8f5afa889ca5c5675265ec152a2ab18e84c092135922b52dfccad yes
 
-echo
-echo "  -- vesting: cancellation and milestones --"
+section "-- vesting: cancellation and milestones --"
 check vest    cancel-create   85316f14c130cc58cd08a6b6f76ced688220203cc9188ff1b4de11159a20aa76 yes
 check vest    cancel-fund     190fcddad8c722107f538397492639f2a454380eb9ec831887078cfce5ba3297 yes
 check vest    cancel          1d4935cd06a03feaec9bd421bd89209224b8b7b31d8b59d1726ad8b0c493fca1 yes
@@ -91,8 +136,7 @@ check vest    xfer-create     a5c1eef17d852681b1e993fa0dff2ca55a370d48aa43fe6f19
 check vest    xfer-by-holder  9b87fc9d37839828733d736c4e1bf36f129fbe257d5e0b8bf5ed63c372e4dd89 yes
 check vest    make-noncancel  ced7d77ea0495943cb2faac477212cd8699d6cb28aebf63ccb7a65da68cefffe yes
 
-echo
-echo "  -- the per-swap fee: accrued on the buy, swept on its own --"
+section "-- the per-swap fee: accrued on the buy, swept on its own --"
 check fee     deploy          53e149f997a343c91af6223b101889330cca46a1ad4ec92dadd5d8d9ba72bc91 yes
 check fee     create_sale     679ec10a355bf65722bc20fe3ed1e17c05d77f6f439bf17c02b629592479a406 yes
 check fee     execute_buy     9512887af1df329d7d9a201ebf550be9ee6a551e77ce14988b7ea03d2a21d9d8 yes
@@ -107,8 +151,7 @@ check close   create_sale     6fedb9b30ce2f702dc0733f612563315f2770e042467f2945a
 check close   closing_buy     554ed18d74ac875077be52a39308b1440e5707bf269f299317c73aac66ef680d yes
 check close   withdraw        ad96e838b802d9e998944e9e67f5717c8490bfeef64b028d7f4484bc7f6c2bce yes
 
-echo
-echo "  -- the private path, run twice with distinct ephemeral accounts --"
+section "-- the private path, run twice with distinct ephemeral accounts --"
 check private init-eph-1     646f91b21d8faf80a249ee8a6ad5ad1a1e07c74517ee03ff3f4e305b49a8880d yes
 check private deshield-1     921b9e4f72425b65a5e0622e248ea7834de32215d785e24670d32ceb75de83ec yes
 check private buy-eph-1      70f19695cd81be4210a304896090686529c0f5f547ad15aa062d1498e1c95a29 yes
@@ -123,8 +166,7 @@ check CONTROL never-deployed  dedededededededededededededededededededededededede
 # places, so it is asserted here rather than left as prose. LP-0012's awarded
 # implementation added a getTransactionReceipt RPC; if it ever lands, this stops
 # failing quietly and starts failing loudly, which is the point.
-echo
-echo "  -- the event mechanism LP-0012 delivered, which the runtime does not carry --"
+section "-- the event mechanism LP-0012 delivered, which the runtime does not carry --"
 for method in getTransactionReceipt getEvents getLogs; do
   body="$(curl -s -m 25 -X POST "$RPC" -H 'Content-Type: application/json' \
     -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"$method\",\"params\":[]}")"
@@ -139,9 +181,15 @@ done
 echo
 if [ "$fail" -eq 0 ]; then
   {
-  echo "All fifty-two expected transactions resolve."
-  echo "Neither the never-deployed hash nor the refused vesting payout does, which is"
-  echo "what makes the other fifty-two mean something."
+  if [ -n "$ONLY" ]; then
+    echo "All $ran expected checks for \`$ONLY\` resolve — run without --only for all of them."
+    echo "The never-deployed hash still does not, which is what makes the rest mean"
+    echo "something."
+  else
+    echo "All fifty-two expected transactions resolve."
+    echo "Neither the never-deployed hash nor the refused vesting payout does, which is"
+    echo "what makes the other fifty-two mean something."
+  fi
 }
 else
   echo "Something above did not hold." >&2
