@@ -1213,4 +1213,6 @@ CMakeFiles/antumbra_lez_plugin.dir/src/chain_bridge.cpp.o: \
   /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/QNetworkReply \
   /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qnetworkreply.h \
   /tmp/Qt/6.9.2/macos/lib/QtCore.framework/Headers/QIODevice \
-  /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/QNetworkRequest
+  /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/QNetworkRequest \
+  /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/QNetworkProxy \
+  /tmp/Qt/6.9.2/macos/lib/QtNetwork.framework/Headers/qnetworkproxy.h

@@ -44,6 +44,53 @@ The dylib **extracted from the packaged `.lgx`** was load-tested too, not just
 the one in `build/`. A package that ships a different binary from the one you
 verified has verified nothing.
 
+## And loading is not running, which cost us the host process
+
+`QPluginLoader::load()` returning true says the binary is ABI-compatible and
+exports the interface. It says nothing about what happens when the panel is
+actually used. Clicking the tile in Basecamp 0.2.2 killed the host outright —
+`SIGTRAP`, no dialog, no log line, the window simply gone:
+
+```
+libsystem_pthread.dylib   pthread_jit_write_protect_np
+libpcre2-16.0.dylib       sljit_malloc_exec
+libpcre2-16.0.dylib       pcre2_jit_compile_16
+QtCore                    QRegularExpressionPrivate::compilePattern()
+QtNetwork                 macQueryInternal(QNetworkProxyQuery const&)
+QtNetwork                 QNetworkProxyFactory::systemProxyForQuery(...)
+QtNetwork                 QNetworkReplyHttpImplPrivate::postRequest(...)
+```
+
+Read bottom-up: the first HTTP request triggers Qt's macOS system-proxy lookup,
+which builds a `QRegularExpression`, which asks PCRE2 to JIT-compile it. Basecamp
+runs under the hardened runtime *without* `com.apple.security.cs.allow-jit`, so
+the JIT allocation traps and takes the process down. Any module that makes a
+network call through `QNetworkAccessManager` hits this — ours does on every
+refresh, which is the whole point of it.
+
+A module cannot add an entitlement to somebody else's signed binary, so it
+declines the lookup instead. Two lines in the `ChainBridge` constructor:
+
+```cpp
+QNetworkProxyFactory::setUseSystemConfiguration(false);
+m_net.setProxy(QNetworkProxy::NoProxy);
+```
+
+Direct connection only, which is what talking to a sequencer over its public URL
+wanted anyway. After the fix the panel opens and reads chain state:
+
+![The module running in Basecamp 0.2.2](../docs/img/basecamp-module.png)
+
+Two of the three panels read zero. That is not a decoding failure — those PDAs
+belong to the frozen deployments in `DEPLOYMENTS.md`, which were initialised but
+never driven; the driven state lives on the earlier deployments. The weighted
+pool is the one this build points at that was driven, and it shows the schedule
+running from 99% to 1%.
+
+**The lesson generalises past this module.** A load test is a necessary control
+and we will keep running it, but the claim it supports is "the host will accept
+this binary", not "the host survives using it". Those need separate evidence.
+
 ## Build it
 
 Basecamp bundles Qt 6.9.2, so build against 6.9.2. Get it without disturbing the

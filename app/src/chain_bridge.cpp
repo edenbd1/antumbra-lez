@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkReply>
+#include <QNetworkProxy>
 #include <QNetworkRequest>
 #include <QUrl>
 
@@ -80,7 +81,17 @@ private:
 } // namespace
 
 ChainBridge::ChainBridge(QObject* parent)
-    : QObject(parent), m_rpc(QStringLiteral("https://testnet.lez.logos.co")) {}
+    : QObject(parent), m_rpc(QStringLiteral("https://testnet.lez.logos.co")) {
+    // Qt's macOS system-proxy lookup builds a QRegularExpression, PCRE2 tries to
+    // JIT-compile it, and pthread_jit_write_protect_np traps: Basecamp runs under
+    // the hardened runtime without com.apple.security.cs.allow-jit, so the first
+    // HTTP request took the whole host process down with SIGTRAP. The module is
+    // not the one deciding to JIT and cannot add the entitlement to someone
+    // else's binary, so it declines the lookup instead. Direct connection only —
+    // which is what talking to a sequencer over its public URL wants anyway.
+    QNetworkProxyFactory::setUseSystemConfiguration(false);
+    m_net.setProxy(QNetworkProxy::NoProxy);
+}
 
 void ChainBridge::setEndpoint(const QString& url) {
     if (!url.isEmpty()) m_rpc = url;
