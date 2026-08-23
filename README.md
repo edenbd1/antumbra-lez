@@ -9,7 +9,9 @@ written for [λPrize RFP-015](https://github.com/logos-co/rfp/blob/master/RFPs/R
 cargo test --release
 ```
 
-Nine tests, no dependencies, `#![forbid(unsafe_code)]`.
+50 tests green. The pricing library has no dependencies at all — the
+executor harness is a separate workspace — and `#![forbid(unsafe_code)]`
+throughout.
 
 ## What this found
 
@@ -212,7 +214,8 @@ proposal this repository accompanies.
 
 ## Licence
 
-MIT OR Apache-2.0.
+MIT OR Apache-2.0, at your option:
+[`LICENSE-MIT`](LICENSE-MIT) and [`LICENSE-APACHE`](LICENSE-APACHE).
 
 ## Cycle cost
 
