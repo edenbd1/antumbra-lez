@@ -39,8 +39,13 @@ esac
 # Which program a line belongs to, from the two labels it already carries. The
 # labels were written for a human reading the output; this reuses them rather
 # than adding a fourth column nobody would keep in step.
-belongs() { # section label -> program, or "shared"
+belongs() { # section label -> the programs it belongs to, or "shared"
   case "$1 $2" in
+    # `deshield → buy → re-shield` is asked for by RFP-015 and RFP-016 and by
+    # neither of the others, so the path belongs to both and to no one else.
+    # It has to be decided before the patterns below, or `buy-eph-*` reads as a
+    # plain curve buy and the path stops at the deshield in the pool's run.
+    private\ *)                                          echo "curve lbp" ;;
     *lbp*|*pool*|*pause*|*weight*)                       echo lbp ;;
     *vest*|*schedule*|*claim*|*milestone*|*cancel*)      echo vesting ;;
     *curve*|*sale*|*buy*|*fee*|*close*|*sell*)           echo curve ;;
@@ -56,12 +61,13 @@ flush_section() {
 }
 
 check() { # program label tx expect_present
-  local body height mine
+  local body height mine why
   if [ -n "$ONLY" ]; then
     mine="$(belongs "$1" "$2")"
     # CONTROL and REFUSED are the negative controls; they always run.
     case "$1" in CONTROL|rpc) mine=shared ;; REFUSED) mine=vesting ;; esac
-    [ "$mine" = "$ONLY" ] || [ "$mine" = shared ] || return 0
+    # `mine` may name more than one program, so this is membership, not equality.
+    case " $mine " in *" shared "*|*" $ONLY "*) : ;; *) return 0 ;; esac
   fi
   flush_section
   ran=$((ran + 1))
@@ -75,7 +81,15 @@ check() { # program label tx expect_present
     fi
   else
     if [ "$4" = "no" ]; then
-      printf '  ✅ %-8s %-16s returns null, as a never-deployed hash must\n' "$1" "$2"
+      # Both of these must fail to resolve, but not for the same reason, and a
+      # line that gives the wrong reason is worse than one that gives none: it
+      # reads as a canned string, which is exactly what a negative control is
+      # there to rule out.
+      case "$1" in
+        REFUSED) why='was refused on submission, and never landed' ;;
+        *)       why='returns null, as a never-deployed hash must' ;;
+      esac
+      printf '  ✅ %-8s %-16s %s\n' "$1" "$2" "$why"
     else
       printf '  ❌ %-8s %-16s MISSING %s\n' "$1" "$2" "$3"; fail=1
     fi
@@ -142,10 +156,12 @@ check fee     create_sale     679ec10a355bf65722bc20fe3ed1e17c05d77f6f439bf17c02
 check fee     execute_buy     9512887af1df329d7d9a201ebf550be9ee6a551e77ce14988b7ea03d2a21d9d8 yes
 check fee     collect_fees    63e4e5f22214bbc57a92648e9b9a3a34080bdb8abeaa5757cd6d2eab690337d8 yes
 
+section "-- the pool's fee, taken at close rather than per swap --"
 check lbpclose deploy         9138f9111e708ba1c39feded3413352e1efd341c5fa1cfc08c003e3d0015b3ba yes
 check lbpclose create_pool    e25299d867b147a6904f6a09eb61ca91b65d78b1eb5412b8498e0e22b929af8d yes
 check lbpclose buy            37c6cf16765809ad6091749e8b9e181d660d18e2a3dbb1f3561baa8027e3b1fa yes
 
+section "-- the sale that closes when its reserve empties, and pays the creator --"
 check close   deploy          e63783c89976833aaa033394e89f1db302a01f8a3c99bf786648de02533f9b9c yes
 check close   create_sale     6fedb9b30ce2f702dc0733f612563315f2770e042467f2945a04638eaf2822c0 yes
 check close   closing_buy     554ed18d74ac875077be52a39308b1440e5707bf269f299317c73aac66ef680d yes
@@ -159,7 +175,7 @@ check private init-eph-2     6c57df67d732854779e4f90e36a3c07339ead8f50a2117c86e1
 check private deshield-2     9da4fe4bf848c54d1b6324e05cb873ac4daa8312d41905ff2b31490ecd2167aa yes
 check private buy-eph-2      ab1d956440c3cc0c83527d0b08b85e6003caf5e17e5dca1251c935c625cbe832 yes
 
-echo
+section "-- the controls: the lines that must not resolve --"
 check CONTROL never-deployed  dededededededededededededededededededededededededededededededede no
 
 # The absence of the event mechanism is a claim this repository makes in several
@@ -171,6 +187,7 @@ for method in getTransactionReceipt getEvents getLogs; do
   body="$(curl -s -m 25 -X POST "$RPC" -H 'Content-Type: application/json' \
     -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"$method\",\"params\":[]}")"
   if printf '%s' "$body" | grep -q 'Method not found'; then
+    flush_section
     printf '  ✅ %-8s %-16s absent, as documented\n' rpc "$method"
     ran=$((ran + 1))
   else
