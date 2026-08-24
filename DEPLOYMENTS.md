@@ -29,11 +29,11 @@ useful: the ImageID identifies the program, the digest lets you check that a fil
 you hold is the file that was deployed without asking an explorer to vouch for
 it. Neither substitutes for the other.
 
-| Program | RFP | ImageID | Deploy | Block |
-|---|---|---|---|---|
-| `antumbra_curve` | [015](https://github.com/logos-co/rfp/issues/179) | `49db0fc91883668a5ccb85242aa1cdf923a557a7327f7c0613ad526fa56fc510` | [`f074ffe1…4d8c3855`](https://explorer.testnet.lez.logos.co/transaction/f074ffe110131ed108d7ea37d6445d7492ff36842ed63399b005dc364d8c3855) | 17265 |
-| `antumbra_lbp` | [016](https://github.com/logos-co/rfp/issues/180) | `51f28557602ae6daff97e51127ba6dbc5ddfe6048ea7cd89ca5e170ab6c7a82d` | [`fbfe7e39…7bbe4859`](https://explorer.testnet.lez.logos.co/transaction/fbfe7e3960cd787a26699cd2690d6a663f88c895f4a68ee6bf7dffa47bbe4859) | 17266 |
-| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/178) | `4c6e62a585934f87ef919c63a252fb33faef14d9ed1af2bd17da62deaf93ea7f` | [`9b35fc31…d1691ee2`](https://explorer.testnet.lez.logos.co/transaction/9b35fc31a93a276d13a354863f0ed3c870f6b957a90086775a943837d1691ee2) | 17267 |
+| Program | RFP | Freeze commit | ImageID | Deploy | Block |
+|---|---|---|---|---|---|
+| `antumbra_curve` | [015](https://github.com/logos-co/rfp/issues/179) | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `49db0fc91883668a5ccb85242aa1cdf923a557a7327f7c0613ad526fa56fc510` | [`f074ffe1…4d8c3855`](https://explorer.testnet.lez.logos.co/transaction/f074ffe110131ed108d7ea37d6445d7492ff36842ed63399b005dc364d8c3855) | 17265 |
+| `antumbra_lbp` | [016](https://github.com/logos-co/rfp/issues/180) | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `51f28557602ae6daff97e51127ba6dbc5ddfe6048ea7cd89ca5e170ab6c7a82d` | [`fbfe7e39…7bbe4859`](https://explorer.testnet.lez.logos.co/transaction/fbfe7e3960cd787a26699cd2690d6a663f88c895f4a68ee6bf7dffa47bbe4859) | 17266 |
+| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/178) | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `4c6e62a585934f87ef919c63a252fb33faef14d9ed1af2bd17da62deaf93ea7f` | [`9b35fc31…d1691ee2`](https://explorer.testnet.lez.logos.co/transaction/9b35fc31a93a276d13a354863f0ed3c870f6b957a90086775a943837d1691ee2) | 17267 |
 
 The four facts in that table — freeze commit, ImageID, deploy transaction,
 block — are the convention `logos-co/lez-payment-streams` sets for its own live
@@ -44,15 +44,24 @@ quote the deployments that were *driven*, which are the earlier programs, not th
 top table. Both sets are live and neither supersedes the other on chain, so the
 earlier ImageIDs are recorded here rather than left for a reviewer to reconcile:
 
-| Program | RFP | ImageID | Deploy | Block | Driven by |
-|---|---|---|---|---|---|
-| `antumbra_curve` | [015](https://github.com/logos-co/rfp/issues/179) | `bcd6d07d27bb0d2ea8c237c46125018e5115815173025a1a24aca505835f1a23` | [`25a8f405…b42f1718`](https://explorer.testnet.lez.logos.co/transaction/25a8f4051b60ff471cb30d9655217e7b172b9b43f3977be327956fd2b42f1718) | 16339 | `create_sale`, `execute_buy` |
-| `antumbra_lbp` | [016](https://github.com/logos-co/rfp/issues/180) | `249648dcf6e2fe70e81c0315bdc5737037d3f343e3362697575dd0a30bbe0e08` | [`f765ec06…98b4eac2`](https://explorer.testnet.lez.logos.co/transaction/f765ec06ae391c8d9e754f40947398cf15d66c9967f2fda23894d30098b4eac2) | 16342 | `create_pool`, `execute_buy` |
-| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/178) | `26134c7901b2cb8c2dac5889155ef17be988d5cd7b77f2af8df10e39a6c235be` | [`f45a7b2f…0b928030`](https://explorer.testnet.lez.logos.co/transaction/f45a7b2fc835e75e9633e6fe8cd00687146f2b05b22591ff38baeec80b928030) | 16335 | `create_schedule`, `record_claim` |
+| Program | RFP | Freeze commit | ImageID | Deploy | Block | Driven by |
+|---|---|---|---|---|---|---|
+| `antumbra_curve` | [015](https://github.com/logos-co/rfp/issues/179) | [`8c09b33`](https://github.com/edenbd1/antumbra-lez/commit/8c09b33) | `bcd6d07d27bb0d2ea8c237c46125018e5115815173025a1a24aca505835f1a23` | [`25a8f405…b42f1718`](https://explorer.testnet.lez.logos.co/transaction/25a8f4051b60ff471cb30d9655217e7b172b9b43f3977be327956fd2b42f1718) | 16339 | `create_sale`, `execute_buy` |
+| `antumbra_lbp` | [016](https://github.com/logos-co/rfp/issues/180) | [`8c09b33`](https://github.com/edenbd1/antumbra-lez/commit/8c09b33) | `249648dcf6e2fe70e81c0315bdc5737037d3f343e3362697575dd0a30bbe0e08` | [`f765ec06…98b4eac2`](https://explorer.testnet.lez.logos.co/transaction/f765ec06ae391c8d9e754f40947398cf15d66c9967f2fda23894d30098b4eac2) | 16342 | `create_pool`, `execute_buy` |
+| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/178) | [`8c09b33`](https://github.com/edenbd1/antumbra-lez/commit/8c09b33) | `26134c7901b2cb8c2dac5889155ef17be988d5cd7b77f2af8df10e39a6c235be` | [`f45a7b2f…0b928030`](https://explorer.testnet.lez.logos.co/transaction/f45a7b2fc835e75e9633e6fe8cd00687146f2b05b22591ff38baeec80b928030) | 16335 | `create_schedule`, `record_claim` |
 
 Each ImageID there is checkable without trusting this table: fetch any driven
 transaction and read its `program_id` field, which is the ImageID that executed
 it. `scripts/verify-onchain.sh` covers the deploy hashes.
+
+**If you check an ImageID against this repository, check out the freeze commit
+first.** `spel program-id artifacts/programs/antumbra_curve.bin` on `main` prints
+`49db0fc9…`, the top table's — not `bcd6d07d…`, the one the RFP issue quotes. Both
+are correct: the binaries moved on `b5aa3da`, and the proposals cite the programs
+that were driven, which `8c09b33` builds. `git checkout 8c09b33` and the same
+command prints what the proposal says. The column above is there so that this
+costs a checkout rather than an accusation, and the same applies to
+`antumbra_lbp` and `antumbra_vesting`.
 
 **These three carry a fix for an attack the earlier ones were open to.** LEZ
 deployment is permissionless, so anyone may deploy a program and own accounts
