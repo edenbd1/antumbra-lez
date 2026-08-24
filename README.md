@@ -206,6 +206,29 @@ compiled in: 1% per swap, 5% at close. A rate above it is **refused by name, not
 clamped** — silently clamping a misconfiguration hides it from the person who
 needs to see it.
 
+## Deployed
+
+Three programs are live on the public LEZ testnet, and each deployment carries
+the same four facts: the commit it was frozen at, the ImageID, the deploy
+transaction and the block. That is the convention `logos-co/lez-payment-streams`
+sets for its own live program, and it is what makes a deployment checkable
+rather than asserted.
+
+| Program | Freeze commit | ImageID | Deploy | Block |
+|---|---|---|---|---|
+| `antumbra_curve` | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `49db0fc9…a56fc510` | [`f074ffe1…4d8c3855`](https://explorer.testnet.lez.logos.co/transaction/f074ffe110131ed108d7ea37d6445d7492ff36842ed63399b005dc364d8c3855) | 17265 |
+| `antumbra_lbp` | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `51f28557…b6c7a82d` | [`fbfe7e39…7bbe4859`](https://explorer.testnet.lez.logos.co/transaction/fbfe7e3960cd787a26699cd2690d6a663f88c895f4a68ee6bf7dffa47bbe4859) | 17266 |
+| `antumbra_vesting` | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `4c6e62a5…af93ea7f` | [`9b35fc31…d1691ee2`](https://explorer.testnet.lez.logos.co/transaction/9b35fc31a93a276d13a354863f0ed3c870f6b957a90086775a943837d1691ee2) | 17267 |
+
+An earlier set of the same three programs is still on chain and is what the RFP
+issues quote, because those are the ones that were *driven* rather than merely
+deployed: they are built by
+[`8c09b33`](https://github.com/edenbd1/antumbra-lez/commit/8c09b33), and their
+ImageIDs are `bcd6d07d…`, `249648dc…` and `26134c79…`. Check an ImageID against
+the freeze commit rather than against `main`, or the numbers will disagree for a
+reason that is not a defect. [`DEPLOYMENTS.md`](DEPLOYMENTS.md) has both tables,
+the reconciliation, and every transaction that drove them.
+
 ## Status
 
 This is the pricing core, not the program. The SPEL program, the private
