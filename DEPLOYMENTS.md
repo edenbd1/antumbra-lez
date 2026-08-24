@@ -63,8 +63,11 @@ chain into it; that program could decline to move anything while the curve state
 here still advanced, and the buyer would leave with tokens and keep their money.
 
 The `authenticated_transfer` program id is now **pinned as a constant**, verified
-against `artifacts/lez/programs/authenticated_transfer.bin` at tag v0.2.4
-(ImageID `fe96c422…5eef875a`, reproducible with `spel program-id`), and every
+against
+[artifacts/lez/programs/authenticated\_transfer.bin](https://github.com/logos-blockchain/logos-execution-zone/blob/v0.2.4/artifacts/lez/programs/authenticated_transfer.bin)
+at tag v0.2.4 — that path is in `logos-blockchain/logos-execution-zone`, not in
+this repository, and it is written here without backticks for that reason. Its
+ImageID is `fe96c422…5eef875a`, reproducible with `spel program-id`, and every
 payer is checked against it. The question is no longer "is this account owned by
 something" but "is it owned by *the* transfer program", and on a permissionless
 chain those are very different questions.
