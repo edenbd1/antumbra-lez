@@ -48,7 +48,7 @@ belongs() { # section label -> the programs it belongs to, or "shared"
     private\ *)                                          echo "curve lbp" ;;
     *lbp*|*pool*|*pause*|*weight*)                       echo lbp ;;
     *vest*|*schedule*|*claim*|*milestone*|*cancel*)      echo vesting ;;
-    *curve*|*sale*|*buy*|*fee*|*close*|*sell*)           echo curve ;;
+    *curve*|*sale*|*buy*|*fee*|*close*|*sell*|*paying*) echo curve ;;
     *)                                                    echo shared ;;
   esac
 }
@@ -110,9 +110,6 @@ check curve   execute_buy     1b886f82a9966e94fb2ba2d9181fe69945ceacbd6de4318e99
 check lbp     deploy          f765ec06ae391c8d9e754f40947398cf15d66c9967f2fda23894d30098b4eac2 yes
 check lbp     create_pool     417d64e3ec33b71ea9ae5e6d4a354f063c6b91ee2f4405b6e788e9d69b5dd7af yes
 check lbp     execute_buy     45fa7b915283369d9c6eac61ae2a599a7a4b0042064f788ecb7540b2e2eda6b0 yes
-check vesting deploy          f45a7b2fc835e75e9633e6fe8cd00687146f2b05b22591ff38baeec80b928030 yes
-check vesting create_schedule dbe8c7538ca3c759e0668c9fa285e6fd343aab574fa92d861514e0bcb1bfa475 yes
-check vesting record_claim    3aff5549434a0573a4d98895e7fd28afbdc4353c90ebf217320e3e59ec203685 yes
 section "-- the paying buy: collateral moved by a chained call --"
 check paid    deploy-paying   b6ea6b6d79ac7e32ee52982426255412471d15d156ab197b73896aa2acf0211d yes
 check paid    create_sale     7fa6b18cf81eb91624ecd9fa5e4e4d10ea8bd1da353a0a08c9786902866071b8 yes
@@ -121,10 +118,6 @@ check paid    execute_buy     ea0eeb936cd43850354f44989d6dd1cda15e1e7353ee1f5a53
 check paid    lbp-deploy      65ccfc975bf88f589f91a1440fa5b40de4f9ee9f052dd59929f5ea36d6bea8e5 yes
 check paid    lbp-create      583aa01747742f7db3f2fdbf0632b2ddd7c09c3f1dd13df5e774ea4b6536e8f4 yes
 check paid    lbp-buy         9d981f120ec4b75d0b189691b014cff38c31bcd14df41833c509eb45e867d34c yes
-check paid    vest-deploy     ef50f00718096f428aa59ec79492eb8563a1011d1b1fbb5b82c97b371251e700 yes
-check paid    vest-create     f54e045da3acc684fa94561fcc7d649f614b9824a05e5615cb41cd24b1bcfc21 yes
-check paid    vest-fund       9d9f0a9256b0893b2cdae7899d51a55bafedf1913361d4850003de99778fb2d9 yes
-check paid    vest-payout     a84e5ff1efda083de4f94f2ec9f89dc800e0ea4d864e071efda2ec0883b647e2 yes
 
 # The FIRST payout design chained a transfer out of an account that had signed
 # nothing, and was refused. Keeping the assertion keeps the fact: an unauthorized
@@ -136,19 +129,46 @@ section "-- pause, and what it cannot pause --"
 check pause   set-paused      f51fa03e27edc9fad0ec62cd4a702532e73eef16772d37293933c78f2bc8fe8a yes
 check pause   resume          117ca8eeadc8f5afa889ca5c5675265ec152a2ab18e84c092135922b52dfccad yes
 
-section "-- vesting: cancellation and milestones --"
-check vest    cancel-create   85316f14c130cc58cd08a6b6f76ced688220203cc9188ff1b4de11159a20aa76 yes
-check vest    cancel-fund     190fcddad8c722107f538397492639f2a454380eb9ec831887078cfce5ba3297 yes
-check vest    cancel          1d4935cd06a03feaec9bd421bd89209224b8b7b31d8b59d1726ad8b0c493fca1 yes
-check vest    claim-post-canc 708978b02411b78b8115d3911a5f30ee468f7b57937ab7d49f0af9855b0db84a yes
-check vest    ms-signal-0     3ae1ffc4862cf0afcc757c1e23bc03ebccb2941f554b24fb2805b85fc354ee54 yes
-check vest    ms-claim-1      a47a1d3383abaa17e9cdff57977b2d18e542ba711fe5f0de77e5ab8178753422 yes
-check vest    ms-signal-1     9b2d01803ea362c61e4f1a87d0305d8d3da3c53ebf2023234836062a4a82b278 yes
-check vest    ms-claim-2      7e7b87ab9e97a2cce98bab3cb11156ef0bb66d8811940fa84e18080186921e4e yes
+# The public testnet was reset on 2026-09-08 (its genesis block is dated 13:33
+# UTC that day), and every transaction from before then returns null — ours and
+# everyone else's. The vesting program was redeployed from the same binary on
+# 2026-09-26, which reproduced the same deploy hash (9b35fc31… above, content
+# addressed) and the same ImageID, and its whole lifecycle was driven again with
+# scripts/replay-vesting.sh. These are those transactions. The curve and pool
+# rows elsewhere in this file predate the reset and have not been re-driven yet,
+# so a full run reports them missing — which is true.
+section "-- vesting on the current testnet: pay, cancel, milestones, transfer --"
+check vest    create          4c841d44f16347536687ee4ad9f33d3a68b179530c8c37a10b016a0ed246d78b yes
+check vest    fund            f35e03b5b1c7264c8b605d98994264e1379eb0afb6deeb2457b6256b436e2837 yes
+check vest    claim_and_pay   2a4f2331f9fe5ba0cb5d00f9d25598acec4304ef5292386871d0e1f91e97ce6c yes
+check vest    cancel-create   3895ac750ee725a01043e7315ba25ea2883e6701da46becd12697fc4ae3aaae0 yes
+check vest    cancel-fund     49606fcc7894f2536ec8cd33fa1283e7a774a7e1de8f5bb83eac1f0d94ef11b6 yes
+check vest    cancel          44bee081400ea6d15cea69926b1857e17b0a08b31bed68ccbd08a76be997e341 yes
+check vest    claim-post-canc 0c777ed768da314b36aef92072c3f54eb70c7f6da2368ff464fb03417b0d4785 yes
+check vest    ms-create       9148abc204b554572478a867a12bd6181a60fd350138401b0ae7f3879ef3ceff yes
+check vest    ms-fund         5b660ba7ab9b7887e147829178d5fb09f2c1e2faf356fc35776b250ca375fcab yes
+check vest    ms-signal-0     13ae7130d2e54892057bab878ba0a83f3c68755dcce6ff0623da620c00c0c605 yes
+check vest    ms-claim-1      12b0bb25490f909b40ca51f65021c49d43601206bd2b43ac0ac56f68804ecfea yes
+check vest    ms-signal-1     54db03c6ed75e5aed14cbed406c89410ffa1afe457c5e799b95f08e4f590f527 yes
+check vest    ms-claim-2      7990a21e636e2bc981df854f88a0407dbc991440e334df3749b4bcdd70e54e76 yes
+check vest    xfer-create     c4f4a691e8abd06125f09dc08e32686841818c5b11d8365954e6d47ce04a9ac3 yes
+check vest    xfer-by-holder  c035d3e3003650917216c0a6b32c9c6c09fd4b4f820325bf45ebac66b09aa7c9 yes
+check vest    make-noncancel  8189e3ffdf2be9af390348de2343979bd3fe6b25f414f5772378cb87375f48bd yes
+check vest    accrual-create  90281b913b27deb7ddaed36c7173df2023af34ff8c92d41ae2ed1a80a172ccfa yes
+check vest    accrual-fund    a221ef0ae34b7439fe559a3e179bdd3f159092b6159f5bc820e8b3cdb703b12e yes
+check vest    claim-t4959     4355400eac80b42832b46cbbf6566819bd42d850eb8a86daf9363e8de3e32e43 yes
+check vest    claim-t8919     d7a53e7f32504a8ef1fdd7772ec8bfcbca968b2b58cf88a855abf909014c8f18 yes
 
-check vest    xfer-create     a5c1eef17d852681b1e993fa0dff2ca55a370d48aa43fe6f1995e175ec53487b yes
-check vest    xfer-by-holder  9b87fc9d37839828733d736c4e1bf36f129fbe257d5e0b8bf5ed63c372e4dd89 yes
-check vest    make-noncancel  ced7d77ea0495943cb2faac477212cd8699d6cb28aebf63ccb7a65da68cefffe yes
+# Each of these was submitted by the same run and refused by the program, so it
+# never landed. They are the requirements stated as what the program will not do.
+section "-- vesting: the refusals, each submitted and none landed --"
+check REFUSED claim-again     a439e53b3f6751fc3ceedb059bbcabbf67521c6b26b0a05bdd92d2ebae21b9f4 no
+check REFUSED ms-claim-early  20a96362070106a077d3d45e02e5512d0c7650331dc13de74b60faefaf55b164 no
+check REFUSED ms-signal-twice 4d0c5781b62fc008d5ea2c07d4af38bb4b0dcd007bbec6245d9bb605c542db23 no
+check REFUSED ms-signal-2of2  00d89ff58b3324607fc17cc66ae7a61c3bb9604e10ef5737794526caddeb319a no
+check REFUSED xfer-by-creator 9f19fe874f544e6c08565278a71370307af97b5e9ae6dcdc70184b06c9820f5c no
+check REFUSED cancel-noncanc  72014d82090aadf62f7a04f2af4fba0d7e5ccfc5170175cb16ad458311aa0157 no
+check REFUSED noncanc-twice   7f3922243553d51ac0bd080c589b708aea349a6de94763124b77c3483c9b6129 no
 
 section "-- the per-swap fee: accrued on the buy, swept on its own --"
 check fee     deploy          53e149f997a343c91af6223b101889330cca46a1ad4ec92dadd5d8d9ba72bc91 yes
@@ -204,9 +224,9 @@ if [ "$fail" -eq 0 ]; then
     echo "The never-deployed hash still does not, which is what makes the rest mean"
     echo "something."
   else
-    echo "All fifty-two expected transactions resolve."
-    echo "Neither the never-deployed hash nor the refused vesting payout does, which is"
-    echo "what makes the other fifty-two mean something."
+    echo "All $ran expected checks hold."
+    echo "The never-deployed hash and every refused call still do not resolve, which is"
+    echo "what makes the rest mean something."
   fi
 }
 else

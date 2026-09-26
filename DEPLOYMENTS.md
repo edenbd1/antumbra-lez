@@ -13,6 +13,33 @@ sides of the transaction that changed it, and
 in one command — including two that must **not** resolve, because a check with
 no negative control is not a check.
 
+## The testnet was reset on 2026-09-08, and vesting has been driven again since
+
+The public testnet's state was wiped: its current genesis block is dated
+**2026-09-08 13:33 UTC**, and every transaction from before then — ours, and
+every other team's — now returns `null` from the sequencer and "Transaction not
+found" from the explorer. The runtime did not change; the wallet's own
+`check-health` still matches every builtin program against v0.2.4.
+
+**`antumbra_vesting` was redeployed on 2026-09-26 from the unchanged binary, and
+the deploy transaction came back with the same hash it had before the reset**,
+`9b35fc31…d1691ee2`, now at block 25898. That is not a coincidence to be
+explained away: a LEZ deploy hash is `SHA256(len ‖ bytecode)`, so the same file
+gives the same hash and the same ImageID on any chain. It is the strongest
+evidence this repository can offer that the program running today is the one
+the source builds.
+
+Its whole lifecycle was then driven again — paying claim, cancellation,
+milestones, transfer, the one-way conversion, and an accrual that does not
+divide evenly — by [`scripts/replay-vesting.sh`](scripts/replay-vesting.sh), so
+the next reset costs one command instead of an afternoon. 29 transactions: 22
+landed and 7 were refused by the program exactly where the RFP says it must
+refuse. `./scripts/verify-onchain.sh --only vesting` checks every one of them.
+
+**The curve and pool tables further down predate the reset and have not been
+re-driven yet.** They are left as the record of what ran, not presented as live:
+a full `verify-onchain.sh` run reports them missing, which is the truth.
+
 **The current deployments.** Each is content-addressed, so the ImageID *is* the
 version: rebuilding from the same source reproduces the same program id whoever
 runs the build. That also means the earlier ImageIDs quoted further down are not
@@ -33,7 +60,7 @@ it. Neither substitutes for the other.
 |---|---|---|---|---|---|
 | `antumbra_curve` | [015](https://github.com/logos-co/rfp/issues/179) | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `49db0fc91883668a5ccb85242aa1cdf923a557a7327f7c0613ad526fa56fc510` | [`f074ffe1…4d8c3855`](https://explorer.testnet.lez.logos.co/transaction/f074ffe110131ed108d7ea37d6445d7492ff36842ed63399b005dc364d8c3855) | 17265 |
 | `antumbra_lbp` | [016](https://github.com/logos-co/rfp/issues/180) | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `51f28557602ae6daff97e51127ba6dbc5ddfe6048ea7cd89ca5e170ab6c7a82d` | [`fbfe7e39…7bbe4859`](https://explorer.testnet.lez.logos.co/transaction/fbfe7e3960cd787a26699cd2690d6a663f88c895f4a68ee6bf7dffa47bbe4859) | 17266 |
-| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/178) | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `4c6e62a585934f87ef919c63a252fb33faef14d9ed1af2bd17da62deaf93ea7f` | [`9b35fc31…d1691ee2`](https://explorer.testnet.lez.logos.co/transaction/9b35fc31a93a276d13a354863f0ed3c870f6b957a90086775a943837d1691ee2) | 17267 |
+| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/178) | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `4c6e62a585934f87ef919c63a252fb33faef14d9ed1af2bd17da62deaf93ea7f` | [`9b35fc31…d1691ee2`](https://explorer.testnet.lez.logos.co/transaction/9b35fc31a93a276d13a354863f0ed3c870f6b957a90086775a943837d1691ee2) | 25898 (redeployed after the reset; the hash is unchanged) |
 
 The four facts in that table — freeze commit, ImageID, deploy transaction,
 block — are the convention `logos-co/lez-payment-streams` sets for its own live
@@ -41,8 +68,10 @@ program. They are what makes a deployment checkable rather than asserted.
 
 **The builds the RFP issues cite, and where they went.** The three proposals
 quote the deployments that were *driven*, which are the earlier programs, not the
-top table. Both sets are live and neither supersedes the other on chain, so the
-earlier ImageIDs are recorded here rather than left for a reviewer to reconcile:
+top table. Both sets were live side by side until the 2026-09-08 reset removed
+them; the earlier ImageIDs are recorded here rather than left for a reviewer to
+reconcile. RFP-017 now cites the redeployed `4c6e62a5…` above, which is the build
+every post-reset vesting transaction ran against:
 
 | Program | RFP | Freeze commit | ImageID | Deploy | Block | Driven by |
 |---|---|---|---|---|---|---|
@@ -101,8 +130,8 @@ the host.
 | `antumbra_curve` | `execute_buy` | [`1b886f82…fa4ba71a`](https://explorer.testnet.lez.logos.co/transaction/1b886f82a9966e94fb2ba2d9181fe69945ceacbd6de4318e99e3d902fa4ba71a) | 16417 |
 | `antumbra_lbp` | `create_pool` | [`417d64e3…9b5dd7af`](https://explorer.testnet.lez.logos.co/transaction/417d64e3ec33b71ea9ae5e6d4a354f063c6b91ee2f4405b6e788e9d69b5dd7af) | 16418 |
 | `antumbra_lbp` | `execute_buy` | [`45fa7b91…e2eda6b0`](https://explorer.testnet.lez.logos.co/transaction/45fa7b915283369d9c6eac61ae2a599a7a4b0042064f788ecb7540b2e2eda6b0) | 16419 |
-| `antumbra_vesting` | `create_schedule` | [`dbe8c753…b1bfa475`](https://explorer.testnet.lez.logos.co/transaction/dbe8c7538ca3c759e0668c9fa285e6fd343aab574fa92d861514e0bcb1bfa475) | 16413 |
-| `antumbra_vesting` | `record_claim` | [`3aff5549…ec203685`](https://explorer.testnet.lez.logos.co/transaction/3aff5549434a0573a4d98895e7fd28afbdc4353c90ebf217320e3e59ec203685) | 16415 |
+| `antumbra_vesting` | `claim_and_pay`, t = 4959 | [`4355400e…e3e32e43`](https://explorer.testnet.lez.logos.co/transaction/4355400eac80b42832b46cbbf6566819bd42d850eb8a86daf9363e8de3e32e43) | 25968 |
+| `antumbra_vesting` | `claim_and_pay`, t = 8919 | [`d7a53e7f…014c8f18`](https://explorer.testnet.lez.logos.co/transaction/d7a53e7f32504a8ef1fdd7772ec8bfcbca968b2b58cf88a855abf909014c8f18) | 25969 |
 
 The host side of every comparison below is reproducible too — a claim that the
 chain agrees with this crate is only checkable if both halves are:
@@ -144,10 +173,14 @@ guest**, agreeing to the unit with the host kernel. The pool account stores
 `w_start` and `w_end`; it stores no current weight, because there is none to
 store.
 
-**Vesting.** A linear schedule of 1e21 from t=1000 to t=8919, claimed at
-t=4959. The PDA `SqLgfYnsQ6STtHRvjNxj1MmXjM3EsUBbsCCvDCcpX9B` came back with
-`claimed = 499936860714736709180` — the same value as `total × (4959−1000) ÷
-(8919−1000)` computed off chain, to the unit.
+**Vesting, after the reset.** A linear schedule of **97** from t=1000 to t=8919,
+funded and then claimed at t=4959. `total × (4959−1000) ÷ (8919−1000)` is
+48.49…, and the beneficiary's balance went **45 → 93**: the program paid **48**,
+floored, and left the residue in the holding (**97 → 49**). The claim at t=8919
+then paid exactly the **49** that remained, and the holding reads **0**. Floored
+in the middle, exact at the end, to the unit, both read back from the chain.
+(The pre-reset run did the same on a schedule of 1e21 with the since-deleted
+`record_claim`; that deployment is gone with the old chain.)
 
 ## The buy now takes payment, and that changes what these programs are
 
@@ -240,14 +273,14 @@ creates the holding and `fund_schedule` fills it, exactly as
 
 | step | transaction | effect |
 |---|---|---|
-| deploy (`2167726c…`) | [`ef50f007…1251e700`](https://explorer.testnet.lez.logos.co/transaction/ef50f00718096f428aa59ec79492eb8563a1011d1b1fbb5b82c97b371251e700) | block 16687 |
-| `create_schedule` | [`f54e045d…b1bcfc21`](https://explorer.testnet.lez.logos.co/transaction/f54e045da3acc684fa94561fcc7d649f614b9824a05e5615cb41cd24b1bcfc21) | schedule + holding created |
-| `fund_schedule` | [`9d9f0a92…778fb2d9`](https://explorer.testnet.lez.logos.co/transaction/9d9f0a9256b0893b2cdae7899d51a55bafedf1913361d4850003de99778fb2d9) | creator **3 → 1**, holding **0 → 2** |
-| `claim_and_pay` | [`a84e5ff1…83b647e2`](https://explorer.testnet.lez.logos.co/transaction/a84e5ff1efda083de4f94f2ec9f89dc800e0ea4d864e071efda2ec0883b647e2) | holding **2 → 0**, beneficiary **1 → 3** |
+| deploy (`4c6e62a5…`, the hardened build) | [`9b35fc31…d1691ee2`](https://explorer.testnet.lez.logos.co/transaction/9b35fc31a93a276d13a354863f0ed3c870f6b957a90086775a943837d1691ee2) | block 25898 |
+| `create_schedule` | [`4c841d44…d246d78b`](https://explorer.testnet.lez.logos.co/transaction/4c841d44f16347536687ee4ad9f33d3a68b179530c8c37a10b016a0ed246d78b) | schedule + holding created |
+| `fund_schedule` | [`f35e03b5…436e2837`](https://explorer.testnet.lez.logos.co/transaction/f35e03b5b1c7264c8b605d98994264e1379eb0afb6deeb2457b6256b436e2837) | creator **30 → 28**, holding **0 → 2** |
+| `claim_and_pay` | [`2a4f2331…1e97ce6c`](https://explorer.testnet.lez.logos.co/transaction/2a4f2331f9fe5ba0cb5d00f9d25598acec4304ef5292386871d0e1f91e97ce6c) | holding **2 → 0**, beneficiary **40 → 42** |
 
 The schedule afterwards reads `total = 2`, `claimed = 2`, `last_seen = 2000`, and
 a **second** claim at the same timestamp is refused, because nothing is
-claimable. Paid once, recorded once.
+claimable (`a439e53b…`, submitted and never landed). Paid once, recorded once.
 
 **So what is LP-0013 actually for, then?** Moving a balance held by a *different*
 program — an SPL-style token account — where the payer is neither the signer nor
@@ -270,9 +303,9 @@ of 2 over `t = 1000…3000`, cancelled at the midpoint:
 
 | step | transaction | effect |
 |---|---|---|
-| create + fund | [`85316f14…9a20aa76`](https://explorer.testnet.lez.logos.co/transaction/85316f14c130cc58cd08a6b6f76ced688220203cc9188ff1b4de11159a20aa76) · [`190fcdda…e5ba3297`](https://explorer.testnet.lez.logos.co/transaction/190fcddad8c722107f538397492639f2a454380eb9ec831887078cfce5ba3297) | creator **3 → 1**, holding **0 → 2** |
-| `cancel` at t = 2000 | [`1d4935cd…c493fca1`](https://explorer.testnet.lez.logos.co/transaction/1d4935cd06a03feaec9bd421bd89209224b8b7b31d8b59d1726ad8b0c493fca1) | creator **1 → 2**, holding **2 → 1** |
-| `claim_and_pay` **after** cancelling, at t = 9999 | [`708978b0…5b0db84a`](https://explorer.testnet.lez.logos.co/transaction/708978b02411b78b8115d3911a5f30ee468f7b57937ab7d49f0af9855b0db84a) | beneficiary **0 → 1**, holding **1 → 0** |
+| create + fund | [`3895ac75…ae3aaae0`](https://explorer.testnet.lez.logos.co/transaction/3895ac750ee725a01043e7315ba25ea2883e6701da46becd12697fc4ae3aaae0) · [`49606fcc…94ef11b6`](https://explorer.testnet.lez.logos.co/transaction/49606fcc7894f2536ec8cd33fa1283e7a774a7e1de8f5bb83eac1f0d94ef11b6) | creator **28 → 26**, holding **0 → 2** |
+| `cancel` at t = 2000 | [`44bee081…e997e341`](https://explorer.testnet.lez.logos.co/transaction/44bee081400ea6d15cea69926b1857e17b0a08b31bed68ccbd08a76be997e341) | creator **26 → 27**, holding **2 → 1** |
+| `claim_and_pay` **after** cancelling, at t = 9999 | [`0c777ed7…7b0d4785`](https://explorer.testnet.lez.logos.co/transaction/0c777ed768da314b36aef92072c3f54eb70c7f6da2368ff464fb03417b0d4785) | beneficiary **42 → 43**, holding **1 → 0** |
 
 That last row is the requirement most implementations get wrong. The RFP says
 tokens already vested but unclaimed **remain claimable after cancellation** — so
@@ -286,12 +319,12 @@ two equal tranches:
 
 | step | outcome |
 |---|---|
-| claim before any signal | **refused** — nothing released |
-| `signal_milestone(0)` | [`3ae1ffc4…c354ee54`](https://explorer.testnet.lez.logos.co/transaction/3ae1ffc4862cf0afcc757c1e23bc03ebccb2941f554b24fb2805b85fc354ee54) |
-| `signal_milestone(0)` **again** | **refused** — the bit is already set |
-| claim | [`a47a1d33…78753422`](https://explorer.testnet.lez.logos.co/transaction/a47a1d3383abaa17e9cdff57977b2d18e542ba711fe5f0de77e5ab8178753422) — beneficiary **1 → 2**, exactly one tranche |
-| `signal_milestone(1)` + claim | [`9b2d0180…4a82b278`](https://explorer.testnet.lez.logos.co/transaction/9b2d01803ea362c61e4f1a87d0305d8d3da3c53ebf2023234836062a4a82b278) · [`7e7b87ab…86921e4e`](https://explorer.testnet.lez.logos.co/transaction/7e7b87ab9e97a2cce98bab3cb11156ef0bb66d8811940fa84e18080186921e4e) — holding **→ 0** |
-| `signal_milestone(2)` | **refused** — past the tranche count |
+| claim before any signal | **refused** — nothing released (`20a96362…`) |
+| `signal_milestone(0)` | [`13ae7130…00c0c605`](https://explorer.testnet.lez.logos.co/transaction/13ae7130d2e54892057bab878ba0a83f3c68755dcce6ff0623da620c00c0c605) |
+| `signal_milestone(0)` **again** | **refused** — the bit is already set (`4d0c5781…`) |
+| claim | [`12b0bb25…804ecfea`](https://explorer.testnet.lez.logos.co/transaction/12b0bb25490f909b40ca51f65021c49d43601206bd2b43ac0ac56f68804ecfea) — beneficiary **43 → 44**, exactly one tranche |
+| `signal_milestone(1)` + claim | [`54db03c6…f590f527`](https://explorer.testnet.lez.logos.co/transaction/54db03c6ed75e5aed14cbed406c89410ffa1afe457c5e799b95f08e4f590f527) · [`7990a21e…70e54e76`](https://explorer.testnet.lez.logos.co/transaction/7990a21e636e2bc981df854f88a0407dbc991440e334df3749b4bcdd70e54e76) — beneficiary **44 → 45**, holding **→ 0** |
+| `signal_milestone(2)` | **refused** — past the tranche count (`00d89ff5…`) |
 
 The holding reaching exactly **zero** is not luck. Released is
 `total × signalled / tranches` floored, so when every bit is set the numerator
@@ -301,15 +334,18 @@ obtained for free.
 
 **Transferability and the one-way conversion, with the refusals that define
 them.** A transferable schedule
-([`a5c1eef1…`](https://explorer.testnet.lez.logos.co/transaction/a5c1eef17d852681b1e993fa0dff2ca55a370d48aa43fe6f1995e175ec53487b)):
+([`c4f4a691…e04a9ac3`](https://explorer.testnet.lez.logos.co/transaction/c4f4a691e8abd06125f09dc08e32686841818c5b11d8365954e6d47ce04a9ac3)):
 
 | attempt | outcome |
 |---|---|
-| the **creator** transfers the beneficiary | **refused** |
-| the **holder** transfers it | [`9b87fc9d…c372e4dd89`](https://explorer.testnet.lez.logos.co/transaction/9b87fc9d37839828733d736c4e1bf36f129fbe257d5e0b8bf5ed63c372e4dd89) — the account reads the new beneficiary |
-| `make_non_cancelable` | [`ced7d77e…68cefffe`](https://explorer.testnet.lez.logos.co/transaction/ced7d77ea0495943cb2faac477212cd8699d6cb28aebf63ccb7a65da68cefffe) — the flag reads 0 |
-| `cancel` afterwards | **refused**, and `cancelled_at` still reads 0 |
-| `make_non_cancelable` again | **refused** |
+| the **creator** transfers the beneficiary | **refused** (`9f19fe87…`) |
+| the **holder** transfers it | [`c035d3e3…b09aa7c9`](https://explorer.testnet.lez.logos.co/transaction/c035d3e3003650917216c0a6b32c9c6c09fd4b4f820325bf45ebac66b09aa7c9) — the account reads the new beneficiary |
+| `make_non_cancelable` | [`8189e3ff…375f48bd`](https://explorer.testnet.lez.logos.co/transaction/8189e3ffdf2be9af390348de2343979bd3fe6b25f414f5772378cb87375f48bd) — the flag reads 0 |
+| `cancel` afterwards | **refused** (`72014d82…`), and `cancelled_at` still reads 0 |
+| `make_non_cancelable` again | **refused** (`7f392224…`) |
+
+Every "reads" in that table is [`scripts/read-schedule.py`](scripts/read-schedule.py)
+decoding the schedule account from the chain, field by field.
 
 The first row is the one worth having. A creator who could reassign a
 beneficiary could redirect vested compensation to themselves, so the holder moves
@@ -512,7 +548,7 @@ have written "atomic deshield" into a milestone and discovered it in month four.
 
 ```bash
 curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"getTransaction","params":["f45a7b2fc835e75e9633e6fe8cd00687146f2b05b22591ff38baeec80b928030"]}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"getTransaction","params":["9b35fc31a93a276d13a354863f0ed3c870f6b957a90086775a943837d1691ee2"]}'
 ```
 
 A deployed transaction returns `"result":[<tx>,<block>]`. The control that makes

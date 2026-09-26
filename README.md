@@ -218,10 +218,18 @@ rather than asserted.
 |---|---|---|---|---|
 | `antumbra_curve` | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `49db0fc9…a56fc510` | [`f074ffe1…4d8c3855`](https://explorer.testnet.lez.logos.co/transaction/f074ffe110131ed108d7ea37d6445d7492ff36842ed63399b005dc364d8c3855) | 17265 |
 | `antumbra_lbp` | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `51f28557…b6c7a82d` | [`fbfe7e39…7bbe4859`](https://explorer.testnet.lez.logos.co/transaction/fbfe7e3960cd787a26699cd2690d6a663f88c895f4a68ee6bf7dffa47bbe4859) | 17266 |
-| `antumbra_vesting` | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `4c6e62a5…af93ea7f` | [`9b35fc31…d1691ee2`](https://explorer.testnet.lez.logos.co/transaction/9b35fc31a93a276d13a354863f0ed3c870f6b957a90086775a943837d1691ee2) | 17267 |
+| `antumbra_vesting` | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `4c6e62a5…af93ea7f` | [`9b35fc31…d1691ee2`](https://explorer.testnet.lez.logos.co/transaction/9b35fc31a93a276d13a354863f0ed3c870f6b957a90086775a943837d1691ee2) | 25898 |
 
-An earlier set of the same three programs is still on chain and is what the RFP
-issues quote, because those are the ones that were *driven* rather than merely
+**The public testnet was reset on 2026-09-08**, which removed every transaction
+from before that date, ours and everyone's. `antumbra_vesting` was redeployed on
+2026-09-26 from the same binary — the deploy hash came back identical, because
+it is `SHA256(len ‖ bytecode)` — and its full lifecycle re-driven with
+[`scripts/replay-vesting.sh`](scripts/replay-vesting.sh); `./scripts/verify-onchain.sh
+--only vesting` checks all of it. The curve and pool rows above are pre-reset and
+have not been re-driven yet.
+
+An earlier set of the same three programs was on chain before the reset and is what the RFP-015
+and RFP-016 issues quote, because those are the ones that were *driven* rather than merely
 deployed: they are built by
 [`8c09b33`](https://github.com/edenbd1/antumbra-lez/commit/8c09b33), and their
 ImageIDs are `bcd6d07d…`, `249648dc…` and `26134c79…`. Check an ImageID against
