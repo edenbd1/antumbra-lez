@@ -13,32 +13,43 @@ sides of the transaction that changed it, and
 in one command — including two that must **not** resolve, because a check with
 no negative control is not a check.
 
-## The testnet was reset on 2026-09-08, and vesting has been driven again since
+## `antumbra_vesting` now: the chain's clock, real tokens, private claims
 
-The public testnet's state was wiped: its current genesis block is dated
-**2026-09-08 13:33 UTC**, and every transaction from before then — ours, and
-every other team's — now returns `null` from the sequencer and "Transaction not
-found" from the explorer. The runtime did not change; the wallet's own
-`check-health` still matches every builtin program against v0.2.4.
+**The current vesting program and every call made against it are on one page,
+[`evidence/VESTING.md`](evidence/VESTING.md)**, generated from the replay log
+rather than written by hand. `./scripts/verify-onchain.sh --only vesting`
+re-checks every line of it against the public sequencer.
 
-**`antumbra_vesting` was redeployed on 2026-09-26 from the unchanged binary, and
-the deploy transaction came back with the same hash it had before the reset**,
-`9b35fc31…d1691ee2`, now at block 25898. That is not a coincidence to be
-explained away: a LEZ deploy hash is `SHA256(len ‖ bytecode)`, so the same file
-gives the same hash and the same ImageID on any chain. It is the strongest
-evidence this repository can offer that the program running today is the one
-the source builds.
+What that program does that the earlier one, recorded further down, did not:
 
-Its whole lifecycle was then driven again — paying claim, cancellation,
-milestones, transfer, the one-way conversion, and an accrual that does not
-divide evenly — by [`scripts/replay-vesting.sh`](scripts/replay-vesting.sh), so
-the next reset costs one command instead of an afternoon. 29 transactions: 22
-landed and 7 were refused by the program exactly where the RFP says it must
-refuse. `./scripts/verify-onchain.sh --only vesting` checks every one of them.
+- **Time comes from the LEZ clock accounts**, not from the caller. The earlier
+  program took `now` as an argument, so a beneficiary could claim "at the end
+  date" on the first day and a creator could cancel "at the start". Both checks
+  are made — the clock program as owner, a clock address as the address — and
+  the replay shows a caller-supplied account refused. `cancel` requires the
+  per-block clock. `claim` also accepts the 10- and 50-block clocks, because a
+  privacy-preserving claim is proved against its public inputs as they were when
+  proving began and the sequencer re-checks it against them at inclusion: the
+  per-block clock has always moved on by then, the 50-block clock has not. A
+  coarser reading can only make a claim pay less than has vested, never more.
+- **A real token-program token can be escrowed**, not only native balance. The
+  holding is owned by the token program and paid out by a chained `Transfer`
+  carrying this program's PDA seed. The token program is pinned by ImageID.
+- **Claims pay into a destination the beneficiary names**, public or shielded;
+  the replay claims into a private account in both assets.
+- **A nominated cancel authority and milestone authority**, each defaulting to
+  the creator, and a refund account fixed at creation so whoever cancels cannot
+  redirect the unvested part.
+- **The cliff pays its lump**: at the cliff, everything accrued since the start.
 
-**The curve and pool tables further down predate the reset and have not been
-re-driven yet.** They are left as the record of what ran, not presented as live:
-a full `verify-onchain.sh` run reports them missing, which is the truth.
+**The testnet was reset on 2026-09-08** (its genesis block is dated 13:33 UTC
+that day): every transaction from before then — ours, and every other team's —
+returns `null` from the sequencer. **The curve and pool tables below predate the
+reset and have not been re-driven**; they are the record of what ran, and a full
+`verify-onchain.sh` run reports them missing, which is the truth. The earlier
+vesting program was redeployed after the reset from the unchanged file and
+reproduced its deploy hash exactly, `9b35fc31…`, because a LEZ deploy hash is
+`SHA256(len ‖ bytecode)`: the same file gives the same hash on any chain.
 
 **The current deployments.** Each is content-addressed, so the ImageID *is* the
 version: rebuilding from the same source reproduces the same program id whoever
@@ -60,7 +71,7 @@ it. Neither substitutes for the other.
 |---|---|---|---|---|---|
 | `antumbra_curve` | [015](https://github.com/logos-co/rfp/issues/179) | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `49db0fc91883668a5ccb85242aa1cdf923a557a7327f7c0613ad526fa56fc510` | [`f074ffe1…4d8c3855`](https://explorer.testnet.lez.logos.co/transaction/f074ffe110131ed108d7ea37d6445d7492ff36842ed63399b005dc364d8c3855) | 17265 |
 | `antumbra_lbp` | [016](https://github.com/logos-co/rfp/issues/180) | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `51f28557602ae6daff97e51127ba6dbc5ddfe6048ea7cd89ca5e170ab6c7a82d` | [`fbfe7e39…7bbe4859`](https://explorer.testnet.lez.logos.co/transaction/fbfe7e3960cd787a26699cd2690d6a663f88c895f4a68ee6bf7dffa47bbe4859) | 17266 |
-| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/178) | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `4c6e62a585934f87ef919c63a252fb33faef14d9ed1af2bd17da62deaf93ea7f` | [`9b35fc31…d1691ee2`](https://explorer.testnet.lez.logos.co/transaction/9b35fc31a93a276d13a354863f0ed3c870f6b957a90086775a943837d1691ee2) | 25898 (redeployed after the reset; the hash is unchanged) |
+| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/186) | [`9aeedf7`](https://github.com/edenbd1/antumbra-lez/commit/9aeedf7b49460677e8b8029dbb490a28d10e0d14) | `cf1d5564469e42963ea5d6456bbeabf661c470982d87e256043a8eb5a835b560` | [`e5053201…fbe36b4c`](https://explorer.testnet.lez.logos.co/transaction/e5053201c25ada30c2a09d4d595c40792957f360f5ecdca13abb39f3fbe36b4c) | 26204 |
 
 The four facts in that table — freeze commit, ImageID, deploy transaction,
 block — are the convention `logos-co/lez-payment-streams` sets for its own live
@@ -548,7 +559,7 @@ have written "atomic deshield" into a milestone and discovered it in month four.
 
 ```bash
 curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"getTransaction","params":["9b35fc31a93a276d13a354863f0ed3c870f6b957a90086775a943837d1691ee2"]}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"getTransaction","params":["e5053201c25ada30c2a09d4d595c40792957f360f5ecdca13abb39f3fbe36b4c"]}'
 ```
 
 A deployed transaction returns `"result":[<tx>,<block>]`. The control that makes

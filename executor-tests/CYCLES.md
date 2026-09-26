@@ -13,9 +13,9 @@ fails if it drifts.
 
 | operation | cycles | share of the 32M public-execution cap |
 |---|---:|---:|
-| create schedule | 248249 | 0.740% |
-| claim (native) | 362484 | 1.080% |
-| cancel (native) | 362902 | 1.082% |
-| claim (token, chained transfer) | 466051 | 1.389% |
-| signal milestone | 227304 | 0.677% |
-| transfer beneficiary | 236844 | 0.706% |
+| create schedule | 248166 | 0.740% |
+| claim (native) | 362546 | 1.080% |
+| cancel (native) | 362964 | 1.082% |
+| claim (token, chained transfer) | 465903 | 1.388% |
+| signal milestone | 227274 | 0.677% |
+| transfer beneficiary | 236964 | 0.706% |

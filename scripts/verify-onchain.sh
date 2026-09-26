@@ -101,7 +101,6 @@ section "-- the hardened programs, with the transfer program id pinned --"
 echo
 check hard    curve-deploy    f074ffe110131ed108d7ea37d6445d7492ff36842ed63399b005dc364d8c3855 yes
 check hard    lbp-deploy      fbfe7e3960cd787a26699cd2690d6a663f88c895f4a68ee6bf7dffa47bbe4859 yes
-check hard    vesting-deploy  9b35fc31a93a276d13a354863f0ed3c870f6b957a90086775a943837d1691ee2 yes
 
 echo
 check curve   deploy          25a8f4051b60ff471cb30d9655217e7b172b9b43f3977be327956fd2b42f1718 yes
@@ -131,44 +130,25 @@ check pause   resume          117ca8eeadc8f5afa889ca5c5675265ec152a2ab18e84c0921
 
 # The public testnet was reset on 2026-09-08 (its genesis block is dated 13:33
 # UTC that day), and every transaction from before then returns null — ours and
-# everyone else's. The vesting program was redeployed from the same binary on
-# 2026-09-26, which reproduced the same deploy hash (9b35fc31… above, content
-# addressed) and the same ImageID, and its whole lifecycle was driven again with
-# scripts/replay-vesting.sh. These are those transactions. The curve and pool
-# rows elsewhere in this file predate the reset and have not been re-driven yet,
-# so a full run reports them missing — which is true.
-section "-- vesting on the current testnet: pay, cancel, milestones, transfer --"
-check vest    create          4c841d44f16347536687ee4ad9f33d3a68b179530c8c37a10b016a0ed246d78b yes
-check vest    fund            f35e03b5b1c7264c8b605d98994264e1379eb0afb6deeb2457b6256b436e2837 yes
-check vest    claim_and_pay   2a4f2331f9fe5ba0cb5d00f9d25598acec4304ef5292386871d0e1f91e97ce6c yes
-check vest    cancel-create   3895ac750ee725a01043e7315ba25ea2883e6701da46becd12697fc4ae3aaae0 yes
-check vest    cancel-fund     49606fcc7894f2536ec8cd33fa1283e7a774a7e1de8f5bb83eac1f0d94ef11b6 yes
-check vest    cancel          44bee081400ea6d15cea69926b1857e17b0a08b31bed68ccbd08a76be997e341 yes
-check vest    claim-post-canc 0c777ed768da314b36aef92072c3f54eb70c7f6da2368ff464fb03417b0d4785 yes
-check vest    ms-create       9148abc204b554572478a867a12bd6181a60fd350138401b0ae7f3879ef3ceff yes
-check vest    ms-fund         5b660ba7ab9b7887e147829178d5fb09f2c1e2faf356fc35776b250ca375fcab yes
-check vest    ms-signal-0     13ae7130d2e54892057bab878ba0a83f3c68755dcce6ff0623da620c00c0c605 yes
-check vest    ms-claim-1      12b0bb25490f909b40ca51f65021c49d43601206bd2b43ac0ac56f68804ecfea yes
-check vest    ms-signal-1     54db03c6ed75e5aed14cbed406c89410ffa1afe457c5e799b95f08e4f590f527 yes
-check vest    ms-claim-2      7990a21e636e2bc981df854f88a0407dbc991440e334df3749b4bcdd70e54e76 yes
-check vest    xfer-create     c4f4a691e8abd06125f09dc08e32686841818c5b11d8365954e6d47ce04a9ac3 yes
-check vest    xfer-by-holder  c035d3e3003650917216c0a6b32c9c6c09fd4b4f820325bf45ebac66b09aa7c9 yes
-check vest    make-noncancel  8189e3ffdf2be9af390348de2343979bd3fe6b25f414f5772378cb87375f48bd yes
-check vest    accrual-create  90281b913b27deb7ddaed36c7173df2023af34ff8c92d41ae2ed1a80a172ccfa yes
-check vest    accrual-fund    a221ef0ae34b7439fe559a3e179bdd3f159092b6159f5bc820e8b3cdb703b12e yes
-check vest    claim-t4959     4355400eac80b42832b46cbbf6566819bd42d850eb8a86daf9363e8de3e32e43 yes
-check vest    claim-t8919     d7a53e7f32504a8ef1fdd7772ec8bfcbca968b2b58cf88a855abf909014c8f18 yes
-
-# Each of these was submitted by the same run and refused by the program, so it
-# never landed. They are the requirements stated as what the program will not do.
-section "-- vesting: the refusals, each submitted and none landed --"
-check REFUSED claim-again     a439e53b3f6751fc3ceedb059bbcabbf67521c6b26b0a05bdd92d2ebae21b9f4 no
-check REFUSED ms-claim-early  20a96362070106a077d3d45e02e5512d0c7650331dc13de74b60faefaf55b164 no
-check REFUSED ms-signal-twice 4d0c5781b62fc008d5ea2c07d4af38bb4b0dcd007bbec6245d9bb605c542db23 no
-check REFUSED ms-signal-2of2  00d89ff58b3324607fc17cc66ae7a61c3bb9604e10ef5737794526caddeb319a no
-check REFUSED xfer-by-creator 9f19fe874f544e6c08565278a71370307af97b5e9ae6dcdc70184b06c9820f5c no
-check REFUSED cancel-noncanc  72014d82090aadf62f7a04f2af4fba0d7e5ccfc5170175cb16ad458311aa0157 no
-check REFUSED noncanc-twice   7f3922243553d51ac0bd080c589b708aea349a6de94763124b77c3483c9b6129 no
+# everyone else's. The curve and pool rows in this file predate it and have not
+# been re-driven, so a full run reports them missing, which is true.
+#
+# The vesting program's rows are not written here at all: they are read from the
+# replay log scripts/replay-vesting.sh commits, evidence/vesting-replay.tsv, the
+# same file the RFP-017 proposal is generated from. A landed step must resolve;
+# a refused one must not. Two lists would drift; one cannot.
+if [ -f evidence/vesting-replay.tsv ]; then
+  . evidence/vesting-deploy.env
+  section "-- vesting: the deployed program and every call its replay made --"
+  check vest    deploy          "$DEPLOY_TX" yes
+  while IFS=$'\t' read -r label expect _verdict _block hash; do
+    if [ "$expect" = yes ]; then
+      check vest    "$label" "$hash" yes
+    else
+      check REFUSED "$label" "$hash" no
+    fi
+  done < <(grep -v '^#' evidence/vesting-replay.tsv)
+fi
 
 section "-- the per-swap fee: accrued on the buy, swept on its own --"
 check fee     deploy          53e149f997a343c91af6223b101889330cca46a1ad4ec92dadd5d8d9ba72bc91 yes

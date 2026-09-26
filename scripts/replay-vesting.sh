@@ -6,19 +6,25 @@
 # lifecycle again and cite the new hashes. This is that run, as a script rather
 # than as a session history, so the next reset costs one command.
 #
+# Time is the chain's, not ours. `claim` and `cancel` read the sequencer-written
+# clock account, so every schedule here is laid out around the clock's current
+# reading and every amount is checked against the timestamp the program actually
+# recorded (`last_seen`, `cancelled_at`), read back from the chain.
+#
 # Every step prints the transaction hash and whether it LANDED or was REFUSED,
 # and that verdict comes from `getTransaction` on the sequencer, not from spel's
-# own output. The refusals are expected where marked: a refused step that lands
-# is a failure of this script, exactly like a paying step that does not.
+# own output. Refusals are expected where marked: a refused step that lands is a
+# failure of this script, exactly like a paying step that does not.
 #
-# Needs: `spel` on $PATH, a v0.2.4 wallet home whose CREATOR is funded and
-# initialised under authenticated_transfer (`wallet auth-transfer init` first,
-# or the vesting program becomes the account's owner on its first signature),
-# and the program deployed from artifacts/programs/antumbra_vesting.bin.
+# Needs: `spel` on $PATH and a v0.2.4 wallet home ($LEE_WALLET_HOME_DIR) holding
+# the accounts below. Public accounts that sign or receive native balance are
+# initialised under authenticated_transfer first (`wallet auth-transfer init`);
+# token holdings are ATAs (`wallet ata create`); the two private destinations
+# are `wallet account new private`, one initialised with `auth-transfer init`,
+# one by shielding a unit of the token into it.
 #
-# Set `seq_tx_poll_max_blocks` to about 4 in the wallet config before running.
-# At the default of 60, spel waits an hour on every call the program refuses,
-# and seven of them are refused on purpose.
+# Set `seq_tx_poll_max_blocks` to about 6 in the wallet config first. At the
+# default of 60, spel waits an hour on every call the program refuses.
 #
 # Writes one TSV line per step to $OUT (default /tmp/vesting-replay.tsv):
 #   label  expected  verdict  block  tx_hash
@@ -28,15 +34,34 @@ cd "$(dirname "$0")/.."
 RPC="${SEQUENCER_URL:-https://testnet.lez.logos.co}"
 OUT="${OUT:-/tmp/vesting-replay.tsv}"
 : "${LEE_WALLET_HOME_DIR:?set LEE_WALLET_HOME_DIR to the wallet home}"
-: "${CREATOR:?base58 id of the funded creator}"
-: "${BENEFICIARY:?base58 id of the beneficiary}"
-: "${SECOND:?base58 id of the account the position is transferred to}"
-TAG="${TAG:-r2}"   # suffix for schedule ids, so a rerun on the same chain does not collide
-SECTIONS="${SECTIONS:-1 2 3 4 5}"   # run a subset, e.g. SECTIONS=5
+: "${CREATOR:?base58 id of the funded creator key}"
+: "${CREFUND:?base58 id of the creator account a native cancellation refunds}"
+: "${BENEFICIARY:?base58 id of the beneficiary key}"
+: "${NDEST:?base58 id of the public account native claims pay into}"
+: "${AUTH2:?base58 id of a key nominated as a separate cancel/milestone authority}"
+: "${SECOND:?base58 id of the key a position is transferred to}"
+: "${DEF:?base58 id of the token definition}"
+: "${SUPPLY:?base58 id of the creator token holding that funds token schedules}"
+: "${REFUND_ATA:?base58 id of the creator token holding a token cancellation refunds}"
+: "${BEN_ATA:?base58 id of the beneficiary token holding public token claims pay into}"
+: "${PNAT:?base58 id of the beneficiary private native account}"
+: "${PTOK:?base58 id of the beneficiary private token holding}"
+W="${WALLET:-$HOME/data/ns.com/lp-0002/_external/lez/target/release/wallet}"
+TAG="${TAG:-v2}"   # suffix for schedule ids, so a rerun on the same chain does not collide
+SECTIONS="${SECTIONS:-1 2 3 4 5 6 7 8 9}"
 want() { case " $SECTIONS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
 IDL=idl/antumbra_vesting.idl.json
 BIN=artifacts/programs/antumbra_vesting.bin
+CLOCK=4BdcjoXkq786TMWcBGGHqcxeLYMZmn17rL4eM9ZyRWNU   # /LEZ/ClockProgramAccount/0000001
+# The 50-block clock, for private claims: a privacy-preserving transaction is
+# proved against its public inputs as they were when proving began, and the
+# per-block clock has moved on before a proof of minutes can land.
+CLOCK50=4BdcjoXkq786TMWcBGGHqcxeLYMZmn17rL4eM9ZyRWkX  # /LEZ/ClockProgramAccount/0000050
+# The token program's binary, which a privacy-preserving claim of a token must
+# declare as a dependency: the claim chains into it.
+TOKEN_BIN="${TOKEN_BIN:-$HOME/data/ns.com/lp-0002/_external/lez/artifacts/lez/programs/token.bin}"
+Z=0000000000000000000000000000000000000000000000000000000000000000
 
 hex() { python3 - "$1" <<'PY'
 import sys
@@ -49,27 +74,42 @@ PY
 rpc() { curl -s -m 25 -X POST "$RPC" -H 'Content-Type: application/json' \
   -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"$1\",\"params\":[\"$2\"]}"; }
 bal() { rpc getAccount "$1" | python3 -c 'import json,sys;print((json.load(sys.stdin).get("result") or {}).get("balance"))'; }
-pda() { # schedule_id which -> base58 address, from spel's own derivation
+tokbal() { rpc getAccount "$1" | python3 -c '
+import json,sys
+d=bytes((json.load(sys.stdin).get("result") or {}).get("data") or [])
+print(int.from_bytes(d[33:49],"little") if len(d)>=49 and d[0]==0 else 0)'; }
+clock_ms() { rpc getAccount "$CLOCK" | python3 -c '
+import json,sys,struct
+print(struct.unpack("<QQ",bytes(json.load(sys.stdin)["result"]["data"])[:16])[1])'; }
+pda() { # schedule_id -> schedule PDA, from spel's own derivation
+  spel --idl "$IDL" --program "$BIN" --dry-run -- \
+    make-non-cancelable --schedule-id "$1" --creator "$CREATOR" 2>/dev/null \
+    | grep -oE "PDA schedule → [A-Za-z0-9]+" | awk '{print $NF}'
+}
+hold() { # schedule_id -> holding PDA
   spel --idl "$IDL" --program "$BIN" --dry-run -- \
     fund-schedule --schedule-id "$1" --amount 1 --creator "$CREATOR" 2>/dev/null \
-    | grep -oE "PDA $2 → [A-Za-z0-9]+" | awk '{print $NF}'
+    | grep -oE "PDA holding → [A-Za-z0-9]+" | awk '{print $NF}'
 }
+field() { python3 scripts/read-schedule.py "$1" | awk -v f="$2" '$1==f{print $2}'; }
+linear_vested() { python3 -c "import sys;T,s,e,t=map(int,sys.argv[1:]);print(0 if t<s else T if t>=e else T*(t-s)//(e-s))" "$@"; }
 
-BHEX="$(hex "$BENEFICIARY")"
-SHEX="$(hex "$SECOND")"
 fail=0
-
-# step label expected(yes|no) -- spel args...
+expect_eq() { # label got want
+  if [ "$2" = "$3" ]; then echo "  ✅ $1: $2"; echo "# check ok: $1 = $2" >> "$OUT"
+  else echo "  ❌ $1: got $2, want $3"; echo "# check FAIL: $1: $2 != $3" >> "$OUT"; fail=1; fi
+}
+# step label expected(yes|no) -- spel args...   (SPEL_PRE: extra spel options)
 step() {
   local label="$1" expect="$2"; shift 3
   local log hash verdict block="-" i r
-  log="$(spel --idl "$IDL" --program "$BIN" -- "$@" 2>&1)"
+  log="$(spel --idl "$IDL" --program "$BIN" ${SPEL_PRE:-} -- "$@" 2>&1)"
   hash="$(printf '%s' "$log" | grep -oE 'tx_hash: [0-9a-f]{64}' | head -1 | awk '{print $2}')"
   verdict=REFUSED
   if [ -n "$hash" ]; then
-    # A landed transaction is visible within a block or two; a refused one never
-    # is. Wait long enough that "not seen" means refused, not "not yet".
-    for i in $(seq 1 18); do
+    # spel has already waited three blocks; a landed transaction is visible by
+    # then, so a further minute and a half settles "refused" rather than "late".
+    for i in $(seq 1 9); do
       r="$(rpc getTransaction "$hash")"
       if printf '%s' "$r" | grep -q '"result":\['; then
         verdict=LANDED
@@ -79,103 +119,218 @@ step() {
       sleep 10
     done
   else
-    hash="(none: $(printf '%s' "$log" | grep -iE 'error|refus|fail' | head -1 | cut -c1-80))"
+    hash="(none: $(printf '%s' "$log" | grep -iE 'error|refus|fail|panic' | head -1 | cut -c1-90))"
+  fi
+  # A private claim proved across a 50-block clock tick is rejected at
+  # inclusion because its clock input moved; that is the platform, not the
+  # program, and one retry in the next epoch settles it. The first attempt stays
+  # in the log as a note, so nothing is hidden.
+  if [ "${RETRY:-0}" = 1 ] && [ "$expect" = yes ] && [ "$verdict" != LANDED ]; then
+    note "$label: first attempt $hash did not land (clock tick during proving?); retrying once"
+    RETRY=0 step "$label" "$expect" -- "$@"
+    return
   fi
   local ok="✅"
   if { [ "$expect" = yes ] && [ "$verdict" != LANDED ]; } || { [ "$expect" = no ] && [ "$verdict" = LANDED ]; }; then
     ok="❌"; fail=1
   fi
-  printf '  %s %-22s %-8s block %-6s %s\n' "$ok" "$label" "$verdict" "$block" "$hash"
+  printf '  %s %-32s %-8s block %-6s %s\n' "$ok" "$label" "$verdict" "$block" "$hash"
   printf '%s\t%s\t%s\t%s\t%s\n' "$label" "$expect" "$verdict" "$block" "$hash" >> "$OUT"
 }
-balances() { # label then name=id pairs
-  local out="  · $1:" kv
-  shift
-  for kv in "$@"; do out="$out ${kv%%=*}=$(bal "${kv#*=}")"; done
-  echo "$out"; echo "#$out" >> "$OUT"
+note() { echo "  · $*"; echo "# $*" >> "$OUT"; }
+# A private account's balance, as its owner's wallet decrypts it. spel can leave
+# the wallet's sync marker past blocks it never scanned, so the marker is moved
+# back to just before `$2` and the wallet re-scans from there.
+privbal() { # account kind(native|token) from_block
+  python3 - "$LEE_WALLET_HOME_DIR/storage.json" "$3" <<'PY'
+import json, sys
+p, b = sys.argv[1], int(sys.argv[2])
+d = json.load(open(p)); d["last_synced_block"] = min(d["last_synced_block"], b - 1); json.dump(d, open(p, "w"))
+PY
+  "$W" account sync-private >/dev/null 2>&1
+  "$W" account get --account-id "Private/$1" 2>/dev/null | sed -n 2p | python3 -c '
+import json,sys
+d=json.loads(sys.stdin.read() or "{}")
+print(d["balance"] if "balance" in d else d.get("Fungible",{}).get("balance"))'
 }
+lastblock() { grep -v "^#" "$OUT" | tail -1 | cut -f4; }
 
+BHEX="$(hex "$BENEFICIARY")"; SHEX="$(hex "$SECOND")"; AHEX="$(hex "$AUTH2")"; RHEX="$(hex "$CREFUND")"
+MIN=60000
 : > "$OUT"
-echo "antumbra_vesting on $RPC — $(spel program-id "$BIN" 2>/dev/null | grep -oE 'hex\): .*' | head -1)"
+echo "antumbra_vesting on $RPC"
+T0="$(clock_ms)"; note "clock at start: $T0 ms"
 
 if want 1; then
-echo; echo "-- 1. fund, claim and pay; a second claim is refused --"
-ID=antumbra-pay-$TAG
-step create_schedule yes -- create-schedule --schedule-id "$ID" --kind 1 --start 1000 --cliff 1000 --end 2000 \
-  --total 2 --beneficiary "$BHEX" --cancelable 0 --transferable 0 --tranches 0 --creator "$CREATOR"
-HOLD="$(pda "$ID" holding)"
-balances "before funding" creator="$CREATOR" holding="$HOLD"
+echo; echo "-- 1. native: a vested schedule pays its whole total once; the clock cannot be faked --"
+ID=pay-$TAG; S=$((T0 - 20*MIN)); E=$((T0 - 10*MIN))
+step create_schedule yes -- create-schedule --schedule-id "$ID" --kind 1 --start $S --cliff $S --end $E \
+  --total 2 --beneficiary "$BHEX" --cancelable 0 --transferable 0 --tranches 0 \
+  --cancel-authority $Z --milestone-authority $Z --refund-to "$RHEX" --creator "$CREATOR"
+H="$(hold "$ID")"
 step fund_schedule yes -- fund-schedule --schedule-id "$ID" --amount 2 --creator "$CREATOR"
-balances "after funding" creator="$CREATOR" holding="$HOLD" beneficiary="$BENEFICIARY"
-step claim_and_pay yes -- claim-and-pay --schedule-id "$ID" --now 2000 --beneficiary "$BENEFICIARY"
-balances "after claim" holding="$HOLD" beneficiary="$BENEFICIARY"
-step claim_again_refused no -- claim-and-pay --schedule-id "$ID" --now 2000 --beneficiary "$BENEFICIARY"
+B0="$(bal "$NDEST")"
+# The negative control that matters most: an account the caller controls, in
+# place of the clock. Refused, so "now" is not a number the caller chooses.
+step claim_with_fake_clock_refused no -- claim --schedule-id "$ID" --destination "$NDEST" --beneficiary "$BENEFICIARY" --clock "$SECOND"
+step claim yes -- claim --schedule-id "$ID" --destination "$NDEST" --beneficiary "$BENEFICIARY" --clock "$CLOCK"
+expect_eq "destination received the total" "$(( $(bal "$NDEST") - B0 ))" 2
+expect_eq "holding emptied" "$(bal "$H")" 0
+step claim_again_refused no -- claim --schedule-id "$ID" --destination "$NDEST" --beneficiary "$BENEFICIARY" --clock "$CLOCK"
+step claim_by_non_beneficiary_refused no -- claim --schedule-id "$ID" --destination "$NDEST" --beneficiary "$SECOND" --clock "$CLOCK"
 fi
 
 if want 2; then
-echo; echo "-- 2. cancel at the midpoint; the vested half stays claimable --"
-ID=antumbra-cancel-$TAG
-step cancel_create yes -- create-schedule --schedule-id "$ID" --kind 1 --start 1000 --cliff 1000 --end 3000 \
-  --total 2 --beneficiary "$BHEX" --cancelable 1 --transferable 1 --tranches 0 --creator "$CREATOR"
-HOLD="$(pda "$ID" holding)"
-step cancel_fund yes -- fund-schedule --schedule-id "$ID" --amount 2 --creator "$CREATOR"
-balances "after funding" creator="$CREATOR" holding="$HOLD"
-step cancel yes -- cancel --schedule-id "$ID" --now 2000 --creator "$CREATOR"
-balances "after cancel at t=2000" creator="$CREATOR" holding="$HOLD"
-step claim_post_cancel yes -- claim-and-pay --schedule-id "$ID" --now 9999 --beneficiary "$BENEFICIARY"
-balances "after claim at t=9999" holding="$HOLD" beneficiary="$BENEFICIARY"
+echo; echo "-- 2. native, live accrual: the amount paid is the clock's, to the unit --"
+ID=accrue-$TAG; S="$(clock_ms)"; E=$((S + 30*MIN))
+step accrual_create yes -- create-schedule --schedule-id "$ID" --kind 1 --start $S --cliff $S --end $E \
+  --total 600 --beneficiary "$BHEX" --cancelable 0 --transferable 0 --tranches 0 \
+  --cancel-authority $Z --milestone-authority $Z --refund-to "$RHEX" --creator "$CREATOR"
+step accrual_fund yes -- fund-schedule --schedule-id "$ID" --amount 600 --creator "$CREATOR"
+B0="$(bal "$NDEST")"
+step accrual_claim yes -- claim --schedule-id "$ID" --destination "$NDEST" --beneficiary "$BENEFICIARY" --clock "$CLOCK"
+P="$(pda "$ID")"; T="$(field "$P" last_seen)"
+note "claim recorded clock time $T ms, $(( (T - S) / 1000 )) s into a 1800 s schedule"
+expect_eq "paid = floor(total × elapsed ÷ duration) at the recorded time" \
+  "$(( $(bal "$NDEST") - B0 ))" "$(linear_vested 600 $S $E $T)"
+expect_eq "the schedule's claimed field agrees" "$(field "$P" claimed)" "$(linear_vested 600 $S $E $T)"
 fi
 
 if want 3; then
-echo; echo "-- 3. milestones: two tranches, each signal once --"
-ID=antumbra-ms-$TAG
-step ms_create yes -- create-schedule --schedule-id "$ID" --kind 2 --start 0 --cliff 0 --end 1 \
-  --total 2 --beneficiary "$BHEX" --cancelable 1 --transferable 0 --tranches 2 --creator "$CREATOR"
-HOLD="$(pda "$ID" holding)"
-step ms_fund yes -- fund-schedule --schedule-id "$ID" --amount 2 --creator "$CREATOR"
-step ms_claim_before_refused no -- claim-and-pay --schedule-id "$ID" --now 0 --beneficiary "$BENEFICIARY"
-step ms_signal_0 yes -- signal-milestone --schedule-id "$ID" --index 0 --creator "$CREATOR"
-step ms_signal_0_again_refused no -- signal-milestone --schedule-id "$ID" --index 0 --creator "$CREATOR"
-balances "before claim" holding="$HOLD" beneficiary="$BENEFICIARY"
-step ms_claim_1 yes -- claim-and-pay --schedule-id "$ID" --now 0 --beneficiary "$BENEFICIARY"
-balances "after one tranche" holding="$HOLD" beneficiary="$BENEFICIARY"
-step ms_signal_1 yes -- signal-milestone --schedule-id "$ID" --index 1 --creator "$CREATOR"
-step ms_claim_2 yes -- claim-and-pay --schedule-id "$ID" --now 0 --beneficiary "$BENEFICIARY"
-balances "after both tranches" holding="$HOLD" beneficiary="$BENEFICIARY"
-step ms_signal_2_refused no -- signal-milestone --schedule-id "$ID" --index 2 --creator "$CREATOR"
+echo; echo "-- 3. native cancel by the clock: unvested returns, vested stays claimable --"
+ID=cancel-$TAG; S="$(clock_ms)"; E=$((S + 30*MIN))
+step cancel_create yes -- create-schedule --schedule-id "$ID" --kind 1 --start $S --cliff $S --end $E \
+  --total 600 --beneficiary "$BHEX" --cancelable 1 --transferable 0 --tranches 0 \
+  --cancel-authority $Z --milestone-authority $Z --refund-to "$RHEX" --creator "$CREATOR"
+H="$(hold "$ID")"
+step cancel_fund yes -- fund-schedule --schedule-id "$ID" --amount 600 --creator "$CREATOR"
+R0="$(bal "$CREFUND")"
+step cancel_by_stranger_refused no -- cancel --schedule-id "$ID" --refund "$CREFUND" --authority "$SECOND" --clock "$CLOCK"
+step cancel_to_other_refund_refused no -- cancel --schedule-id "$ID" --refund "$NDEST" --authority "$CREATOR" --clock "$CLOCK"
+step cancel yes -- cancel --schedule-id "$ID" --refund "$CREFUND" --authority "$CREATOR" --clock "$CLOCK"
+P="$(pda "$ID")"; C="$(field "$P" cancelled_at)"; V="$(linear_vested 600 $S $E $C)"
+note "cancelled at clock time $C ms; vested then: $V of 600"
+expect_eq "refund received the unvested part" "$(( $(bal "$CREFUND") - R0 ))" "$(( 600 - V ))"
+expect_eq "holding keeps exactly the vested part" "$(bal "$H")" "$V"
+B0="$(bal "$NDEST")"
+step claim_after_cancel yes -- claim --schedule-id "$ID" --destination "$NDEST" --beneficiary "$BENEFICIARY" --clock "$CLOCK"
+expect_eq "beneficiary still receives the vested part" "$(( $(bal "$NDEST") - B0 ))" "$V"
+expect_eq "holding closes at zero" "$(bal "$H")" 0
+step cancel_twice_refused no -- cancel --schedule-id "$ID" --refund "$CREFUND" --authority "$CREATOR" --clock "$CLOCK"
 fi
 
 if want 4; then
-echo; echo "-- 4. transfer by the holder only; the one-way conversion --"
-ID=antumbra-xfer-$TAG
-step xfer_create yes -- create-schedule --schedule-id "$ID" --kind 1 --start 1000 --cliff 1000 --end 3000 \
-  --total 2 --beneficiary "$BHEX" --cancelable 1 --transferable 1 --tranches 0 --creator "$CREATOR"
-step xfer_by_creator_refused no -- transfer-beneficiary --schedule-id "$ID" --new-beneficiary "$SHEX" --beneficiary "$CREATOR"
-step xfer_by_holder yes -- transfer-beneficiary --schedule-id "$ID" --new-beneficiary "$SHEX" --beneficiary "$BENEFICIARY"
-step make_non_cancelable yes -- make-non-cancelable --schedule-id "$ID" --creator "$CREATOR"
-step cancel_after_refused no -- cancel --schedule-id "$ID" --now 2000 --creator "$CREATOR"
-step make_non_cancelable_again_refused no -- make-non-cancelable --schedule-id "$ID" --creator "$CREATOR"
+echo; echo "-- 4. milestones, signalled by a separate authority, each once --"
+ID=ms-$TAG
+step ms_create yes -- create-schedule --schedule-id "$ID" --kind 2 --start 0 --cliff 0 --end 1 \
+  --total 2 --beneficiary "$BHEX" --cancelable 1 --transferable 0 --tranches 2 \
+  --cancel-authority $Z --milestone-authority "$AHEX" --refund-to "$RHEX" --creator "$CREATOR"
+H="$(hold "$ID")"
+step ms_fund yes -- fund-schedule --schedule-id "$ID" --amount 2 --creator "$CREATOR"
+step ms_claim_before_refused no -- claim --schedule-id "$ID" --destination "$NDEST" --beneficiary "$BENEFICIARY" --clock "$CLOCK"
+step ms_signal_by_creator_refused no -- signal-milestone --schedule-id "$ID" --index 0 --authority "$CREATOR"
+step ms_signal_0 yes -- signal-milestone --schedule-id "$ID" --index 0 --authority "$AUTH2"
+step ms_signal_0_again_refused no -- signal-milestone --schedule-id "$ID" --index 0 --authority "$AUTH2"
+B0="$(bal "$NDEST")"
+step ms_claim_1 yes -- claim --schedule-id "$ID" --destination "$NDEST" --beneficiary "$BENEFICIARY" --clock "$CLOCK"
+expect_eq "one tranche paid" "$(( $(bal "$NDEST") - B0 ))" 1
+step ms_signal_1 yes -- signal-milestone --schedule-id "$ID" --index 1 --authority "$AUTH2"
+step ms_claim_2 yes -- claim --schedule-id "$ID" --destination "$NDEST" --beneficiary "$BENEFICIARY" --clock "$CLOCK"
+expect_eq "both tranches drain the holding to zero" "$(bal "$H")" 0
+step ms_signal_2_refused no -- signal-milestone --schedule-id "$ID" --index 2 --authority "$AUTH2"
 fi
 
 if want 5; then
-# The accrual, to the unit, on a ratio that does not divide: 97 over a 7919-second
-# window, claimed at 3959 seconds in. total × elapsed ÷ duration is 48.49…, so the
-# program must pay 48 — floored, the residue left in the holding — and the claim
-# at the end must pay exactly the 49 that remain, leaving the holding at zero.
-echo; echo "-- 5. accrual to the unit: floored mid-schedule, exact at the end --"
-ID=antumbra-accrual-$TAG
-step accrual_create yes -- create-schedule --schedule-id "$ID" --kind 1 --start 1000 --cliff 1000 --end 8919 \
-  --total 97 --beneficiary "$BHEX" --cancelable 0 --transferable 0 --tranches 0 --creator "$CREATOR"
-HOLD="$(pda "$ID" holding)"
-step accrual_fund yes -- fund-schedule --schedule-id "$ID" --amount 97 --creator "$CREATOR"
-balances "after funding" holding="$HOLD" beneficiary="$BENEFICIARY"
-step accrual_claim_mid yes -- claim-and-pay --schedule-id "$ID" --now 4959 --beneficiary "$BENEFICIARY"
-balances "after claim at t=4959 (expect +48)" holding="$HOLD" beneficiary="$BENEFICIARY"
-step accrual_claim_end yes -- claim-and-pay --schedule-id "$ID" --now 8919 --beneficiary "$BENEFICIARY"
-balances "after claim at t=8919 (expect +49, holding 0)" holding="$HOLD" beneficiary="$BENEFICIARY"
+echo; echo "-- 5. a nominated cancel authority, holder-only transfer, the one-way conversion --"
+ID=xfer-$TAG; S="$(clock_ms)"; E=$((S + 60*MIN))
+step xfer_create yes -- create-schedule --schedule-id "$ID" --kind 1 --start $S --cliff $S --end $E \
+  --total 2 --beneficiary "$BHEX" --cancelable 1 --transferable 1 --tranches 0 \
+  --cancel-authority "$AHEX" --milestone-authority $Z --refund-to "$RHEX" --creator "$CREATOR"
+step xfer_by_creator_refused no -- transfer-beneficiary --schedule-id "$ID" --new-beneficiary "$SHEX" --beneficiary "$CREATOR"
+step xfer_by_holder yes -- transfer-beneficiary --schedule-id "$ID" --new-beneficiary "$SHEX" --beneficiary "$BENEFICIARY"
+P="$(pda "$ID")"
+expect_eq "the schedule names the new beneficiary" "$(field "$P" beneficiary)" "$SECOND"
+step cancel_by_creator_when_delegated_refused no -- cancel --schedule-id "$ID" --refund "$CREFUND" --authority "$CREATOR" --clock "$CLOCK"
+step make_non_cancelable yes -- make-non-cancelable --schedule-id "$ID" --creator "$CREATOR"
+step cancel_after_refused no -- cancel --schedule-id "$ID" --refund "$CREFUND" --authority "$AUTH2" --clock "$CLOCK"
+step make_non_cancelable_again_refused no -- make-non-cancelable --schedule-id "$ID" --creator "$CREATOR"
+expect_eq "cancelable reads 0" "$(field "$P" cancelable)" 0
+expect_eq "cancelled_at still reads 0" "$(field "$P" cancelled_at)" 0
+fi
+
+if want 6; then
+echo; echo "-- 6. a real token: escrowed by the token program, paid out under our PDA seed --"
+ID=tok-$TAG; S=$((T0 - 20*MIN)); E=$((T0 - 10*MIN))
+step token_create yes -- create-token-schedule --schedule-id "$ID" --definition "$DEF" --refund "$REFUND_ATA" \
+  --kind 1 --start $S --cliff $S --end $E --total 100 --beneficiary "$BHEX" --cancelable 0 --transferable 0 \
+  --tranches 0 --cancel-authority $Z --milestone-authority $Z --creator "$CREATOR"
+H="$(hold "$ID")"
+step token_fund yes -- fund-token-schedule --schedule-id "$ID" --amount 100 --source "$SUPPLY"
+expect_eq "token escrow holds 100, owned by the token program" \
+  "$(tokbal "$H")/$(rpc getAccount "$H" | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["program_owner"][0])')" "100/1047643340"
+B0="$(tokbal "$BEN_ATA")"
+step token_claim_into_native_refused no -- claim --schedule-id "$ID" --destination "$NDEST" --beneficiary "$BENEFICIARY" --clock "$CLOCK"
+step token_claim yes -- claim --schedule-id "$ID" --destination "$BEN_ATA" --beneficiary "$BENEFICIARY" --clock "$CLOCK"
+expect_eq "beneficiary token holding received 100" "$(( $(tokbal "$BEN_ATA") - B0 ))" 100
+expect_eq "token escrow emptied" "$(tokbal "$H")" 0
+fi
+
+if want 7; then
+echo; echo "-- 7. a real token, cancelled by the clock: the unvested tokens go home --"
+ID=tokcancel-$TAG; S="$(clock_ms)"; E=$((S + 30*MIN))
+step token_cancel_create yes -- create-token-schedule --schedule-id "$ID" --definition "$DEF" --refund "$REFUND_ATA" \
+  --kind 1 --start $S --cliff $S --end $E --total 100000 --beneficiary "$BHEX" --cancelable 1 --transferable 0 \
+  --tranches 0 --cancel-authority $Z --milestone-authority $Z --creator "$CREATOR"
+H="$(hold "$ID")"
+step token_cancel_fund yes -- fund-token-schedule --schedule-id "$ID" --amount 100000 --source "$SUPPLY"
+R0="$(tokbal "$REFUND_ATA")"
+step token_cancel yes -- cancel --schedule-id "$ID" --refund "$REFUND_ATA" --authority "$CREATOR" --clock "$CLOCK"
+P="$(pda "$ID")"; C="$(field "$P" cancelled_at)"; V="$(linear_vested 100000 $S $E $C)"
+note "cancelled at clock time $C ms; vested then: $V of 100000"
+expect_eq "creator's token holding got the unvested part back" "$(( $(tokbal "$REFUND_ATA") - R0 ))" "$(( 100000 - V ))"
+expect_eq "token escrow keeps exactly the vested part" "$(tokbal "$H")" "$V"
+fi
+
+if want 8; then
+echo; echo "-- 8. claims into PRIVATE accounts: native and token --"
+ID=privnat-$TAG; S=$((T0 - 20*MIN)); E=$((T0 - 10*MIN))
+step private_native_create yes -- create-schedule --schedule-id "$ID" --kind 1 --start $S --cliff $S --end $E \
+  --total 3 --beneficiary "$BHEX" --cancelable 0 --transferable 0 --tranches 0 \
+  --cancel-authority $Z --milestone-authority $Z --refund-to "$RHEX" --creator "$CREATOR"
+H="$(hold "$ID")"
+step private_native_fund yes -- fund-schedule --schedule-id "$ID" --amount 3 --creator "$CREATOR"
+P0="$(privbal "$PNAT" native "$(curl -s -m 25 -X POST "$RPC" -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"getLastBlockId","params":[]}' | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"])')")"
+RETRY=1 step private_native_claim yes -- claim --schedule-id "$ID" --destination "Private/$PNAT" --beneficiary "$BENEFICIARY" --clock "$CLOCK50"
+expect_eq "public holding emptied into the private account" "$(bal "$H")" 0
+expect_eq "the private account, as its owner decrypts it, gained the 3" "$(( $(privbal "$PNAT" native "$(lastblock)") - P0 ))" 3
+ID=privtok-$TAG
+step private_token_create yes -- create-token-schedule --schedule-id "$ID" --definition "$DEF" --refund "$REFUND_ATA" \
+  --kind 1 --start $S --cliff $S --end $E --total 50 --beneficiary "$BHEX" --cancelable 0 --transferable 0 \
+  --tranches 0 --cancel-authority $Z --milestone-authority $Z --creator "$CREATOR"
+H="$(hold "$ID")"
+step private_token_fund yes -- fund-token-schedule --schedule-id "$ID" --amount 50 --source "$SUPPLY"
+Q0="$(privbal "$PTOK" token "$(curl -s -m 25 -X POST "$RPC" -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"getLastBlockId","params":[]}' | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"])')")"
+RETRY=1 SPEL_PRE="--bin-token $TOKEN_BIN" step private_token_claim yes -- claim --schedule-id "$ID" --destination "Private/$PTOK" --beneficiary "$BENEFICIARY" --clock "$CLOCK50"
+expect_eq "token escrow emptied into the private holding" "$(tokbal "$H")" 0
+expect_eq "the private token holding, as its owner decrypts it, gained the 50" "$(( $(privbal "$PTOK" token "$(lastblock)") - Q0 ))" 50
+fi
+
+if want 9; then
+# The schedule the Basecamp panel reads: a year-long token position whose
+# claimable amount grows with every block, so the panel shows vesting happening
+# rather than a finished record.
+echo; echo "-- 9. the schedule the Basecamp panel shows: live, accruing, token-denominated --"
+ID=showcase-$TAG; S=$((T0 - 30*24*60*MIN)); E=$((T0 + 335*24*60*MIN))
+step showcase_create yes -- create-token-schedule --schedule-id "$ID" --definition "$DEF" --refund "$REFUND_ATA" \
+  --kind 0 --start $S --cliff $((S + 7*24*60*MIN)) --end $E --total 365000 --beneficiary "$BHEX" --cancelable 1 \
+  --transferable 0 --tranches 0 --cancel-authority $Z --milestone-authority $Z --creator "$CREATOR"
+step showcase_fund yes -- fund-token-schedule --schedule-id "$ID" --amount 365000 --source "$SUPPLY"
+step showcase_claim yes -- claim --schedule-id "$ID" --destination "$BEN_ATA" --beneficiary "$BENEFICIARY" --clock "$CLOCK"
+note "kScheduleAccount = $(pda "$ID")"
+note "kScheduleHolding = $(hold "$ID")"
 fi
 
 echo
-[ "$fail" -eq 0 ] && echo "Every step landed or was refused exactly as expected. Log: $OUT" \
+[ "$fail" -eq 0 ] && echo "Every step landed or was refused exactly as expected, and every amount matched. Log: $OUT" \
                   || echo "A step did not behave as expected — see ❌ above. Log: $OUT" >&2
 exit "$fail"

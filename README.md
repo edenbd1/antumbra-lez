@@ -218,15 +218,17 @@ rather than asserted.
 |---|---|---|---|---|
 | `antumbra_curve` | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `49db0fc9…a56fc510` | [`f074ffe1…4d8c3855`](https://explorer.testnet.lez.logos.co/transaction/f074ffe110131ed108d7ea37d6445d7492ff36842ed63399b005dc364d8c3855) | 17265 |
 | `antumbra_lbp` | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `51f28557…b6c7a82d` | [`fbfe7e39…7bbe4859`](https://explorer.testnet.lez.logos.co/transaction/fbfe7e3960cd787a26699cd2690d6a663f88c895f4a68ee6bf7dffa47bbe4859) | 17266 |
-| `antumbra_vesting` | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `4c6e62a5…af93ea7f` | [`9b35fc31…d1691ee2`](https://explorer.testnet.lez.logos.co/transaction/9b35fc31a93a276d13a354863f0ed3c870f6b957a90086775a943837d1691ee2) | 25898 |
+| `antumbra_vesting` | [`9aeedf7`](https://github.com/edenbd1/antumbra-lez/commit/9aeedf7b49460677e8b8029dbb490a28d10e0d14) | `cf1d5564…a835b560` | [`e5053201…fbe36b4c`](https://explorer.testnet.lez.logos.co/transaction/e5053201c25ada30c2a09d4d595c40792957f360f5ecdca13abb39f3fbe36b4c) | 26204 |
 
-**The public testnet was reset on 2026-09-08**, which removed every transaction
-from before that date, ours and everyone's. `antumbra_vesting` was redeployed on
-2026-09-26 from the same binary — the deploy hash came back identical, because
-it is `SHA256(len ‖ bytecode)` — and its full lifecycle re-driven with
-[`scripts/replay-vesting.sh`](scripts/replay-vesting.sh); `./scripts/verify-onchain.sh
---only vesting` checks all of it. The curve and pool rows above are pre-reset and
-have not been re-driven yet.
+**The vesting program reads the chain's clock, escrows native balance or a
+token-program token, and pays claims into public or shielded accounts.** Every
+call made against the deployed program is on one page,
+[`evidence/VESTING.md`](evidence/VESTING.md), generated from the replay log;
+`./scripts/verify-onchain.sh --only vesting` re-checks it against the sequencer,
+and [`executor-tests/`](executor-tests/) runs the same binary through the
+sequencer's execution path, one test per requirement, with the per-instruction
+cost table. **The public testnet was reset on 2026-09-08**; the curve and pool
+rows above predate it and have not been re-driven.
 
 An earlier set of the same three programs was on chain before the reset and is what the RFP-015
 and RFP-016 issues quote, because those are the ones that were *driven* rather than merely

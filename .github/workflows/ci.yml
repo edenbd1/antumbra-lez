@@ -125,6 +125,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: The vesting evidence page is what the replay log says
+        run: python3 scripts/render-vesting-evidence.py --check
+
       - name: Every quoted path, link and line citation resolves
         run: |
           set -e -o pipefail

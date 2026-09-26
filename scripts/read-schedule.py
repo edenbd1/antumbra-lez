@@ -3,8 +3,8 @@
 
     scripts/read-schedule.py <schedule-PDA-base58> [RPC]
 
-The layout is VestingSchedule's Borsh encoding, field for field; the script
-refuses to guess if the account's length disagrees with it.
+The layout is VestingSchedule's Borsh encoding, field for field, in either of
+its two versions; the script refuses to guess if the length matches neither.
 """
 import json, struct, sys, urllib.request
 B = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
@@ -21,9 +21,16 @@ d = bytes(acc["data"])
 F = [("kind","B"),("start","Q"),("cliff","Q"),("end","Q"),("total","16"),("claimed","16"),
      ("last_seen","Q"),("beneficiary","32"),("escrow","32"),("creator","32"),("cancelable","B"),
      ("transferable","B"),("cancelled_at","Q"),("signalled","Q"),("tranches","I")]
-size = sum({"B":1,"Q":8,"I":4}.get(t) or int(t) for _, t in F)
-if len(d) != size:
-    sys.exit(f"{addr}: {len(d)} bytes, VestingSchedule is {size} — not decoding a layout that does not match")
+# The second version appends the asset, the refund account and the two
+# nominated authorities; the prefix above is unchanged in both.
+V2 = [("asset","B"),("token_definition","32"),("refund_to","32"),
+      ("cancel_authority","32"),("milestone_authority","32")]
+width = lambda fs: sum({"B":1,"Q":8,"I":4}.get(t) or int(t) for _, t in fs)
+if len(d) == width(F + V2):
+    F = F + V2
+elif len(d) != width(F):
+    sys.exit(f"{addr}: {len(d)} bytes, matching neither VestingSchedule layout "
+             f"({width(F)} or {width(F + V2)}) — not decoding it")
 o = 0
 for name, t in F:
     if t in ("B","Q","I"):

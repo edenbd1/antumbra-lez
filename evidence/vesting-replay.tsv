@@ -1,0 +1,78 @@
+# clock at start: 1790451530002 ms
+create_schedule	yes	LANDED	26229	01946f0be2fb1250309837f03d4c52d3d968906ee95f1ee83c152015e00d63ba
+fund_schedule	yes	LANDED	26230	9bfdcc64818450353b49f4cf3d696d657f29e70a75fd9dd7a9a580feebfbeaaf
+claim_with_fake_clock_refused	no	REFUSED	-	4bf670bd5da112fd8624e907cc264ddf29862f732417e0a2b17bace83180a7a0
+claim	yes	LANDED	26233	953324aed53c43ee00d2caa0a5349edd299a6831c7bf0e969ed8fbf47cf4d9fa
+# check ok: destination received the total = 2
+# check ok: holding emptied = 0
+claim_again_refused	no	REFUSED	-	a2d92f372492bad3d3a45f9dd289cca32e93fae96f5e4494742bdc25ca71d310
+claim_by_non_beneficiary_refused	no	REFUSED	-	c5cdf0132246c94431490ad14d04dda5dd4a311116b7a62c42b0f326bd559668
+accrual_create	yes	LANDED	26239	7bb5083fb38f86ea93413d531fe466f33e76181a0de7c071d102c70d1ee90cee
+accrual_fund	yes	LANDED	26240	c9fdfed61bb1d6132d8a9b3361e93a675cc7856d987b3be6e4d1acfe9a22c191
+accrual_claim	yes	LANDED	26241	0f3e6ab2c6d25bfb826b012db06f247d7f2c6a8bf6d56aca5f1c1e14638098e0
+# claim recorded clock time 1790452252288 ms, 120 s into a 1800 s schedule
+# check ok: paid = floor(total × elapsed ÷ duration) at the recorded time = 40
+# check ok: the schedule's claimed field agrees = 40
+cancel_create	yes	LANDED	26242	fbc1bab0be8f55120e5426518450bde825b1902a39efa255e38ab86ec6c3568d
+cancel_fund	yes	LANDED	26243	a746c397541af64cd9be80830f75bd8e01f7efdb87009a449a4ead0e3c27ebab
+cancel_by_stranger_refused	no	REFUSED	-	c23fa5ed7f844f5db597d51e0c7f0b69fed704e0f64957968e30cd5ddef1f755
+cancel_to_other_refund_refused	no	REFUSED	-	bcd6a9c867a9bb849f058a4e160e15290d779788d56d59ada9d312676f52addf
+cancel	yes	LANDED	26250	dc24bfd72800b507586b504778527f42d3f9984a9831f58373628af30b87b480
+# cancelled at clock time 1790452794116 ms; vested then: 160 of 600
+# check ok: refund received the unvested part = 440
+# check ok: holding keeps exactly the vested part = 160
+claim_after_cancel	yes	LANDED	26251	d62012eb1ca8cf71a242f5271ba17864c89c29d5ff789854cffb7f8708e831c8
+# check ok: beneficiary still receives the vested part = 160
+# check ok: holding closes at zero = 0
+cancel_twice_refused	no	REFUSED	-	154c433dc5353ad8b953f49c46de3a2c66ff0e7c498f62aa9b264d822135a606
+ms_create	yes	LANDED	26255	0b932049dddd27aac3cef7d9306b20a82c66ef5d672be5d9b3841148b7bc486b
+ms_fund	yes	LANDED	26256	0775837b9557de7d2fbec908e1a37a844fdff50c6fe1a1be6893e8b9e8b4d8b2
+ms_claim_before_refused	no	REFUSED	-	ae4692f9dfe1aa2aa2d8d93d65a33ecabf50ed9928e929de52ac9450cc5f84aa
+ms_signal_by_creator_refused	no	REFUSED	-	0469d81a1f5a047a125a8aa7508dc1e77aa4d2042440f53700f45a31b571d86b
+ms_signal_0	yes	LANDED	26262	05a8b858d28af7145d06344d77466269e3683b9372d34d26de9b65a24d9e79ef
+ms_signal_0_again_refused	no	REFUSED	-	a35d1f4a736e9c1fcf649bacdbaf25f59da074a52850c411a198954f02c34f3b
+ms_claim_1	yes	LANDED	26266	9b978bdd4a528ba77c91632d53e1f8c0c9e0946a4f09ad8c8d019046aeb732f5
+# check ok: one tranche paid = 1
+ms_signal_1	yes	LANDED	26267	fa09dda51b6e322999b1d50c8e074dc06303d2867c8ba7fd7dfbcd8caaaddbd7
+ms_claim_2	yes	LANDED	26268	4c0a1b8e43434424445b92d9f6b622fbf7a8043ef977c7993b4f23df02fa08e3
+# check ok: both tranches drain the holding to zero = 0
+ms_signal_2_refused	no	REFUSED	-	42b70feed29fe0b8867c8923f911099fdcd7e7749ce224584575768d0e29e50e
+xfer_create	yes	LANDED	26271	fae11ae52389acbd11471d7c119659dd4a3789359c7efdefa9ad15d9bb79c847
+xfer_by_creator_refused	no	REFUSED	-	12eba75f7145935d7ac6e31291f011148b1eea0146f53109367537bbb7ecad8c
+xfer_by_holder	yes	LANDED	26275	33de8ed46543fcab36d564e709f48db4da5fa36c68e6868377d35bda0286335a
+# check ok: the schedule names the new beneficiary = nKk7En4yD4wDK8Q8jVY6epQs2kdc75NiFJ4N6rnmJ9k
+cancel_by_creator_when_delegated_refused	no	REFUSED	-	d1c4d45ff44f76471a30e8cf53d45a2d4841ab2507e4442c58e8210d38b543a8
+make_non_cancelable	yes	LANDED	26278	6e7afe2e6c482ed8d573d4b610e2cfedd36ea1678977c18548ad4cadccd59c92
+cancel_after_refused	no	REFUSED	-	af65cd45b7b1ba45ab5d0b6ebca747f3b956cce209f5dedd141174ce307671c1
+make_non_cancelable_again_refused	no	REFUSED	-	514d47d1dbfed677524cc673e99e2c72806c096aa882828abe5eea0741b53904
+# check ok: cancelable reads 0 = 0
+# check ok: cancelled_at still reads 0 = 0
+token_create	yes	LANDED	26284	15c6473c1580e2f1cd0eada5aeaa6752908e786fdb21f4d84f00d39215677a4e
+token_fund	yes	LANDED	26285	20f4c11cf1640260d3a914c5b80dcfbf8717153a6639c5e53e03e7af9521aa98
+# check ok: token escrow holds 100, owned by the token program = 100/1047643340
+token_claim_into_native_refused	no	REFUSED	-	988635bba436bdeab9e7ce4c15c190ae1746619c35d17bb92c78547c886854dd
+token_claim	yes	LANDED	26288	5da8f6c9c5b76af69c292557b50bee38eda0f19fd9457e7bc20ffbd0850a0242
+# check ok: beneficiary token holding received 100 = 100
+# check ok: token escrow emptied = 0
+token_cancel_create	yes	LANDED	26289	dcb2043b1bd281fa42bfb893fc2d1744aca48866d83ceb4b1cd90fed0843e473
+token_cancel_fund	yes	LANDED	26290	ccf0147af9aa5c2d6c42930cd8d4c2f056f3dba5464c886124aa504bd32b96af
+token_cancel	yes	LANDED	26291	d87e8c2c22ef255e59f8a0a576e5e70c7f83e0c08958b0c846dee06c64212446
+# cancelled at clock time 1790455261785 ms; vested then: 6692 of 100000
+# check ok: creator's token holding got the unvested part back = 93308
+# check ok: token escrow keeps exactly the vested part = 6692
+private_native_create	yes	LANDED	26292	340058d6773a8a50fb31a4cec2dcd6ddd7edfce88e66a2197dbb83952f700947
+private_native_fund	yes	LANDED	26293	024836f10b98cac6250278fdb16c096f8c22670b01cb8ef8310df83de39025ee
+# private_native_claim: first attempt cab3bda56a27c37306c002074fa4f68cb61fda497b879257afb8b9dee4c1f83d did not land (clock tick during proving?); retrying once
+private_native_claim	yes	LANDED	26311	cd45d41255422914fb8f2bbbe5c298e14d76b229c429cd425e7d75ab9d4db72b
+# check ok: public holding emptied into the private account = 0
+# check ok: the private account, as its owner decrypts it, gained the 3 = 3
+private_token_create	yes	LANDED	26312	00071b9b7482e1945ee5a6c8ff529f2b5dd31fc058b1dde4047a8fb38646606e
+private_token_fund	yes	LANDED	26313	fe8503c308642c561d423016d9aab85deb9cd9f1ff9d9642599446db6ea79964
+private_token_claim	yes	LANDED	26322	4a433724f46638ecef8f3592055d8a9aa6d403bc14f8ddafa2d9a8e52952f621
+# check ok: token escrow emptied into the private holding = 0
+# check ok: the private token holding, as its owner decrypts it, gained the 50 = 50
+showcase_create	yes	LANDED	26323	d843e8a8e48b9c85f441e16c984d55c37107f34bd7ac3a3f868c51ad774c1b0a
+showcase_fund	yes	LANDED	26324	788d5faa0a097dd1bfb22658180c73e660bf38e73d636450d4557e3a571daa48
+showcase_claim	yes	LANDED	26325	2c1bca9bb98a02f692fdda43d0c7477091391713e4f9ad765247eb4ccac6bc8d
+# kScheduleAccount = CzBDQC7tnM8Eh6qfVW2bGtHzCsSn8cNJ9y98bPWf8UTc
+# kScheduleHolding = Dj1Di9ZJqwRwEq9ZAfFh8aQqfVNt4jNSWu9LKrE8ScaD
