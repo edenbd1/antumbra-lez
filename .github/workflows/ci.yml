@@ -80,7 +80,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             zkvm/target
-          key: zkvm-${{ hashFiles('zkvm/**/Cargo.toml', 'src/**') }}
+            executor-tests/target
+          key: zkvm-${{ hashFiles('zkvm/**/Cargo.toml', 'executor-tests/Cargo.toml', 'src/**') }}
 
       # The executor only — no proving. These are the counts that decide whether
       # an operation fits LEZ's public-execution budget, and they are
@@ -89,6 +90,19 @@ jobs:
       - name: Measure, and fail if the published table has drifted
         working-directory: zkvm
         run: cargo run --release | tee /tmp/cycles.txt && python3 verify_cycles.py < /tmp/cycles.txt
+
+      # The deployed binary itself, run through the sequencer's execution path:
+      # every requirement test that accepts or refuses an instruction, then the
+      # per-instruction cost table, which must match the committed one.
+      - name: The committed vesting binary accepts and refuses what the RFP says
+        working-directory: executor-tests
+        run: cargo test --release
+
+      - name: Whole-instruction costs still match executor-tests/CYCLES.md
+        working-directory: executor-tests
+        run: |
+          cargo run --release --bin measure | grep '^|' > /tmp/instr.md
+          grep '^|' CYCLES.md | diff - /tmp/instr.md
 
       - name: Publish the table to the run summary
         if: always()
