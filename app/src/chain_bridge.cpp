@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 #include "chain_bridge.h"
 
+#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -18,8 +19,19 @@ namespace {
 const char* kSaleAccount     = "4AjdDDLLpyumGxnLki51cQPt5hbvQoUvG81KMerGqmBh";
 const char* kSaleHolding     = "3kXqDQxkWMK13ZDCFkfamfktPXbMGndr5d1N5FVB8VrV";
 const char* kPoolAccount     = "25ekuB2nQ84WLvoVjWejf63Z714X9vvjnb7Jz4R3Kkdg";
-const char* kScheduleAccount = "DnFqQZChzEkKRtzENwUPQYed25ni1qztTJ33iJ2PGqnE";
-const char* kScheduleHolding = "FF8dXEEyCoWuH3vanrFpEZXe2xon8Xze44Xk55MVzXzS";
+// The vesting schedule the panel follows: a year-long token position left
+// accruing on purpose, written by scripts/replay-vesting.sh (section 9), which
+// prints these two addresses.
+const char* kScheduleAccount = "CzBDQC7tnM8Eh6qfVW2bGtHzCsSn8cNJ9y98bPWf8UTc";
+const char* kScheduleHolding = "Dj1Di9ZJqwRwEq9ZAfFh8aQqfVNt4jNSWu9LKrE8ScaD";
+
+// The sequencer-written clock the vesting program itself reads, so "claimable
+// now" here is computed against the same time a claim would be.
+const char* kClockAccount    = "4BdcjoXkq786TMWcBGGHqcxeLYMZmn17rL4eM9ZyRWNU";
+
+// ProgramId word 0 of the token program; an escrow owned by it holds a token
+// balance in its data rather than a native balance.
+const qint64 kTokenProgramWord0 = 1047643340;
 
 // The two holdings are plain balances rather than decoded state: what they hold
 // is the value actually escrowed, which is the number a reader of an analytics
@@ -47,6 +59,26 @@ struct Reader {
         for (int i = 7; i >= 0; --i) v = (v << 8) | static_cast<quint8>(b[pos + i]);
         pos += 8;
         return v;
+    }
+    unsigned __int128 u128v() {
+        if (pos + 16 > b.size()) { ok = false; return 0; }
+        unsigned __int128 v = 0;
+        for (int i = 15; i >= 0; --i) v = (v << 8) | static_cast<quint8>(b[pos + i]);
+        pos += 16;
+        return v;
+    }
+    quint32 u32() {
+        if (pos + 4 > b.size()) { ok = false; return 0; }
+        quint32 v = 0;
+        for (int i = 3; i >= 0; --i) v = (v << 8) | static_cast<quint8>(b[pos + i]);
+        pos += 4;
+        return v;
+    }
+    QByteArray bytes(int n) {
+        if (pos + n > b.size()) { ok = false; return {}; }
+        QByteArray out = b.mid(pos, n);
+        pos += n;
+        return out;
     }
     // No portable 128-bit integer in the standard, and these values genuinely
     // exceed 64 bits — a token total at 18 decimals passes 2^64 at 18.4 units —
@@ -78,6 +110,45 @@ private:
     }
 };
 
+QString dec(unsigned __int128 v) {
+    if (v == 0) return QStringLiteral("0");
+    QString out;
+    while (v > 0) { out.prepend(QChar('0' + int(v % 10))); v /= 10; }
+    return out;
+}
+
+QString base58(const QByteArray& in) {
+    static const char* A = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    QByteArray digits;                       // base-58 digits, little end first
+    for (unsigned char c : in) {
+        int carry = c;
+        for (char& d : digits) { carry += (static_cast<unsigned char>(d) << 8); d = char(carry % 58); carry /= 58; }
+        while (carry) { digits.append(char(carry % 58)); carry /= 58; }
+    }
+    QString out;
+    for (unsigned char c : in) { if (c) break; out.append(QChar('1')); }
+    for (int i = digits.size() - 1; i >= 0; --i) out.append(QChar(A[static_cast<unsigned char>(digits[i])]));
+    return out;
+}
+
+// The program's own accrual rule, restated: nothing before the cliff, then
+// everything accrued since `start` at once and linear to `end`; a cancelled
+// schedule stops accruing at the cancellation; milestones release
+// total × signalled / tranches.
+unsigned __int128 vestedAt(quint8 kind, quint64 start, quint64 cliff, quint64 end,
+                           unsigned __int128 total, quint64 cancelledAt,
+                           quint64 signalled, quint32 tranches, quint64 now) {
+    if (kind == 2) {
+        if (tranches == 0) return 0;
+        return total * static_cast<unsigned __int128>(__builtin_popcountll(signalled)) / tranches;
+    }
+    const quint64 t = cancelledAt ? qMin(now, cancelledAt) : now;
+    if (kind == 0 && t < cliff) return 0;
+    if (t <= start) return 0;
+    if (t >= end) return total;
+    return total * static_cast<unsigned __int128>(t - start) / static_cast<unsigned __int128>(end - start);
+}
+
 } // namespace
 
 ChainBridge::ChainBridge(QObject* parent)
@@ -99,11 +170,16 @@ void ChainBridge::setEndpoint(const QString& url) {
 
 void ChainBridge::refresh() {
     emit statusChanged(QStringLiteral("reading %1…").arg(m_rpc));
+    // The clock first: the schedule is only meaningful against it, so its
+    // answer triggers the two vesting reads.
+    fetch(QStringLiteral("clock"), QString::fromLatin1(kClockAccount));
+}
+
+void ChainBridge::refreshLaunchpad() {
+    emit statusChanged(QStringLiteral("reading %1…").arg(m_rpc));
     fetch(QStringLiteral("sale"), QString::fromLatin1(kSaleAccount));
     fetch(QStringLiteral("pool"), QString::fromLatin1(kPoolAccount));
-    fetch(QStringLiteral("schedule"), QString::fromLatin1(kScheduleAccount));
     fetch(QStringLiteral("sale-escrow"), QString::fromLatin1(kSaleHolding));
-    fetch(QStringLiteral("schedule-escrow"), QString::fromLatin1(kScheduleHolding));
 }
 
 void ChainBridge::fetch(const QString& label, const QString& accountId) {
@@ -137,18 +213,39 @@ void ChainBridge::fetch(const QString& label, const QString& accountId) {
         // The holdings are read for their balance alone: what a program has
         // actually escrowed is the number an analytics panel exists to show,
         // and the one a stale copy would most misrepresent.
-        if (label.endsWith(QLatin1String("-escrow"))) {
-            const QString which = label.left(label.size() - 7);
-            emit escrowUpdated(which,
-                               QString::number(acc.value(QStringLiteral("balance")).toDouble(), 'f', 0));
-            emit statusChanged(QStringLiteral("%1 escrow read from chain").arg(which));
-            return;
-        }
-
         const QJsonArray raw = acc.value(QStringLiteral("data")).toArray();
         QByteArray data;
         data.reserve(raw.size());
         for (const QJsonValue& v : raw) data.append(static_cast<char>(v.toInt()));
+
+        if (label == QLatin1String("clock")) {
+            Reader r{data};
+            r.u64();                                   // block_id
+            m_nowMs = r.u64();                         // timestamp, ms
+            if (!r.ok) { emit failed(label, QStringLiteral("clock account is short")); return; }
+            fetch(QStringLiteral("schedule"), QString::fromLatin1(kScheduleAccount));
+            fetch(QStringLiteral("schedule-escrow"), QString::fromLatin1(kScheduleHolding));
+            return;
+        }
+
+        // The holdings are read for what they actually escrow: a native balance,
+        // or for a token-program holding the balance inside its data.
+        if (label.endsWith(QLatin1String("-escrow"))) {
+            const QString which = label.left(label.size() - 7);
+            const QJsonArray owner = acc.value(QStringLiteral("program_owner")).toArray();
+            QString held;
+            if (!owner.isEmpty() && owner.at(0).toInteger() == kTokenProgramWord0 && data.size() >= 49) {
+                Reader r{data};
+                r.skip(33);                            // tag, definition id
+                held = dec(r.u128v()) + QStringLiteral("  (token balance held by the escrow)");
+            } else {
+                held = QString::number(acc.value(QStringLiteral("balance")).toDouble(), 'f', 0)
+                       + QStringLiteral("  (native balance held by the escrow)");
+            }
+            emit escrowUpdated(which, held);
+            emit statusChanged(QStringLiteral("%1 escrow read from chain").arg(which));
+            return;
+        }
 
         Reader r{data};
         if (label == QLatin1String("sale")) {
@@ -167,13 +264,50 @@ void ChainBridge::fetch(const QString& label, const QString& accountId) {
             emit poolUpdated(rt, rcol, ws, we, QString::number(last));
         } else {
             const quint8 kind = r.u8();
-            r.u64(); r.u64(); r.u64();              // start, cliff, end
-            const QString total = r.u128(), claimed = r.u128();
-            const quint64 last = r.u64();
+            const quint64 start = r.u64(), cliff = r.u64(), end = r.u64();
+            const unsigned __int128 total = r.u128v(), claimed = r.u128v();
+            r.u64();                                    // last_seen
+            r.skip(32 * 3);                             // beneficiary, escrow, creator
+            const quint8 cancelable = r.u8();
+            r.u8();                                     // transferable
+            const quint64 cancelledAt = r.u64(), signalled = r.u64();
+            const quint32 tranches = r.u32();
+            quint8 asset = 0;
+            QByteArray definition;
+            if (data.size() > r.pos) {                  // the second layout appends these
+                asset = r.u8();
+                definition = r.bytes(32);
+            }
             if (!r.ok) { emit failed(label, QStringLiteral("account data is short")); return; }
-            emit scheduleUpdated(total, claimed, QString::number(last),
-                                 kind == 0 ? QStringLiteral("cliff + linear")
-                                           : QStringLiteral("linear"));
+
+            const unsigned __int128 vested = vestedAt(kind, start, cliff, end, total, cancelledAt,
+                                                      signalled, tranches, m_nowMs);
+            const unsigned __int128 claimable = vested > claimed ? vested - claimed : 0;
+            auto when = [](quint64 ms) {
+                return QDateTime::fromMSecsSinceEpoch(qint64(ms), Qt::UTC).toString(QStringLiteral("yyyy-MM-dd HH:mm 'UTC'"));
+            };
+            QString next;
+            if (cancelledAt) next = QStringLiteral("none — cancelled at ") + when(cancelledAt);
+            else if (kind == 2) next = QStringLiteral("milestone %1 of %2, when signalled")
+                                           .arg(__builtin_popcountll(signalled) + 1).arg(tranches);
+            else if (kind == 0 && m_nowMs < cliff) next = QStringLiteral("cliff lump at ") + when(cliff);
+            else if (m_nowMs < end) next = QStringLiteral("continuous, fully vested at ") + when(end);
+            else next = QStringLiteral("none — fully vested");
+
+            QVariantMap m;
+            m[QStringLiteral("kind")] = kind == 0 ? QStringLiteral("cliff + linear")
+                                      : kind == 1 ? QStringLiteral("linear") : QStringLiteral("milestones");
+            m[QStringLiteral("asset")] = asset == 1 ? QStringLiteral("token ") + base58(definition)
+                                                    : QStringLiteral("native balance");
+            m[QStringLiteral("total")] = dec(total);
+            m[QStringLiteral("claimed")] = dec(claimed);
+            m[QStringLiteral("vested")] = dec(vested);
+            m[QStringLiteral("claimable")] = dec(claimable);
+            m[QStringLiteral("next")] = next;
+            m[QStringLiteral("cancelable")] = cancelledAt ? QStringLiteral("cancelled")
+                                            : cancelable ? QStringLiteral("yes") : QStringLiteral("no (one-way)");
+            m[QStringLiteral("clock")] = when(m_nowMs);
+            emit scheduleUpdated(m);
         }
         emit statusChanged(QStringLiteral("%1 read from chain").arg(label));
     });

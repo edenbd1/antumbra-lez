@@ -51,10 +51,10 @@ Item {
         return (v * 100).toFixed(2) + "%"
     }
 
-    // Which program the panel is showing. "all" is the default and the honest
-    // one; the others exist so a walkthrough of one program is not sharing the
-    // screen with two it is not about.
-    property string only: "all"
+    // Which program the panel is showing. Vesting by default: it is the one
+    // deployed on the current testnet. The launchpad views read on request.
+    property string only: "vesting"
+    onOnlyChanged: root.only === "vesting" ? bridge.refresh() : bridge.refreshLaunchpad()
 
     Rectangle { anchors.fill: parent; color: root.bg }
 
@@ -97,7 +97,7 @@ Item {
             }
             Button {
                 text: "Refresh"
-                onClicked: bridge.refresh()
+                onClicked: root.only === "vesting" ? bridge.refresh() : bridge.refreshLaunchpad()
             }
         }
 
@@ -123,8 +123,8 @@ Item {
         Card {
             id: schedCard
             visible: root.only === "all" || root.only === "vesting"
-            title: "Vesting schedule — RFP-017"
-            subtitle: "accrual recomputed from the terms on every claim"
+            title: "Vesting position — RFP-017"
+            subtitle: "claimable now is computed against the chain's own clock, as a claim would be"
         }
 
         Item { Layout.fillHeight: true }
@@ -208,7 +208,7 @@ Item {
         function onEscrowUpdated(which, balance) {
             var card = which === "sale" ? saleCard : schedCard
             var rows = card.rows.slice()
-            rows.push({ k: "escrowed on chain", v: balance + "  (native balance actually held)" })
+            rows.push({ k: "escrowed on chain", v: balance })
             card.rows = rows
         }
         function onPoolUpdated(rt, rc, ws, we, last) {
@@ -219,12 +219,19 @@ Item {
                 { k: "newest timestamp seen",  v: last },
             ]
         }
-        function onScheduleUpdated(total, claimed, last, kind) {
+        // Base units, not 18-decimal amounts: a vesting total is whatever the
+        // token's own convention is, and the program never scales it.
+        function onScheduleUpdated(s) {
             schedCard.rows = [
-                { k: "schedule type",          v: kind },
-                { k: "total",                  v: root.human(total) },
-                { k: "claimed",                v: root.human(claimed) },
-                { k: "newest timestamp seen",  v: last },
+                { k: "schedule type",          v: s.kind },
+                { k: "asset",                  v: s.asset },
+                { k: "total locked",           v: s.total },
+                { k: "vested so far",          v: s.vested },
+                { k: "claimed so far",         v: s.claimed },
+                { k: "claimable now",          v: s.claimable },
+                { k: "next unlock",            v: s.next },
+                { k: "cancelable",             v: s.cancelable },
+                { k: "computed at",            v: s.clock + "  (the LEZ clock account)" },
             ]
         }
         function onStatusChanged(t) { status.text = t }

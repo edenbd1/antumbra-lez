@@ -17,16 +17,19 @@
 #include <QNetworkAccessManager>
 #include <QObject>
 #include <QString>
+#include <QVariantMap>
 
 class ChainBridge : public QObject {
     Q_OBJECT
 public:
     explicit ChainBridge(QObject* parent = nullptr);
 
-    // Re-read all three program accounts. Results arrive as the signals below;
-    // every failure path emits `failed` rather than leaving the panel showing
-    // stale numbers as if they were fresh.
+    // Re-read the vesting schedule against the chain's clock. Results arrive as
+    // the signals below; every failure path emits `failed` rather than leaving
+    // the panel showing stale numbers as if they were fresh.
     Q_INVOKABLE void refresh();
+    // The launchpad programs' accounts (RFP-015/016), read on request only.
+    Q_INVOKABLE void refreshLaunchpad();
 
     // Point the panel at a different sequencer. Defaults to public testnet.
     Q_INVOKABLE void setEndpoint(const QString& url);
@@ -42,8 +45,9 @@ signals:
     void poolUpdated(const QString& reserveToken, const QString& reserveCollateral,
                      const QString& weightStart, const QString& weightEnd,
                      const QString& lastSeen);
-    void scheduleUpdated(const QString& total, const QString& claimed,
-                         const QString& lastSeen, const QString& kind);
+    /// The recipient view: kind, asset, total, claimed, vested, claimable,
+    /// next unlock, cancelable, and the clock reading it was computed at.
+    void scheduleUpdated(const QVariantMap& s);
     void failed(const QString& which, const QString& reason);
     void statusChanged(const QString& text);
 
@@ -52,4 +56,5 @@ private:
 
     QNetworkAccessManager m_net;
     QString m_rpc;
+    quint64 m_nowMs = 0;
 };
