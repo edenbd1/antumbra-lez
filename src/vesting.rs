@@ -48,10 +48,11 @@ pub const MAX_MILESTONES: u32 = 64;
 /// Which accrual rule a schedule follows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
-    /// Nothing before `cliff`; from `cliff` to `end`, linear in elapsed time.
-    /// The cliff itself pays the lump that has accrued up to it, which for this
-    /// shape is zero — the RFP's "lump sum at the cliff" is the linear amount
-    /// measured from the cliff, not an extra payment.
+    /// Nothing before `cliff`. At the cliff, everything that has accrued since
+    /// `start` unlocks at once — the RFP's "lump sum at the cliff date" — and
+    /// from there to `end` the rest follows linearly. A one-year cliff on a
+    /// four-year schedule unlocks a quarter on its anniversary, which is how
+    /// cliff vesting is written everywhere it is used.
     CliffLinear,
     /// Linear from `start` to `end`, no cliff.
     Linear,
@@ -187,7 +188,7 @@ impl Schedule {
                 if t < self.cliff {
                     0
                 } else {
-                    linear_between(self.cliff, self.end, t, self.total)
+                    linear_between(self.start, self.end, t, self.total)
                 }
             }
         }

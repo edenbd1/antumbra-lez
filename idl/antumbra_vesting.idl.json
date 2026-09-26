@@ -94,6 +94,158 @@
         {
           "name": "tranches",
           "type": "u32"
+        },
+        {
+          "name": "cancel_authority",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "milestone_authority",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "refund_to",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "create_token_schedule",
+      "accounts": [
+        {
+          "name": "schedule",
+          "writable": true,
+          "signer": false,
+          "init": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "schedule_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holding",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "schedule_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
+        },
+        {
+          "name": "definition",
+          "writable": false,
+          "signer": false,
+          "init": false
+        },
+        {
+          "name": "refund",
+          "writable": false,
+          "signer": false,
+          "init": false
+        },
+        {
+          "name": "creator",
+          "writable": false,
+          "signer": true,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "schedule_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "kind",
+          "type": "u8"
+        },
+        {
+          "name": "start",
+          "type": "u64"
+        },
+        {
+          "name": "cliff",
+          "type": "u64"
+        },
+        {
+          "name": "end",
+          "type": "u64"
+        },
+        {
+          "name": "total",
+          "type": "u128"
+        },
+        {
+          "name": "beneficiary",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "cancelable",
+          "type": "u8"
+        },
+        {
+          "name": "transferable",
+          "type": "u8"
+        },
+        {
+          "name": "tranches",
+          "type": "u32"
+        },
+        {
+          "name": "cancel_authority",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "milestone_authority",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         }
       ]
     },
@@ -156,6 +308,64 @@
       ]
     },
     {
+      "name": "fund_token_schedule",
+      "accounts": [
+        {
+          "name": "schedule",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "schedule_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holding",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "schedule_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source",
+          "writable": true,
+          "signer": true,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "schedule_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u128"
+        }
+      ]
+    },
+    {
       "name": "cancel",
       "accounts": [
         {
@@ -191,9 +401,21 @@
           }
         },
         {
-          "name": "creator",
+          "name": "refund",
           "writable": true,
+          "signer": false,
+          "init": false
+        },
+        {
+          "name": "authority",
+          "writable": false,
           "signer": true,
+          "init": false
+        },
+        {
+          "name": "clock",
+          "writable": false,
+          "signer": false,
           "init": false
         }
       ],
@@ -206,10 +428,6 @@
               32
             ]
           }
-        },
-        {
-          "name": "now",
-          "type": "u64"
         }
       ]
     },
@@ -312,7 +530,7 @@
           }
         },
         {
-          "name": "creator",
+          "name": "authority",
           "writable": false,
           "signer": true,
           "init": false
@@ -335,7 +553,7 @@
       ]
     },
     {
-      "name": "claim_and_pay",
+      "name": "claim",
       "accounts": [
         {
           "name": "schedule",
@@ -370,9 +588,21 @@
           }
         },
         {
-          "name": "beneficiary",
+          "name": "destination",
           "writable": true,
+          "signer": false,
+          "init": false
+        },
+        {
+          "name": "beneficiary",
+          "writable": false,
           "signer": true,
+          "init": false
+        },
+        {
+          "name": "clock",
+          "writable": false,
+          "signer": false,
           "init": false
         }
       ],
@@ -385,10 +615,6 @@
               32
             ]
           }
-        },
-        {
-          "name": "now",
-          "type": "u64"
         }
       ]
     }
@@ -473,6 +699,46 @@
           {
             "name": "tranches",
             "type": "u32"
+          },
+          {
+            "name": "asset",
+            "type": "u8"
+          },
+          {
+            "name": "token_definition",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "refund_to",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "cancel_authority",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "milestone_authority",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           }
         ]
       }

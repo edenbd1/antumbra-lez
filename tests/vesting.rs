@@ -73,10 +73,26 @@ fn a_cliff_pays_nothing_before_it_and_everything_by_the_end() {
     for t in 0..365 {
         assert_eq!(s.vested_at(t), 0, "paid before the cliff at t={t}");
     }
-    assert_eq!(s.vested_at(365), 0);
-    assert!(s.vested_at(366) > 0);
     assert_eq!(s.vested_at(365 + 1_095), 1_000_000);
     assert_eq!(s.vested_at(u64::MAX), 1_000_000);
+}
+
+#[test]
+fn the_cliff_unlocks_what_accrued_before_it_as_one_lump() {
+    // F1: "claimable in a lump sum at the cliff date, then linearly over the
+    // remaining duration". A one-year cliff on a four-year schedule: a quarter
+    // at the anniversary, not zero, and linear from there on the same slope.
+    let s = Schedule::cliff_linear(0, 365, 4 * 365, 1_000_000).unwrap();
+    assert_eq!(s.vested_at(364), 0);
+    assert_eq!(s.vested_at(365), 250_000);
+    let slope = Schedule::linear(0, 4 * 365, 1_000_000).unwrap();
+    for t in 365..=(4 * 365) {
+        assert_eq!(
+            s.vested_at(t),
+            slope.vested_at(t),
+            "cliff and linear disagree after the cliff at t={t}"
+        );
+    }
 }
 
 #[test]

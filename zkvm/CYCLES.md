@@ -25,7 +25,7 @@ The number that matters is LEZ's 32,000,000-cycle public-execution cap.
 | `curve_buy` | 12 | **10,622** | 10,622 | 10,622 |
 | `curve_sell` | 12 | 10,623 | 10,623 | 10,623 |
 | `vested_at` (linear) | 12 | 8,717 | 64 | 8,717 |
-| `vested_at` (cliff+linear) | 12 | 8,711 | 56 | 8,711 |
+| `vested_at` (cliff+linear) | 12 | 8,713 | 56 | 8,713 |
 | `vesting_claim` | 12 | 8,808 | 124 | 8,808 |
 | `vesting_cancel` | 12 | 8,840 | 186 | 8,840 |
 | `signal_milestone` | 12 | **30** | 30 | 30 |

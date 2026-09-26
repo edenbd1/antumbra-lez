@@ -1,35 +1,40 @@
 // Antumbra vesting program (RFP-017), deployed on the public LEZ testnet.
 //
-// WHAT THIS IS, AND WHAT IT IS NOT
+// WHAT IT CUSTODIES, AND HOW IT PAYS
 //
-// This is not the RFP-017 deliverable. It is the part of it that can be settled
-// before a grant exists: the schedule state machine and the accrual arithmetic,
-// running on chain, in a real program, with real accounts.
+// Each schedule has its own escrow, a PDA of this program seeded by
+// `[schedule_id, "holding"]`. Two assets are supported:
 //
-// It deliberately does **not** custody tokens. LEZ rule 5 refuses any post-state
-// that debits an account the executing program does not own, so a real escrow is
-// a chained call into the program that owns the balance — and that call depends
-// on LP-0013's transfer authorities, which are awarded but not in the runtime:
-// at tag v0.2.4, `lez/programs/token/src/` carries initialize, mint, burn,
-// transfer, new_definition and print_nft, and no authority module. Pretending
-// otherwise here would be the kind of claim that survives a proposal and fails
-// an audit. What is proved instead is everything that does not depend on it.
+// - **Native balance.** The escrow is owned by this program, so a payout debits
+//   it directly and credits the destination directly. LEZ forbids a program from
+//   *decreasing* a balance it does not own; it never forbids an increase, so the
+//   destination may be any account, public or private.
+// - **A token-program token.** The escrow is a token holding owned by the token
+//   program. A payout is a chained `Transfer` into the token program with this
+//   program's PDA seed attached (`ChainedCall::pda_seeds`), which is how the
+//   runtime lets a program authorise its own PDA to a callee. The AMM's vaults
+//   pay out the same way. No transfer-authority primitive is needed for it.
+//
+// WHERE TIME COMES FROM
+//
+// A zkVM guest has no clock, and a timestamp passed as an argument is a number
+// the caller chose: a beneficiary would claim "at the end date", a creator would
+// cancel "at the start". So `claim` and `cancel` take the sequencer-written LEZ
+// clock account, and check both its owner and its address before believing it.
+// Every time in a schedule is in milliseconds since the epoch, the clock's unit.
 //
 // WHY THE SCHEDULE IS A PDA SEEDED BY ITS ID
 //
 // `[schedule_id]` gives one address per schedule and `init` refuses to overwrite,
 // so a duplicate creation fails rather than silently replacing a beneficiary's
-// terms. `record_claim` re-derives the same address, so a claim cannot be aimed
-// at a schedule the caller invented: an unknown id lands on an uninitialised
-// account whose owner is the default, and the ownership check rejects it.
+// terms, and every instruction re-derives the same address, so none can be aimed
+// at a schedule the caller invented.
 //
 // WHY NOTHING IS CACHED
 //
-// The vested amount is recomputed from the schedule and the caller-supplied
-// timestamp on every claim, using the same `antumbra::vesting` code the host
-// tests cover. There is no stored "currently vested" field to go stale, which is
-// the same choice `weight_at` makes for RFP-016's weights and for the same
-// reason.
+// The vested amount is recomputed from the schedule and the clock on every
+// claim, using the same `antumbra::vesting` code the host tests cover. There is
+// no stored "currently vested" field to go stale.
 
 #![no_main]
 
@@ -50,16 +55,19 @@ const E_NOT_CANCELABLE: u32 = 7010;
 const E_ALREADY_CANCELLED: u32 = 7011;
 const E_NOT_TRANSFERABLE: u32 = 7012;
 const E_MILESTONE_BAD: u32 = 7013;
+const E_BAD_CLOCK: u32 = 7014;
+const E_NOT_AUTHORITY: u32 = 7015;
+const E_WRONG_ASSET: u32 = 7016;
+const E_WRONG_REFUND: u32 = 7017;
 
 /// The native `authenticated_transfer` program, **pinned** rather than read off
 /// whatever account the caller handed us.
 ///
 /// This is a security boundary, not a convenience. LEZ deployment is
 /// permissionless, so anyone may deploy a program and own accounts with it. If
-/// the chained call targeted `buyer.account.program_owner`, a caller could pass
-/// an account owned by a program they wrote, and this program would obediently
-/// chain into it — which could decline to move anything while the curve state
-/// here still advanced. The buyer would leave with tokens and keep their money.
+/// the funding call targeted `creator.account.program_owner`, a caller could pass
+/// an account owned by a program they wrote, which could decline to move
+/// anything while the schedule here recorded itself as funded.
 ///
 /// Pinning the id closes that: the program invoked is the one whose bytecode
 /// hashes to this value, and the check below refuses any payer the real
@@ -84,28 +92,49 @@ enum AuthTransfer {
     Initialize,
 }
 
+/// The token program, pinned for the same reason. ImageID
+/// `ccc4713e2b5ecdff37b0c67c295369effc04b7e8994eb11c3f410bb226b82e9b`, from
+/// `artifacts/lez/programs/token.bin` at tag v0.2.4.
+const TOKEN_PROGRAM_ID: nssa_core::program::ProgramId = [
+    1047643340, 4291649067, 2093396023, 4016657193, 3904308476, 481382041, 2987082047, 2603530278,
+];
 
-/// On-chain schedule state. `last_seen` is the newest timestamp any claim has
-/// presented; a claim carrying an older one is rejected rather than served,
-/// because accrual is monotone and a caller who can rewind time can replay the
-/// accrual curve.
+/// The token program's instruction, mirrored for the same toolchain reason as
+/// `AuthTransfer`. `Transfer` is variant 0 upstream and is the only one sent.
+#[derive(serde::Serialize)]
+enum TokenIx {
+    /// Accounts: `[sender holding (authorised), recipient holding]`.
+    Transfer { amount_to_transfer: u128 },
+}
+
+/// The clock program, and the one clock account read: the one the sequencer
+/// rewrites every block. ImageID
+/// `319fbc054d77207cbaec0b31e9cc813eca0b40d310d7112ec4a0fe64395c61fc`.
+const CLOCK_PROGRAM_ID: nssa_core::program::ProgramId = [
+    96247601, 2082502477, 822865082, 1048693993, 3544189898, 772921104, 1694408900, 4234239033,
+];
+const CLOCK_ACCOUNT: [u8; 32] = *b"/LEZ/ClockProgramAccount/0000001";
+
+/// On-chain schedule state. The first seven fields keep their order across
+/// versions: the Basecamp panel decodes that prefix.
 #[account_type]
 #[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
 pub struct VestingSchedule {
-    /// 0 = cliff+linear, 1 = fully linear.
+    /// 0 = cliff+linear, 1 = fully linear, 2 = milestones.
     pub kind: u8,
+    /// Milliseconds since the epoch, as the LEZ clock reports them.
     pub start: u64,
     pub cliff: u64,
     pub end: u64,
     pub total: u128,
     pub claimed: u128,
+    /// The clock reading of the latest claim or cancellation.
     pub last_seen: u64,
     pub beneficiary: [u8; 32],
-    /// The holding PDA's own address, recorded so a claim cannot name a
-    /// different source. It is derived from `[schedule_id, "holding"]`, so it is
-    /// this program's account and this program may debit it directly.
+    /// The holding PDA's own address, derived from `[schedule_id, "holding"]`,
+    /// recorded so no instruction can name a different source.
     pub escrow: [u8; 32],
-    /// Who may cancel, and who may transfer the position. Fixed at creation.
+    /// Who created the schedule, and alone may make it non-cancelable.
     pub creator: [u8; 32],
     /// 1 while the schedule may still be cancelled. The conversion to 0 is
     /// one-way: there is no instruction that raises it.
@@ -123,6 +152,21 @@ pub struct VestingSchedule {
     /// How many equal tranches a milestone schedule has. Zero for the two
     /// time-based shapes.
     pub tranches: u32,
+    /// 0 = native balance, 1 = a token-program token.
+    pub asset: u8,
+    /// The token definition, for `asset == 1`; zero otherwise.
+    pub token_definition: [u8; 32],
+    /// Where a cancellation returns the unvested part: the creator's account,
+    /// or for a token schedule the creator's holding of that token. Fixed at
+    /// creation, so whoever cancels cannot redirect it.
+    pub refund_to: [u8; 32],
+    /// Who may cancel. The creator unless another was nominated at creation,
+    /// such as a multisig or a DAO.
+    pub cancel_authority: [u8; 32],
+    /// Who may signal milestones. The creator unless another was nominated;
+    /// a separate authority removes the conflict of interest when vesting is
+    /// used as buyer protection and the creator would be approving itself.
+    pub milestone_authority: [u8; 32],
 }
 
 #[lez_program]
@@ -139,13 +183,100 @@ mod antumbra_vesting {
         Ok(())
     }
 
-    /// Vested amount for a milestone schedule.
-    ///
-    /// `total × signalled / tranches`, floored — which is exact at the end by
-    /// construction: when every bit is set the numerator equals the denominator
-    /// and the whole total is released, with no residue to strand. That is the
-    /// same property the linear path gets by special-casing its final step, here
-    /// obtained for free.
+    fn load(schedule: &AccountWithMetadata, me: nssa_core::program::ProgramId) -> Result<VestingSchedule, SpelError> {
+        if schedule.account.program_owner != me {
+            return Err(SpelError::custom(E_NOT_ANCHORED, "no schedule is committed at this id"));
+        }
+        VestingSchedule::try_from_slice(&schedule.account.data)
+            .map_err(|_| SpelError::custom(E_BAD_SCHEDULE, "schedule failed to deserialize"))
+    }
+
+    /// The current time, from the sequencer-written clock account, in
+    /// milliseconds. Both checks are needed: the owner, or a caller hands in an
+    /// account their own program wrote; the address, or they hand in some other
+    /// account the clock program happens to own.
+    fn now(clock: &AccountWithMetadata) -> Result<u64, SpelError> {
+        if clock.account.program_owner != CLOCK_PROGRAM_ID {
+            return Err(SpelError::custom(E_BAD_CLOCK, "the time account is not owned by the clock program"));
+        }
+        if clock.account_id.value() != &CLOCK_ACCOUNT {
+            return Err(SpelError::custom(E_BAD_CLOCK, "the time account is not the per-block clock"));
+        }
+        let data: &[u8] = clock.account.data.as_ref();
+        if data.len() < 16 {
+            return Err(SpelError::custom(E_BAD_CLOCK, "the clock account is short"));
+        }
+        let mut ts = [0u8; 8];
+        ts.copy_from_slice(&data[8..16]); // { block_id: u64, timestamp: u64 }
+        Ok(u64::from_le_bytes(ts))
+    }
+
+    /// The seed the runtime needs to authorise this program's holding PDA to the
+    /// token program, derived by the same function SPEL uses to derive the
+    /// address, so the two cannot disagree.
+    fn holding_seed(schedule_id: &[u8; 32]) -> nssa_core::program::PdaSeed {
+        match AutoClaim::pda_from_seeds(&[schedule_id, &spel_framework::pda::seed_from_str("holding")]) {
+            AutoClaim::Claimed(nssa_core::program::Claim::Pda(seed)) => seed,
+            _ => unreachable!("pda_from_seeds always yields a PDA claim"),
+        }
+    }
+
+    /// The definition a token holding belongs to, if it is a fungible holding
+    /// owned by the token program. `enum TokenHolding { Fungible { definition,
+    /// balance }, .. }` in Borsh: tag 0, then the 32-byte definition id.
+    fn token_definition_of(acc: &AccountWithMetadata) -> Option<[u8; 32]> {
+        if acc.account.program_owner != TOKEN_PROGRAM_ID {
+            return None;
+        }
+        let d: &[u8] = acc.account.data.as_ref();
+        if d.len() < 49 || d[0] != 0 {
+            return None;
+        }
+        let mut def = [0u8; 32];
+        def.copy_from_slice(&d[1..33]);
+        Some(def)
+    }
+
+    /// Pay `amount` out of the escrow into `to`, by whichever path the asset
+    /// takes. Native: debit ours, credit theirs, no chained call. Token: a
+    /// chained `Transfer` with our PDA seed attached, and neither balance is
+    /// written here — a transaction may not both chain a credit to an account
+    /// and write that account itself.
+    fn pay_out(
+        state: &VestingSchedule,
+        schedule_id: &[u8; 32],
+        holding: &mut AccountWithMetadata,
+        to: &mut AccountWithMetadata,
+        amount: u128,
+    ) -> Result<Vec<nssa_core::program::ChainedCall>, SpelError> {
+        if state.asset == 0 {
+            holding.account.balance = holding
+                .account
+                .balance
+                .checked_sub(amount)
+                .ok_or_else(|| SpelError::custom(E_ESCROW_SHORT, "the holding cannot cover this"))?;
+            to.account.balance = to
+                .account
+                .balance
+                .checked_add(amount)
+                .ok_or_else(|| SpelError::custom(E_ESCROW_SHORT, "recipient balance would overflow"))?;
+            return Ok(vec![]);
+        }
+        if token_definition_of(to) != Some(state.token_definition) {
+            return Err(SpelError::custom(
+                E_WRONG_ASSET,
+                "the destination is not a holding of this schedule's token",
+            ));
+        }
+        let escrow = AccountWithMetadata { is_authorized: true, ..holding.clone() };
+        Ok(vec![nssa_core::program::ChainedCall::new(
+            TOKEN_PROGRAM_ID,
+            vec![escrow, to.clone()],
+            &TokenIx::Transfer { amount_to_transfer: amount },
+        )
+        .with_pda_seeds(vec![holding_seed(schedule_id)])])
+    }
+
     fn milestone_vested(s: &VestingSchedule) -> Result<u128, SpelError> {
         if s.tranches == 0 || s.tranches > 64 {
             return Err(SpelError::custom(E_MILESTONE_BAD, "tranche count out of range"));
@@ -159,7 +290,6 @@ mod antumbra_vesting {
         let mut sched = match s.kind {
             0 => antumbra::vesting::Schedule::cliff_linear(s.start, s.cliff, s.end, s.total),
             1 => antumbra::vesting::Schedule::linear(s.start, s.end, s.total),
-            // Kind 2 is time-independent and does not go through this path.
             _ => return Err(SpelError::custom(E_BAD_SCHEDULE, "unknown schedule kind")),
         }
         .map_err(|_| SpelError::custom(E_BAD_SCHEDULE, "schedule parameters are degenerate"))?;
@@ -170,13 +300,51 @@ mod antumbra_vesting {
         Ok(sched)
     }
 
-    /// Create a vesting schedule.
+    fn vested(s: &VestingSchedule, t: u64) -> Result<u128, SpelError> {
+        if s.kind == 2 { milestone_vested(s) } else { Ok(rebuild(s)?.vested_at(t)) }
+    }
+
+    /// A zero authority means "the creator", so a caller who does not care
+    /// passes zeros rather than repeating their own address.
+    fn or_creator(a: [u8; 32], creator: [u8; 32]) -> [u8; 32] {
+        if a == [0u8; 32] { creator } else { a }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn new_state(
+        creator: [u8; 32], escrow: [u8; 32], kind: u8, start: u64, cliff: u64, end: u64,
+        total: u128, beneficiary: [u8; 32], cancelable: u8, transferable: u8, tranches: u32,
+        asset: u8, token_definition: [u8; 32], refund_to: [u8; 32],
+        cancel_authority: [u8; 32], milestone_authority: [u8; 32],
+    ) -> Result<VestingSchedule, SpelError> {
+        let state = VestingSchedule {
+            kind, start, cliff, end, total, claimed: 0, last_seen: 0, beneficiary, escrow,
+            creator, cancelable, transferable, cancelled_at: 0, signalled: 0, tranches,
+            asset, token_definition, refund_to,
+            cancel_authority: or_creator(cancel_authority, creator),
+            milestone_authority: or_creator(milestone_authority, creator),
+        };
+        // Validated at creation rather than discovered at the first claim.
+        if kind == 2 { milestone_vested(&state)?; } else { rebuild(&state)?; }
+        // A transaction may not name one account twice, and a cancellation names
+        // both the authority (signing) and the refund account (credited). Equal,
+        // they would make the schedule impossible to cancel; refuse that now.
+        if state.refund_to == state.cancel_authority {
+            return Err(SpelError::custom(
+                E_WRONG_REFUND,
+                "the refund account must differ from the cancel authority's signing account",
+            ));
+        }
+        Ok(state)
+    }
+
+    /// Create a schedule over **native balance**. The holding is initialised
+    /// here as this program's account and filled by `fund_schedule`: an account
+    /// cannot be initialised and paid into in one transaction.
     ///
-    /// Accounts:
-    /// - `schedule` (init, PDA seeded by `[schedule_id]`): the terms. `init`
-    ///   refuses an existing address, so a schedule id cannot be reused to
-    ///   rewrite a beneficiary's terms.
-    /// - `creator` (signer): the party setting the schedule up.
+    /// Times are milliseconds since the epoch. `cancel_authority` and
+    /// `milestone_authority` may be zero, meaning the creator. `refund_to` is
+    /// the creator's account that a cancellation returns the unvested part to.
     #[instruction]
     pub fn create_schedule(
         #[account(init, pda = [arg("schedule_id")])] mut schedule: AccountWithMetadata,
@@ -193,57 +361,69 @@ mod antumbra_vesting {
         cancelable: u8,
         transferable: u8,
         tranches: u32,
+        cancel_authority: [u8; 32],
+        milestone_authority: [u8; 32],
+        refund_to: [u8; 32],
     ) -> SpelResult {
         let _ = schedule_id;
-        let escrow = *holding.account_id.value();
-        let state = VestingSchedule {
-            kind,
-            start,
-            cliff,
-            end,
-            total,
-            claimed: 0,
-            last_seen: start,
-            beneficiary,
-            escrow,
-            creator: *creator.account_id.value(),
-            cancelable,
-            transferable,
-            cancelled_at: 0,
-            signalled: 0,
-            tranches,
-        };
-        // Validated at creation rather than discovered at the first claim, by
-        // whichever rule the shape actually follows.
-        if kind == 2 {
-            milestone_vested(&state)?;
-        } else {
-            rebuild(&state)?;
-        }
+        let me = *creator.account_id.value();
+        let state = new_state(
+            me, *holding.account_id.value(), kind, start, cliff, end, total, beneficiary,
+            cancelable, transferable, tranches, 0, [0u8; 32], refund_to, cancel_authority,
+            milestone_authority,
+        )?;
         write(&mut schedule.account, &state)?;
-
-        // The holding is created here and funded by `fund_schedule`, in a second
-        // transaction. Not a choice: an account cannot be initialised and paid
-        // into at once, because the chained transfer reads a pre-state the
-        // initialisation has not written yet. `lez-payment-streams` splits
-        // initialize_vault from deposit for the same reason.
-        Ok(SpelOutput::execute(
-            vec![schedule, holding, creator],
-            vec![],
-        ))
+        Ok(SpelOutput::execute(vec![schedule, holding, creator], vec![]))
     }
 
-    // `record_claim` used to live here: it advanced the schedule without paying,
-    // from before the payout worked. Keeping it alongside `claim_and_pay` would
-    // ship two instructions where one records a claim that never happened, which
-    // is the exact state a vesting program exists to make impossible.
-
-    /// Move `amount` from the creator into the schedule's holding.
+    /// Create a schedule over a **token-program token**. The holding is not
+    /// initialised here: it becomes a token holding owned by the token program
+    /// when `fund_token_schedule` first transfers into it, with this program's
+    /// PDA seed authorising it, exactly as the AMM's vaults are created.
     ///
-    /// The creator is not this program's account to debit, so the decrease is
-    /// declared as a chained call into the program that owns their balance —
-    /// they signed this transaction, which is what authorises it. The increase
-    /// on the holding needs no authority: any program may raise any balance.
+    /// `refund` is the creator's own holding of the same token, where a
+    /// cancellation returns the unvested part.
+    #[instruction]
+    pub fn create_token_schedule(
+        #[account(init, pda = [arg("schedule_id")])] mut schedule: AccountWithMetadata,
+        #[account(pda = [arg("schedule_id"), literal("holding")])] holding: AccountWithMetadata,
+        definition: AccountWithMetadata,
+        refund: AccountWithMetadata,
+        #[account(signer)] creator: AccountWithMetadata,
+        schedule_id: [u8; 32],
+        kind: u8,
+        start: u64,
+        cliff: u64,
+        end: u64,
+        total: u128,
+        beneficiary: [u8; 32],
+        cancelable: u8,
+        transferable: u8,
+        tranches: u32,
+        cancel_authority: [u8; 32],
+        milestone_authority: [u8; 32],
+    ) -> SpelResult {
+        let _ = schedule_id;
+        if definition.account.program_owner != TOKEN_PROGRAM_ID {
+            return Err(SpelError::custom(E_WRONG_ASSET, "the definition is not a token-program account"));
+        }
+        let def = *definition.account_id.value();
+        if token_definition_of(&refund) != Some(def) {
+            return Err(SpelError::custom(E_WRONG_REFUND, "the refund account does not hold this token"));
+        }
+        let me = *creator.account_id.value();
+        let state = new_state(
+            me, *holding.account_id.value(), kind, start, cliff, end, total, beneficiary,
+            cancelable, transferable, tranches, 1, def, *refund.account_id.value(),
+            cancel_authority, milestone_authority,
+        )?;
+        write(&mut schedule.account, &state)?;
+        Ok(SpelOutput::execute(vec![schedule, holding, definition, refund, creator], vec![]))
+    }
+
+    /// Move native `amount` from the creator into a native schedule's holding,
+    /// as a chained call into the transfer program the creator's balance
+    /// belongs to. The creator signed, which is what authorises the debit.
     #[instruction]
     pub fn fund_schedule(
         ctx: ProgramContext,
@@ -255,112 +435,116 @@ mod antumbra_vesting {
         amount: u128,
     ) -> SpelResult {
         let _ = schedule_id;
-        if schedule.account.program_owner != ctx.self_program_id {
-            return Err(SpelError::custom(
-                E_NOT_ANCHORED,
-                "no schedule is committed at this id",
-            ));
+        let state = load(&schedule, ctx.self_program_id)?;
+        if state.asset != 0 {
+            return Err(SpelError::custom(E_WRONG_ASSET, "this schedule holds a token; use fund_token_schedule"));
         }
         if holding.account.program_owner != ctx.self_program_id {
-            return Err(SpelError::custom(
-                E_ESCROW_UNOWNED,
-                "the holding account is not owned by this program",
-            ));
+            return Err(SpelError::custom(E_ESCROW_UNOWNED, "the holding account is not owned by this program"));
         }
         if amount == 0 {
             return Err(SpelError::custom(E_ESCROW_SHORT, "zero funding amount"));
         }
-        // Not "is it owned by something" but "is it owned by *the* transfer
-        // program". LEZ deployment is permissionless, so a caller could hand us
-        // an account owned by a program they wrote and we would chain into it.
         if creator.account.program_owner != AUTH_TRANSFER_PROGRAM_ID {
-            return Err(SpelError::custom(
-                E_ESCROW_UNOWNED,
-                "the funding account is not held by the native transfer program",
-            ));
+            return Err(SpelError::custom(E_ESCROW_UNOWNED, "the funding account is not held by the native transfer program"));
         }
         if creator.account.balance < amount {
-            return Err(SpelError::custom(
-                E_ESCROW_SHORT,
-                "the creator cannot cover this funding",
-            ));
+            return Err(SpelError::custom(E_ESCROW_SHORT, "the creator cannot cover this funding"));
         }
         let funding = nssa_core::program::ChainedCall::new(
             AUTH_TRANSFER_PROGRAM_ID,
             vec![creator.clone(), holding.clone()],
             &AuthTransfer::Transfer { amount },
         );
-        Ok(SpelOutput::execute(
-            vec![schedule, holding, creator],
-            vec![funding],
-        ))
+        Ok(SpelOutput::execute(vec![schedule, holding, creator], vec![funding]))
     }
 
-    /// Cancel, returning the unvested remainder to the creator.
+    /// Move `amount` of a schedule's token from `source` (a holding of that
+    /// token, signing) into the schedule's holding. The first funding creates
+    /// the holding as a token-program account authorised by our PDA seed.
+    #[instruction]
+    pub fn fund_token_schedule(
+        ctx: ProgramContext,
+        #[account(pda = [arg("schedule_id")])] schedule: AccountWithMetadata,
+        #[account(mut, pda = [arg("schedule_id"), literal("holding")])]
+        holding: AccountWithMetadata,
+        #[account(mut, signer)] source: AccountWithMetadata,
+        schedule_id: [u8; 32],
+        amount: u128,
+    ) -> SpelResult {
+        let state = load(&schedule, ctx.self_program_id)?;
+        if state.asset != 1 {
+            return Err(SpelError::custom(E_WRONG_ASSET, "this schedule holds native balance; use fund_schedule"));
+        }
+        if amount == 0 {
+            return Err(SpelError::custom(E_ESCROW_SHORT, "zero funding amount"));
+        }
+        if token_definition_of(&source) != Some(state.token_definition) {
+            return Err(SpelError::custom(E_WRONG_ASSET, "the source is not a holding of this schedule's token"));
+        }
+        let escrow = AccountWithMetadata { is_authorized: true, ..holding.clone() };
+        let funding = nssa_core::program::ChainedCall::new(
+            TOKEN_PROGRAM_ID,
+            vec![source.clone(), escrow],
+            &TokenIx::Transfer { amount_to_transfer: amount },
+        )
+        .with_pda_seeds(vec![holding_seed(&schedule_id)]);
+        Ok(SpelOutput::execute(vec![schedule, holding, source], vec![funding]))
+    }
+
+    /// Cancel at the clock's current time, returning the unvested remainder to
+    /// the refund account fixed at creation.
     ///
     /// The split is three ways and all three come from one `vested_at` call, so
     /// they cannot drift: already claimed (gone), vested but unclaimed (still
-    /// the beneficiary's, claimable after cancellation), and unvested (returned
-    /// here). The host tests sweep every cancellation instant asserting the
-    /// three sum to the original total; this is that arithmetic paying out.
+    /// the beneficiary's, claimable after cancellation), and unvested (returned).
     #[instruction]
     pub fn cancel(
         ctx: ProgramContext,
         #[account(pda = [arg("schedule_id")])] mut schedule: AccountWithMetadata,
         #[account(mut, pda = [arg("schedule_id"), literal("holding")])]
         mut holding: AccountWithMetadata,
-        #[account(mut, signer)] mut creator: AccountWithMetadata,
+        #[account(mut)] mut refund: AccountWithMetadata,
+        #[account(signer)] authority: AccountWithMetadata,
+        clock: AccountWithMetadata,
         schedule_id: [u8; 32],
-        now: u64,
     ) -> SpelResult {
-        let _ = schedule_id;
-        if schedule.account.program_owner != ctx.self_program_id
-            || holding.account.program_owner != ctx.self_program_id
-        {
-            return Err(SpelError::custom(E_NOT_ANCHORED, "schedule or holding is not ours"));
-        }
-        let mut state = VestingSchedule::try_from_slice(&schedule.account.data)
-            .map_err(|_| SpelError::custom(E_BAD_SCHEDULE, "schedule failed to deserialize"))?;
-
-        if &state.creator != creator.account_id.value() {
-            return Err(SpelError::custom(E_NOT_CREATOR, "signer is not the creator"));
+        let mut state = load(&schedule, ctx.self_program_id)?;
+        let t = now(&clock)?;
+        if &state.cancel_authority != authority.account_id.value() {
+            return Err(SpelError::custom(E_NOT_AUTHORITY, "signer is not this schedule's cancel authority"));
         }
         if state.cancelable == 0 {
-            return Err(SpelError::custom(
-                E_NOT_CANCELABLE,
-                "this schedule was made non-cancelable",
-            ));
+            return Err(SpelError::custom(E_NOT_CANCELABLE, "this schedule was made non-cancelable"));
         }
         if state.cancelled_at != 0 {
             return Err(SpelError::custom(E_ALREADY_CANCELLED, "already cancelled"));
         }
+        if &state.refund_to != refund.account_id.value() {
+            return Err(SpelError::custom(E_WRONG_REFUND, "refund account is not the one fixed at creation"));
+        }
+        if &state.escrow != holding.account_id.value() {
+            return Err(SpelError::custom(E_ESCROW_MISMATCH, "holding is not this schedule's"));
+        }
+        if state.asset == 0 && holding.account.program_owner != ctx.self_program_id {
+            return Err(SpelError::custom(E_ESCROW_UNOWNED, "the holding account is not owned by this program"));
+        }
 
-        let vested = if state.kind == 2 {
-            milestone_vested(&state)?
-        } else {
-            rebuild(&state)?.vested_at(now)
-        };
         let unvested = state
             .total
-            .checked_sub(vested)
+            .checked_sub(vested(&state, t)?)
             .ok_or_else(|| SpelError::custom(E_BAD_SCHEDULE, "vested exceeds total"))?;
-
-        state.cancelled_at = now;
+        // A clock reading of zero would leave the schedule looking uncancelled.
+        state.cancelled_at = t.max(1);
+        state.last_seen = t;
         write(&mut schedule.account, &state)?;
 
-        if unvested > 0 {
-            holding.account.balance = holding
-                .account
-                .balance
-                .checked_sub(unvested)
-                .ok_or_else(|| SpelError::custom(E_ESCROW_SHORT, "holding is short of the unvested part"))?;
-            creator.account.balance = creator
-                .account
-                .balance
-                .checked_add(unvested)
-                .ok_or_else(|| SpelError::custom(E_ESCROW_SHORT, "creator balance overflow"))?;
-        }
-        Ok(SpelOutput::execute(vec![schedule, holding, creator], vec![]))
+        let calls = if unvested > 0 {
+            pay_out(&state, &schedule_id, &mut holding, &mut refund, unvested)?
+        } else {
+            vec![]
+        };
+        Ok(SpelOutput::execute(vec![schedule, holding, refund, authority, clock], calls))
     }
 
     /// Make a cancelable schedule permanent. One-way by construction: no
@@ -373,11 +557,7 @@ mod antumbra_vesting {
         schedule_id: [u8; 32],
     ) -> SpelResult {
         let _ = schedule_id;
-        if schedule.account.program_owner != ctx.self_program_id {
-            return Err(SpelError::custom(E_NOT_ANCHORED, "schedule is not ours"));
-        }
-        let mut state = VestingSchedule::try_from_slice(&schedule.account.data)
-            .map_err(|_| SpelError::custom(E_BAD_SCHEDULE, "schedule failed to deserialize"))?;
+        let mut state = load(&schedule, ctx.self_program_id)?;
         if &state.creator != creator.account_id.value() {
             return Err(SpelError::custom(E_NOT_CREATOR, "signer is not the creator"));
         }
@@ -401,24 +581,14 @@ mod antumbra_vesting {
         new_beneficiary: [u8; 32],
     ) -> SpelResult {
         let _ = schedule_id;
-        if schedule.account.program_owner != ctx.self_program_id {
-            return Err(SpelError::custom(E_NOT_ANCHORED, "schedule is not ours"));
-        }
-        let mut state = VestingSchedule::try_from_slice(&schedule.account.data)
-            .map_err(|_| SpelError::custom(E_BAD_SCHEDULE, "schedule failed to deserialize"))?;
+        let mut state = load(&schedule, ctx.self_program_id)?;
         if state.transferable == 0 {
-            return Err(SpelError::custom(
-                E_NOT_TRANSFERABLE,
-                "this position was created non-transferable",
-            ));
+            return Err(SpelError::custom(E_NOT_TRANSFERABLE, "this position was created non-transferable"));
         }
         // The holder moves it, not the creator: a creator who could reassign a
         // beneficiary could redirect vested compensation to themselves.
         if &state.beneficiary != beneficiary.account_id.value() {
-            return Err(SpelError::custom(
-                E_NOT_BENEFICIARY,
-                "signer is not the current beneficiary",
-            ));
+            return Err(SpelError::custom(E_NOT_BENEFICIARY, "signer is not the current beneficiary"));
         }
         state.beneficiary = new_beneficiary;
         write(&mut schedule.account, &state)?;
@@ -431,24 +601,24 @@ mod antumbra_vesting {
     pub fn signal_milestone(
         ctx: ProgramContext,
         #[account(pda = [arg("schedule_id")])] mut schedule: AccountWithMetadata,
-        #[account(signer)] creator: AccountWithMetadata,
+        #[account(signer)] authority: AccountWithMetadata,
         schedule_id: [u8; 32],
         index: u32,
     ) -> SpelResult {
         let _ = schedule_id;
-        if schedule.account.program_owner != ctx.self_program_id {
-            return Err(SpelError::custom(E_NOT_ANCHORED, "schedule is not ours"));
-        }
-        let mut state = VestingSchedule::try_from_slice(&schedule.account.data)
-            .map_err(|_| SpelError::custom(E_BAD_SCHEDULE, "schedule failed to deserialize"))?;
-        if &state.creator != creator.account_id.value() {
-            return Err(SpelError::custom(E_NOT_CREATOR, "signer is not the creator"));
+        let mut state = load(&schedule, ctx.self_program_id)?;
+        if &state.milestone_authority != authority.account_id.value() {
+            return Err(SpelError::custom(E_NOT_AUTHORITY, "signer is not this schedule's milestone authority"));
         }
         if state.kind != 2 {
             return Err(SpelError::custom(E_MILESTONE_BAD, "not a milestone schedule"));
         }
-        // Refused before the shift rather than after it: `1u64 << 64` is
-        // undefined, and an index that wrapped would set the wrong tranche.
+        // After a cancellation the unvested part has already been returned; a
+        // later signal would promise tokens the holding no longer has.
+        if state.cancelled_at != 0 {
+            return Err(SpelError::custom(E_ALREADY_CANCELLED, "the schedule was cancelled"));
+        }
+        // Refused before the shift: `1u64 << 64` is undefined.
         if index >= state.tranches.min(64) {
             return Err(SpelError::custom(E_MILESTONE_BAD, "milestone index out of range"));
         }
@@ -458,117 +628,70 @@ mod antumbra_vesting {
         }
         state.signalled |= bit;
         write(&mut schedule.account, &state)?;
-        Ok(SpelOutput::execute(vec![schedule, creator], vec![]))
+        Ok(SpelOutput::execute(vec![schedule, authority], vec![]))
     }
 
-    /// Claim, and pay, by debiting this program's own holding account.
+    /// Claim everything vested by the clock's current time, into `destination`.
     ///
-    /// WHY THIS WORKS TODAY, WITHOUT LP-0013
+    /// The beneficiary signs; the destination is whichever account they name,
+    /// which is what lets a claim land in a **private** account: the program
+    /// only ever *increases* the destination's balance, and LEZ lets any program
+    /// do that to any account, shielded ones included. The creator learns the
+    /// beneficiary, which the schedule already made public, and not where the
+    /// tokens went.
     ///
-    /// LEZ rule 5 forbids a program from *decreasing* a balance it does not own.
-    /// It says nothing about increasing one — the RFP states the same thing from
-    /// the other side: "any program may increase any account's balance". So a
-    /// payout does not need an authority over the payer at all, provided the
-    /// payer is the program itself.
-    ///
-    /// The holding is a PDA of this program, so debiting it is this program
-    /// debiting itself, and crediting the beneficiary is the permitted
-    /// direction. No chained call, no signature from the escrow, and nothing
-    /// waiting on LP-0013 — which would be needed only to move a balance held by
-    /// a *different* program, such as an SPL-style token account.
-    ///
-    /// This is the shape `logos-co/lez-payment-streams` uses for its own live
-    /// withdrawals, and payment streams are continuous vesting.
+    /// Atomic: the schedule records the claim in the same transaction that pays
+    /// it, so a claim that fails pays nothing and records nothing.
     #[instruction]
-    pub fn claim_and_pay(
+    pub fn claim(
         ctx: ProgramContext,
         #[account(pda = [arg("schedule_id")])] mut schedule: AccountWithMetadata,
         #[account(mut, pda = [arg("schedule_id"), literal("holding")])]
         mut holding: AccountWithMetadata,
-        #[account(mut, signer)] mut beneficiary: AccountWithMetadata,
+        #[account(mut)] mut destination: AccountWithMetadata,
+        #[account(signer)] beneficiary: AccountWithMetadata,
+        clock: AccountWithMetadata,
         schedule_id: [u8; 32],
-        now: u64,
     ) -> SpelResult {
-        let _ = schedule_id;
-
-        if schedule.account.program_owner != ctx.self_program_id {
-            return Err(SpelError::custom(
-                E_NOT_ANCHORED,
-                "no schedule is committed at this id",
-            ));
-        }
-        // The holding must be ours as well. A holding this program does not own
-        // is one it may not debit, and finding that out at the subtraction is
-        // finding it out too late.
-        if holding.account.program_owner != ctx.self_program_id {
-            return Err(SpelError::custom(
-                E_ESCROW_UNOWNED,
-                "the holding account is not owned by this program",
-            ));
-        }
-        let mut state = VestingSchedule::try_from_slice(&schedule.account.data)
-            .map_err(|_| SpelError::custom(E_BAD_SCHEDULE, "schedule failed to deserialize"))?;
-
+        let mut state = load(&schedule, ctx.self_program_id)?;
+        let t = now(&clock)?;
         if &state.beneficiary != beneficiary.account_id.value() {
-            return Err(SpelError::custom(
-                E_NOT_BENEFICIARY,
-                "signer is not the beneficiary this schedule names",
-            ));
+            return Err(SpelError::custom(E_NOT_BENEFICIARY, "signer is not the beneficiary this schedule names"));
         }
         if &state.escrow != holding.account_id.value() {
-            return Err(SpelError::custom(
-                E_ESCROW_MISMATCH,
-                "holding is not the account this schedule was created with",
-            ));
+            return Err(SpelError::custom(E_ESCROW_MISMATCH, "holding is not this schedule's"));
         }
-        if now < state.last_seen {
-            return Err(SpelError::custom(
-                E_TIME_WENT_BACKWARDS,
-                "now is earlier than a timestamp this schedule has already seen",
-            ));
+        if state.asset == 0 && holding.account.program_owner != ctx.self_program_id {
+            return Err(SpelError::custom(E_ESCROW_UNOWNED, "the holding account is not owned by this program"));
+        }
+        // One account may not appear twice in a transaction, so the key that
+        // signs for the position and the account it pays into are distinct.
+        if destination.account_id == beneficiary.account_id {
+            return Err(SpelError::custom(E_NOT_BENEFICIARY, "claim into an account other than the signing key"));
+        }
+        if t < state.last_seen {
+            return Err(SpelError::custom(E_TIME_WENT_BACKWARDS, "the clock reads earlier than this schedule's last event"));
         }
 
-        // Milestone schedules ignore `now` entirely: what is released is a
-        // function of which bits are set, and nothing else.
         let (amount, new_claimed) = if state.kind == 2 {
-            let vested = milestone_vested(&state)?;
-            let owed = vested.saturating_sub(state.claimed);
+            let v = milestone_vested(&state)?;
+            let owed = v.saturating_sub(state.claimed);
             if owed == 0 {
-                return Err(SpelError::custom(
-                    E_NOTHING_CLAIMABLE,
-                    "no unsignalled tranche has been released",
-                ));
+                return Err(SpelError::custom(E_NOTHING_CLAIMABLE, "no milestone has been signalled since the last claim"));
             }
-            (owed, vested)
+            (owed, v)
         } else {
             let mut sched = rebuild(&state)?;
-            let paid = sched.claim(now).map_err(|_| {
-                SpelError::custom(E_NOTHING_CLAIMABLE, "nothing is claimable at this time")
+            let paid = sched.claim(t).map_err(|_| {
+                SpelError::custom(E_NOTHING_CLAIMABLE, "nothing has vested since the last claim")
             })?;
             (paid, sched.claimed)
         };
 
-        // Debit ours, credit theirs. Both are checked rather than saturating: an
-        // underflow here would mean the schedule promised more than the holding
-        // ever received, which is a bug to surface, not to absorb.
-        holding.account.balance = holding
-            .account
-            .balance
-            .checked_sub(amount)
-            .ok_or_else(|| SpelError::custom(E_ESCROW_SHORT, "the holding cannot cover this claim"))?;
-        beneficiary.account.balance = beneficiary
-            .account
-            .balance
-            .checked_add(amount)
-            .ok_or_else(|| SpelError::custom(E_ESCROW_SHORT, "beneficiary balance would overflow"))?;
-
         state.claimed = new_claimed;
-        state.last_seen = now;
+        state.last_seen = t;
         write(&mut schedule.account, &state)?;
-
-        Ok(SpelOutput::execute(
-            vec![schedule, holding, beneficiary],
-            vec![],
-        ))
+        let calls = pay_out(&state, &schedule_id, &mut holding, &mut destination, amount)?;
+        Ok(SpelOutput::execute(vec![schedule, holding, destination, beneficiary, clock], calls))
     }
 }

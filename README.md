@@ -9,7 +9,7 @@ written for [λPrize RFP-015](https://github.com/logos-co/rfp/blob/master/RFPs/R
 cargo test --release
 ```
 
-50 tests green. The pricing library has no dependencies at all — the
+51 tests green. The pricing library has no dependencies at all — the
 executor harness is a separate workspace — and `#![forbid(unsafe_code)]`
 throughout.
 
