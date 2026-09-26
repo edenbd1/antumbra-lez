@@ -107,13 +107,15 @@ enum TokenIx {
     Transfer { amount_to_transfer: u128 },
 }
 
-/// The clock program, and the one clock account read: the one the sequencer
-/// rewrites every block. ImageID
+/// The clock program, and its three accounts, rewritten by the sequencer every
+/// 1, 10 and 50 blocks. ImageID
 /// `319fbc054d77207cbaec0b31e9cc813eca0b40d310d7112ec4a0fe64395c61fc`.
 const CLOCK_PROGRAM_ID: nssa_core::program::ProgramId = [
     96247601, 2082502477, 822865082, 1048693993, 3544189898, 772921104, 1694408900, 4234239033,
 ];
-const CLOCK_ACCOUNT: [u8; 32] = *b"/LEZ/ClockProgramAccount/0000001";
+const CLOCK_EVERY_BLOCK: [u8; 32] = *b"/LEZ/ClockProgramAccount/0000001";
+const CLOCK_EVERY_10: [u8; 32] = *b"/LEZ/ClockProgramAccount/0000010";
+const CLOCK_EVERY_50: [u8; 32] = *b"/LEZ/ClockProgramAccount/0000050";
 
 /// On-chain schedule state. The first seven fields keep their order across
 /// versions: the Basecamp panel decodes that prefix.
@@ -191,16 +193,28 @@ mod antumbra_vesting {
             .map_err(|_| SpelError::custom(E_BAD_SCHEDULE, "schedule failed to deserialize"))
     }
 
-    /// The current time, from the sequencer-written clock account, in
+    /// The current time, from a sequencer-written clock account, in
     /// milliseconds. Both checks are needed: the owner, or a caller hands in an
     /// account their own program wrote; the address, or they hand in some other
     /// account the clock program happens to own.
-    fn now(clock: &AccountWithMetadata) -> Result<u64, SpelError> {
+    ///
+    /// `coarse` admits the 10- and 50-block clocks as well as the per-block one.
+    /// A claim needs that: a privacy-preserving transaction is proved against
+    /// its public inputs as they were when proving began, and the sequencer
+    /// re-checks the proof against them as they are at inclusion, so an input
+    /// that changes every block can never be matched by a proof that takes
+    /// minutes. A coarser clock reads earlier than the chain, which can only make
+    /// a claim pay less than has vested, never more — the rest stays claimable.
+    /// A cancellation does not get it: an earlier reading there would let the
+    /// cancel authority take back what had already vested.
+    fn now(clock: &AccountWithMetadata, coarse: bool) -> Result<u64, SpelError> {
         if clock.account.program_owner != CLOCK_PROGRAM_ID {
             return Err(SpelError::custom(E_BAD_CLOCK, "the time account is not owned by the clock program"));
         }
-        if clock.account_id.value() != &CLOCK_ACCOUNT {
-            return Err(SpelError::custom(E_BAD_CLOCK, "the time account is not the per-block clock"));
+        let id = clock.account_id.value();
+        let known = id == &CLOCK_EVERY_BLOCK || (coarse && (id == &CLOCK_EVERY_10 || id == &CLOCK_EVERY_50));
+        if !known {
+            return Err(SpelError::custom(E_BAD_CLOCK, "the time account is not a clock this instruction accepts"));
         }
         let data: &[u8] = clock.account.data.as_ref();
         if data.len() < 16 {
@@ -510,7 +524,7 @@ mod antumbra_vesting {
         schedule_id: [u8; 32],
     ) -> SpelResult {
         let mut state = load(&schedule, ctx.self_program_id)?;
-        let t = now(&clock)?;
+        let t = now(&clock, false)?;
         if &state.cancel_authority != authority.account_id.value() {
             return Err(SpelError::custom(E_NOT_AUTHORITY, "signer is not this schedule's cancel authority"));
         }
@@ -654,7 +668,7 @@ mod antumbra_vesting {
         schedule_id: [u8; 32],
     ) -> SpelResult {
         let mut state = load(&schedule, ctx.self_program_id)?;
-        let t = now(&clock)?;
+        let t = now(&clock, true)?;
         if &state.beneficiary != beneficiary.account_id.value() {
             return Err(SpelError::custom(E_NOT_BENEFICIARY, "signer is not the beneficiary this schedule names"));
         }

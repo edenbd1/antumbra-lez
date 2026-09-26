@@ -45,14 +45,45 @@ fn f1_a_clock_the_caller_owns_is_refused() {
 }
 
 #[test]
-fn f1_an_account_the_clock_program_owns_but_is_not_the_clock_is_refused() {
+fn f1_an_account_the_clock_program_owns_but_is_not_a_clock_is_refused() {
     let mut w = World::new("otherclock");
     w.with(w.linear(T0, T0 + MIN, 10), 10);
     let mut other = clock(T0 + 10 * MIN);
-    other.account_id = lee_core::account::AccountId::new(*b"/LEZ/ClockProgramAccount/0000010");
+    other.account_id = lee_core::account::AccountId::new(*b"/LEZ/ClockProgramAccount/0000077");
     let r = run(&w.elf, &w.pid, &Ix::Claim { schedule_id: w.id }, vec![
         w.schedule.clone(), w.holding.clone(), native(DEST, 0),
         acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true), other,
+    ]);
+    refused(r, 7014);
+}
+
+fn clock_50(ms: u64) -> lee_core::account::AccountWithMetadata {
+    let mut c = clock(ms);
+    c.account_id = lee_core::account::AccountId::new(*b"/LEZ/ClockProgramAccount/0000050");
+    c
+}
+
+#[test]
+fn pr1_a_claim_accepts_the_50_block_clock_that_a_private_proof_can_match() {
+    // A privacy-preserving claim is proved against its public inputs as they
+    // were when proving began; the per-block clock changes before a proof of
+    // minutes lands, the 50-block clock does not.
+    let mut w = World::new("coarse");
+    w.with(w.linear(T0, T0 + 30 * MIN, 600), 600);
+    let r = run(&w.elf, &w.pid, &Ix::Claim { schedule_id: w.id }, vec![
+        w.schedule.clone(), w.holding.clone(), native(DEST, 0),
+        acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true), clock_50(T0 + 15 * MIN),
+    ]).unwrap();
+    assert_eq!(r.post(&native(DEST, 0)).balance, 300);
+}
+
+#[test]
+fn f3_a_cancel_refuses_the_coarse_clock_so_it_cannot_be_backdated() {
+    let mut w = World::new("coarsecancel");
+    w.with(w.linear(T0, T0 + 30 * MIN, 600), 600);
+    let r = run(&w.elf, &w.pid, &Ix::Cancel { schedule_id: w.id }, vec![
+        w.schedule.clone(), w.holding.clone(), native(REFUND, 0),
+        acc(CREATOR, AUTH_TRANSFER, 0, vec![], true), clock_50(T0 + 15 * MIN),
     ]);
     refused(r, 7014);
 }
