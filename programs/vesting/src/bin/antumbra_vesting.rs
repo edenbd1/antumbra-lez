@@ -2,8 +2,8 @@
 //
 // WHAT IT CUSTODIES, AND HOW IT PAYS
 //
-// Each schedule has its own escrow, a PDA of this program seeded by
-// `[schedule_id, "holding"]`. Two assets are supported:
+// A schedule has its own escrow (a batch shares one), a PDA seeded by
+// `[schedule_id, "holding"]` (`[batch_id, "holding"]`). Two assets are supported:
 //
 // - **Native balance.** The escrow is owned by this program, so a payout debits
 //   it directly and credits the destination directly. LEZ forbids a program from

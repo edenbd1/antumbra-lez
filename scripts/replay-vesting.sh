@@ -413,7 +413,8 @@ for M in ${BATCH_SIZES:-256 512 1024 2048 4096}; do
     LAST=$M; printf 'batch_of_%s\tyes\tLANDED\t-\t%s\n' "$M" "$h" >> "$OUT"; echo "  ✅ a batch of $M landed: $h"
   else
     FIRST_NO=$M
-    note "a batch of $M did not land: $(printf '%s' "$log" | grep -iE 'error|too|limit|size|exceed' | head -1 | cut -c1-140)"
+    why=$(printf '%s' "$log" | grep -iE 'error|too|limit|size|exceed' | head -1 | cut -c1-140)
+    note "a batch of $M did not land${why:+: $why}${why:-, and the client printed no error naming a limit}"
     break
   fi
 done

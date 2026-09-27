@@ -123,7 +123,7 @@ against the chain without an explorer.
 - token_cancel: expected to land, refused instead (050cbed553fe5471…); re-run below
 - (empty reading: the step before it did not land) cancelled at clock time 0 ms; vested then: 0 of 100000
 - not met in this run, re-run below: creator's token holding got the unvested part back: 0 != 100000
-- ✅ token escrow keeps exactly the vested part = 0
+- vacuous in this run, re-run below (its account was never funded): token escrow keeps exactly the vested part = 0
 
 | call | outcome | block | transaction |
 |---|---|---|---|
@@ -215,5 +215,5 @@ against the chain without an explorer.
 |---|---|---|---|
 | `batch_of_256` | landed | - | [`1d2a0c9e…e17dff44`](https://explorer.testnet.lez.logos.co/transaction/1d2a0c9ea9c74322fb5a57cd88c109638627ea218fb0bd5169438c07e17dff44) |
 
-- a batch of 512 did not land:
+- a batch of 512 did not land, and the client printed no error naming a limit
 - measured maximum batch: 256 schedules in one creation transaction; 512 did not land

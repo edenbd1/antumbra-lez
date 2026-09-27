@@ -59,7 +59,7 @@ token_cancel_create	yes	LANDED	27174	f5f1725b2f2f1aa197aa32888944971a25827f9b042
 # token_cancel: expected to land, refused instead (050cbed553fe5471…); re-run below
 # (empty reading: the step before it did not land) cancelled at clock time 0 ms; vested then: 0 of 100000
 # not met in this run, re-run below: creator's token holding got the unvested part back: 0 != 100000
-# check ok: token escrow keeps exactly the vested part = 0
+# vacuous in this run, re-run below (its account was never funded): token escrow keeps exactly the vested part = 0
 private_native_create	yes	LANDED	27180	d01d018e901b86aa129d78f314c56e8083de3df2c16dbcc268376f90e0cf8e8e
 private_native_fund	yes	LANDED	27181	fffbe623c97da705df48f8a7cd9d6f09cf3778d6fd6e57361113e48624df45e7
 private_native_claim	yes	LANDED	27189	62c0ff8df2c1a10c89601df66a23d3b353ae437dfd4849afa5c4acc987dbb201
@@ -107,5 +107,5 @@ showcase_claim	yes	LANDED	27226	67f1b3ac80a53e235293f961303559ee5701920ac58f975f
 # kScheduleAccount = tEnLNnoHheKEqyUpZpWLQ59ECDwTe7rm3MDttpXxPL2
 # kScheduleHolding = 6RDFqaQnosx1Nh2E17wY7wz8Zc5MDxGQARBPzfnh7U51
 batch_of_256	yes	LANDED	-	1d2a0c9ea9c74322fb5a57cd88c109638627ea218fb0bd5169438c07e17dff44
-# a batch of 512 did not land: 
+# a batch of 512 did not land, and the client printed no error naming a limit
 # measured maximum batch: 256 schedules in one creation transaction; 512 did not land
