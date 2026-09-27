@@ -45,6 +45,19 @@ fn main() {
     let tb = Ix::TransferBeneficiary { schedule_id: x.id, new_beneficiary: DEST };
     rows.push(("transfer beneficiary", run(&x.elf, &x.pid, &tb, vec![x.schedule.clone(), signer(BENEFICIARY)]).unwrap().cycles));
 
+    let b = World::new("m-batch");
+    let n = 8u32;
+    let batch = Ix::CreateScheduleBatch {
+        batch_id: b.id, kind: 1, start: T0, cliff: T0, end: T0 + 30 * MIN, total_each: 60,
+        beneficiaries: vec![BENEFICIARY; n as usize], cancelable: 1, transferable: 0, tranches: 0,
+        cancel_authority: Z, milestone_authority: Z, refund_to: REFUND,
+    };
+    let mut pre = vec![b.holding.clone(), signer(CREATOR)];
+    for i in 0..n {
+        pre.push(acc(*pda(&b.pid, &[batch_schedule_id(&b.id, i)]).value(), lee_core::program::ProgramId::default(), 0, vec![], false));
+    }
+    rows.push(("create a batch of 8 schedules", run(&b.elf, &b.pid, &batch, pre).unwrap().cycles));
+
     println!("program ImageID word 0: {}", w.pid[0]);
     println!("| operation | cycles | share of the 32M public-execution cap |");
     println!("|---|---:|---:|");

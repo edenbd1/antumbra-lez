@@ -617,6 +617,317 @@
           }
         }
       ]
+    },
+    {
+      "name": "create_schedule_batch",
+      "accounts": [
+        {
+          "name": "holding",
+          "writable": true,
+          "signer": false,
+          "init": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "batch_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": false,
+          "signer": true,
+          "init": false
+        },
+        {
+          "name": "schedules",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "rest": true
+        }
+      ],
+      "args": [
+        {
+          "name": "batch_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "kind",
+          "type": "u8"
+        },
+        {
+          "name": "start",
+          "type": "u64"
+        },
+        {
+          "name": "cliff",
+          "type": "u64"
+        },
+        {
+          "name": "end",
+          "type": "u64"
+        },
+        {
+          "name": "total_each",
+          "type": "u128"
+        },
+        {
+          "name": "beneficiaries",
+          "type": {
+            "vec": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        },
+        {
+          "name": "cancelable",
+          "type": "u8"
+        },
+        {
+          "name": "transferable",
+          "type": "u8"
+        },
+        {
+          "name": "tranches",
+          "type": "u32"
+        },
+        {
+          "name": "cancel_authority",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "milestone_authority",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "refund_to",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "fund_batch",
+      "accounts": [
+        {
+          "name": "holding",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "batch_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "batch_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u128"
+        }
+      ]
+    },
+    {
+      "name": "claim_batch",
+      "accounts": [
+        {
+          "name": "schedule",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "schedule_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holding",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "batch_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
+        },
+        {
+          "name": "destination",
+          "writable": true,
+          "signer": false,
+          "init": false
+        },
+        {
+          "name": "beneficiary",
+          "writable": false,
+          "signer": true,
+          "init": false
+        },
+        {
+          "name": "clock",
+          "writable": false,
+          "signer": false,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "schedule_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "batch_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "cancel_batch",
+      "accounts": [
+        {
+          "name": "schedule",
+          "writable": false,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "schedule_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holding",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "batch_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
+        },
+        {
+          "name": "refund",
+          "writable": true,
+          "signer": false,
+          "init": false
+        },
+        {
+          "name": "authority",
+          "writable": false,
+          "signer": true,
+          "init": false
+        },
+        {
+          "name": "clock",
+          "writable": false,
+          "signer": false,
+          "init": false
+        }
+      ],
+      "args": [
+        {
+          "name": "schedule_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "batch_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
     }
   ],
   "accounts": [

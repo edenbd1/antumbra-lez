@@ -51,6 +51,14 @@ pub enum Ix {
     TransferBeneficiary { schedule_id: [u8; 32], new_beneficiary: [u8; 32] },
     SignalMilestone { schedule_id: [u8; 32], index: u32 },
     Claim { schedule_id: [u8; 32] },
+    CreateScheduleBatch {
+        batch_id: [u8; 32], kind: u8, start: u64, cliff: u64, end: u64, total_each: u128,
+        beneficiaries: Vec<[u8; 32]>, cancelable: u8, transferable: u8, tranches: u32,
+        cancel_authority: [u8; 32], milestone_authority: [u8; 32], refund_to: [u8; 32],
+    },
+    FundBatch { batch_id: [u8; 32], amount: u128 },
+    ClaimBatch { schedule_id: [u8; 32], batch_id: [u8; 32] },
+    CancelBatch { schedule_id: [u8; 32], batch_id: [u8; 32] },
 }
 
 impl Ix {
@@ -65,6 +73,10 @@ impl Ix {
             Ix::TransferBeneficiary { .. } => "transfer_beneficiary",
             Ix::SignalMilestone { .. } => "signal_milestone",
             Ix::Claim { .. } => "claim",
+            Ix::CreateScheduleBatch { .. } => "create_schedule_batch",
+            Ix::FundBatch { .. } => "fund_batch",
+            Ix::ClaimBatch { .. } => "claim_batch",
+            Ix::CancelBatch { .. } => "cancel_batch",
         }
     }
 }
@@ -284,4 +296,14 @@ impl World {
 
 pub fn native(id: [u8; 32], balance: u128) -> AccountWithMetadata {
     acc(id, AUTH_TRANSFER, balance, vec![], false)
+}
+
+/// Schedule `i` of a batch: SHA-256(batch_id ‖ i as 32 little-endian bytes).
+pub fn batch_schedule_id(batch_id: &[u8; 32], i: u32) -> [u8; 32] {
+    let mut idx = [0u8; 32];
+    idx[..4].copy_from_slice(&i.to_le_bytes());
+    let mut h = Sha256::new();
+    h.update(batch_id);
+    h.update(idx);
+    h.finalize().into()
 }

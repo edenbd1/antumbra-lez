@@ -59,6 +59,7 @@ const E_BAD_CLOCK: u32 = 7014;
 const E_NOT_AUTHORITY: u32 = 7015;
 const E_WRONG_ASSET: u32 = 7016;
 const E_WRONG_REFUND: u32 = 7017;
+const E_BATCH: u32 = 7018;
 
 /// The native `authenticated_transfer` program, **pinned** rather than read off
 /// whatever account the caller handed us.
@@ -318,6 +319,111 @@ mod antumbra_vesting {
         if s.kind == 2 { milestone_vested(s) } else { Ok(rebuild(s)?.vested_at(t)) }
     }
 
+    /// The whole of a cancellation, shared by `cancel` and `cancel_batch`, which
+    /// differ only in how the holding's address is derived. `seed_id` is the id
+    /// whose `[id, "holding"]` PDA the escrow is.
+    fn cancel_core(
+        me: nssa_core::program::ProgramId,
+        schedule: &mut AccountWithMetadata,
+        holding: &mut AccountWithMetadata,
+        refund: &mut AccountWithMetadata,
+        authority: &AccountWithMetadata,
+        clock: &AccountWithMetadata,
+        seed_id: &[u8; 32],
+    ) -> Result<Vec<nssa_core::program::ChainedCall>, SpelError> {
+        let mut state = load(schedule, me)?;
+        let t = now(clock, false)?;
+        if &state.cancel_authority != authority.account_id.value() {
+            return Err(SpelError::custom(E_NOT_AUTHORITY, "signer is not this schedule's cancel authority"));
+        }
+        if state.cancelable == 0 {
+            return Err(SpelError::custom(E_NOT_CANCELABLE, "this schedule was made non-cancelable"));
+        }
+        if state.cancelled_at != 0 {
+            return Err(SpelError::custom(E_ALREADY_CANCELLED, "already cancelled"));
+        }
+        if &state.refund_to != refund.account_id.value() {
+            return Err(SpelError::custom(E_WRONG_REFUND, "refund account is not the one fixed at creation"));
+        }
+        if &state.escrow != holding.account_id.value() {
+            return Err(SpelError::custom(E_ESCROW_MISMATCH, "holding is not this schedule's"));
+        }
+        if state.asset == 0 && holding.account.program_owner != me {
+            return Err(SpelError::custom(E_ESCROW_UNOWNED, "the holding account is not owned by this program"));
+        }
+        if t < state.last_seen {
+            return Err(SpelError::custom(E_TIME_WENT_BACKWARDS, "the clock reads earlier than this schedule's last event"));
+        }
+
+        let unvested = state
+            .total
+            .checked_sub(vested(&state, t)?)
+            .ok_or_else(|| SpelError::custom(E_BAD_SCHEDULE, "vested exceeds total"))?;
+        // A clock reading of zero would leave the schedule looking uncancelled.
+        state.cancelled_at = t.max(1);
+        state.last_seen = t;
+        write(&mut schedule.account, &state)?;
+
+        let calls = if unvested > 0 {
+            pay_out(&state, seed_id, holding, refund, unvested)?
+        } else {
+            vec![]
+        };
+        Ok(calls)
+    }
+
+    /// The whole of a claim, shared by `claim` and `claim_batch`.
+    fn claim_core(
+        me: nssa_core::program::ProgramId,
+        schedule: &mut AccountWithMetadata,
+        holding: &mut AccountWithMetadata,
+        destination: &mut AccountWithMetadata,
+        beneficiary: &AccountWithMetadata,
+        clock: &AccountWithMetadata,
+        seed_id: &[u8; 32],
+    ) -> Result<Vec<nssa_core::program::ChainedCall>, SpelError> {
+        let mut state = load(schedule, me)?;
+        let t = now(clock, true)?;
+        if &state.beneficiary != beneficiary.account_id.value() {
+            return Err(SpelError::custom(E_NOT_BENEFICIARY, "signer is not the beneficiary this schedule names"));
+        }
+        if &state.escrow != holding.account_id.value() {
+            return Err(SpelError::custom(E_ESCROW_MISMATCH, "holding is not this schedule's"));
+        }
+        if state.asset == 0 && holding.account.program_owner != me {
+            return Err(SpelError::custom(E_ESCROW_UNOWNED, "the holding account is not owned by this program"));
+        }
+        // One account may not appear twice in a transaction, so the key that
+        // signs for the position and the account it pays into are distinct.
+        if destination.account_id == beneficiary.account_id {
+            return Err(SpelError::custom(E_NOT_BENEFICIARY, "claim into an account other than the signing key"));
+        }
+        if t < state.last_seen {
+            return Err(SpelError::custom(E_TIME_WENT_BACKWARDS, "the clock reads earlier than this schedule's last event"));
+        }
+
+        let (amount, new_claimed) = if state.kind == 2 {
+            let v = milestone_vested(&state)?;
+            let owed = v.saturating_sub(state.claimed);
+            if owed == 0 {
+                return Err(SpelError::custom(E_NOTHING_CLAIMABLE, "no milestone has been signalled since the last claim"));
+            }
+            (owed, v)
+        } else {
+            let mut sched = rebuild(&state)?;
+            let paid = sched.claim(t).map_err(|_| {
+                SpelError::custom(E_NOTHING_CLAIMABLE, "nothing has vested since the last claim")
+            })?;
+            (paid, sched.claimed)
+        };
+
+        state.claimed = new_claimed;
+        state.last_seen = t;
+        write(&mut schedule.account, &state)?;
+        let calls = pay_out(&state, seed_id, holding, destination, amount)?;
+        Ok(calls)
+    }
+
     /// A zero authority means "the creator", so a caller who does not care
     /// passes zeros rather than repeating their own address.
     fn or_creator(a: [u8; 32], creator: [u8; 32]) -> [u8; 32] {
@@ -523,41 +629,7 @@ mod antumbra_vesting {
         clock: AccountWithMetadata,
         schedule_id: [u8; 32],
     ) -> SpelResult {
-        let mut state = load(&schedule, ctx.self_program_id)?;
-        let t = now(&clock, false)?;
-        if &state.cancel_authority != authority.account_id.value() {
-            return Err(SpelError::custom(E_NOT_AUTHORITY, "signer is not this schedule's cancel authority"));
-        }
-        if state.cancelable == 0 {
-            return Err(SpelError::custom(E_NOT_CANCELABLE, "this schedule was made non-cancelable"));
-        }
-        if state.cancelled_at != 0 {
-            return Err(SpelError::custom(E_ALREADY_CANCELLED, "already cancelled"));
-        }
-        if &state.refund_to != refund.account_id.value() {
-            return Err(SpelError::custom(E_WRONG_REFUND, "refund account is not the one fixed at creation"));
-        }
-        if &state.escrow != holding.account_id.value() {
-            return Err(SpelError::custom(E_ESCROW_MISMATCH, "holding is not this schedule's"));
-        }
-        if state.asset == 0 && holding.account.program_owner != ctx.self_program_id {
-            return Err(SpelError::custom(E_ESCROW_UNOWNED, "the holding account is not owned by this program"));
-        }
-
-        let unvested = state
-            .total
-            .checked_sub(vested(&state, t)?)
-            .ok_or_else(|| SpelError::custom(E_BAD_SCHEDULE, "vested exceeds total"))?;
-        // A clock reading of zero would leave the schedule looking uncancelled.
-        state.cancelled_at = t.max(1);
-        state.last_seen = t;
-        write(&mut schedule.account, &state)?;
-
-        let calls = if unvested > 0 {
-            pay_out(&state, &schedule_id, &mut holding, &mut refund, unvested)?
-        } else {
-            vec![]
-        };
+        let calls = cancel_core(ctx.self_program_id, &mut schedule, &mut holding, &mut refund, &authority, &clock, &schedule_id)?;
         Ok(SpelOutput::execute(vec![schedule, holding, refund, authority, clock], calls))
     }
 
@@ -667,45 +739,143 @@ mod antumbra_vesting {
         clock: AccountWithMetadata,
         schedule_id: [u8; 32],
     ) -> SpelResult {
-        let mut state = load(&schedule, ctx.self_program_id)?;
-        let t = now(&clock, true)?;
-        if &state.beneficiary != beneficiary.account_id.value() {
-            return Err(SpelError::custom(E_NOT_BENEFICIARY, "signer is not the beneficiary this schedule names"));
-        }
-        if &state.escrow != holding.account_id.value() {
-            return Err(SpelError::custom(E_ESCROW_MISMATCH, "holding is not this schedule's"));
-        }
-        if state.asset == 0 && holding.account.program_owner != ctx.self_program_id {
-            return Err(SpelError::custom(E_ESCROW_UNOWNED, "the holding account is not owned by this program"));
-        }
-        // One account may not appear twice in a transaction, so the key that
-        // signs for the position and the account it pays into are distinct.
-        if destination.account_id == beneficiary.account_id {
-            return Err(SpelError::custom(E_NOT_BENEFICIARY, "claim into an account other than the signing key"));
-        }
-        if t < state.last_seen {
-            return Err(SpelError::custom(E_TIME_WENT_BACKWARDS, "the clock reads earlier than this schedule's last event"));
-        }
-
-        let (amount, new_claimed) = if state.kind == 2 {
-            let v = milestone_vested(&state)?;
-            let owed = v.saturating_sub(state.claimed);
-            if owed == 0 {
-                return Err(SpelError::custom(E_NOTHING_CLAIMABLE, "no milestone has been signalled since the last claim"));
-            }
-            (owed, v)
-        } else {
-            let mut sched = rebuild(&state)?;
-            let paid = sched.claim(t).map_err(|_| {
-                SpelError::custom(E_NOTHING_CLAIMABLE, "nothing has vested since the last claim")
-            })?;
-            (paid, sched.claimed)
-        };
-
-        state.claimed = new_claimed;
-        state.last_seen = t;
-        write(&mut schedule.account, &state)?;
-        let calls = pay_out(&state, &schedule_id, &mut holding, &mut destination, amount)?;
+        let calls = claim_core(ctx.self_program_id, &mut schedule, &mut holding, &mut destination, &beneficiary, &clock, &schedule_id)?;
         Ok(SpelOutput::execute(vec![schedule, holding, destination, beneficiary, clock], calls))
+    }
+
+    /// Schedule `i` of batch `batch_id` has id `SHA-256(batch_id ‖ i)`, the same
+    /// combination SPEL uses for a two-seed PDA, so its address is the PDA of
+    /// that id and every single-schedule instruction reaches it unchanged.
+    fn batch_schedule_id(batch_id: &[u8; 32], i: u32) -> [u8; 32] {
+        let mut idx = [0u8; 32];
+        idx[..4].copy_from_slice(&i.to_le_bytes());
+        match AutoClaim::pda_from_seeds(&[batch_id, &idx]) {
+            AutoClaim::Claimed(nssa_core::program::Claim::Pda(seed)) => *seed.as_bytes(),
+            _ => unreachable!("pda_from_seeds always yields a PDA claim"),
+        }
+    }
+
+    /// Create one schedule per beneficiary in a single transaction (F5), all on
+    /// the same terms and amount, over **one shared native holding**.
+    ///
+    /// Why one holding: LEZ refuses a transaction in which two chained calls
+    /// debit the same payer, so a creator cannot fund N separate escrows at once.
+    /// One holding funded by one transfer can back N schedules, each still
+    /// recording its own total, claimed amount and cancellation, and each claim
+    /// or cancel debiting only what that schedule is owed.
+    ///
+    /// `schedules` are the N schedule PDAs in order; each is checked against
+    /// `batch_schedule_id(batch_id, i)` before anything is written.
+    #[instruction]
+    pub fn create_schedule_batch(
+        ctx: ProgramContext,
+        #[account(init, pda = [arg("batch_id"), literal("holding")])] holding: AccountWithMetadata,
+        #[account(signer)] creator: AccountWithMetadata,
+        schedules: Vec<AccountWithMetadata>,
+        batch_id: [u8; 32],
+        kind: u8,
+        start: u64,
+        cliff: u64,
+        end: u64,
+        total_each: u128,
+        beneficiaries: Vec<[u8; 32]>,
+        cancelable: u8,
+        transferable: u8,
+        tranches: u32,
+        cancel_authority: [u8; 32],
+        milestone_authority: [u8; 32],
+        refund_to: [u8; 32],
+    ) -> SpelResult {
+        if beneficiaries.is_empty() || beneficiaries.len() != schedules.len() {
+            return Err(SpelError::custom(E_BATCH, "one schedule account per beneficiary, at least one"));
+        }
+        let me = *creator.account_id.value();
+        let escrow = *holding.account_id.value();
+        let mut accounts = vec![holding.account.clone(), creator.account.clone()];
+        let mut claims = vec![
+            AutoClaim::pda_from_seeds(&[&batch_id, &spel_framework::pda::seed_from_str("holding")]),
+            AutoClaim::None,
+        ];
+        for (i, (acc, who)) in schedules.into_iter().zip(beneficiaries.iter()).enumerate() {
+            let sid = batch_schedule_id(&batch_id, i as u32);
+            let seed = nssa_core::program::PdaSeed::new(sid);
+            let want = nssa_core::account::AccountId::for_public_pda(&ctx.self_program_id, &seed);
+            if acc.account_id != want || acc.account != Account::default() {
+                return Err(SpelError::custom(E_BATCH, "a schedule account is not the next PDA of this batch, or is not fresh"));
+            }
+            let state = new_state(
+                me, escrow, kind, start, cliff, end, total_each, *who, cancelable, transferable,
+                tranches, 0, [0u8; 32], refund_to, cancel_authority, milestone_authority,
+            )?;
+            let mut account = acc.account.clone();
+            write(&mut account, &state)?;
+            accounts.push(account);
+            claims.push(AutoClaim::Claimed(nssa_core::program::Claim::Pda(seed)));
+        }
+        Ok(SpelOutput::execute_with_claims(&accounts, &claims, vec![]))
+    }
+
+    /// Fund a batch's shared holding in one chained transfer.
+    #[instruction]
+    pub fn fund_batch(
+        ctx: ProgramContext,
+        #[account(mut, pda = [arg("batch_id"), literal("holding")])] holding: AccountWithMetadata,
+        #[account(mut, signer)] creator: AccountWithMetadata,
+        batch_id: [u8; 32],
+        amount: u128,
+    ) -> SpelResult {
+        let _ = batch_id;
+        if holding.account.program_owner != ctx.self_program_id {
+            return Err(SpelError::custom(E_ESCROW_UNOWNED, "no batch holding at this id"));
+        }
+        if amount == 0 || creator.account.balance < amount {
+            return Err(SpelError::custom(E_ESCROW_SHORT, "the creator cannot cover this funding"));
+        }
+        if creator.account.program_owner != AUTH_TRANSFER_PROGRAM_ID {
+            return Err(SpelError::custom(E_ESCROW_UNOWNED, "the funding account is not held by the native transfer program"));
+        }
+        let funding = nssa_core::program::ChainedCall::new(
+            AUTH_TRANSFER_PROGRAM_ID,
+            vec![creator.clone(), holding.clone()],
+            &AuthTransfer::Transfer { amount },
+        );
+        Ok(SpelOutput::execute(vec![holding, creator], vec![funding]))
+    }
+
+    /// Claim from a batch schedule: `claim`, with the holding derived from the
+    /// batch rather than from the schedule.
+    #[instruction]
+    pub fn claim_batch(
+        ctx: ProgramContext,
+        #[account(pda = [arg("schedule_id")])] mut schedule: AccountWithMetadata,
+        #[account(mut, pda = [arg("batch_id"), literal("holding")])]
+        mut holding: AccountWithMetadata,
+        #[account(mut)] mut destination: AccountWithMetadata,
+        #[account(signer)] beneficiary: AccountWithMetadata,
+        clock: AccountWithMetadata,
+        schedule_id: [u8; 32],
+        batch_id: [u8; 32],
+    ) -> SpelResult {
+        let _ = schedule_id;
+        let calls = claim_core(ctx.self_program_id, &mut schedule, &mut holding, &mut destination, &beneficiary, &clock, &batch_id)?;
+        Ok(SpelOutput::execute(vec![schedule, holding, destination, beneficiary, clock], calls))
+    }
+
+    /// Cancel a batch schedule: `cancel`, with the holding derived from the batch.
+    #[instruction]
+    pub fn cancel_batch(
+        ctx: ProgramContext,
+        #[account(pda = [arg("schedule_id")])] mut schedule: AccountWithMetadata,
+        #[account(mut, pda = [arg("batch_id"), literal("holding")])]
+        mut holding: AccountWithMetadata,
+        #[account(mut)] mut refund: AccountWithMetadata,
+        #[account(signer)] authority: AccountWithMetadata,
+        clock: AccountWithMetadata,
+        schedule_id: [u8; 32],
+        batch_id: [u8; 32],
+    ) -> SpelResult {
+        let _ = schedule_id;
+        let calls = cancel_core(ctx.self_program_id, &mut schedule, &mut holding, &mut refund, &authority, &clock, &batch_id)?;
+        Ok(SpelOutput::execute(vec![schedule, holding, refund, authority, clock], calls))
     }
 }

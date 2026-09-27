@@ -333,3 +333,77 @@ fn creation_writes_the_terms_and_defaults_the_authorities_to_the_creator() {
     assert_eq!(s.escrow, *w.holding.account_id.value());
     let _: ProgramId = w.pid;
 }
+
+// ---------------------------------------------------------------- batch (F5)
+
+fn batch_world(n: u32) -> (World, Vec<lee_core::account::AccountWithMetadata>) {
+    let w = World::new("batch");
+    let schedules = (0..n)
+        .map(|i| {
+            let sid = batch_schedule_id(&w.id, i);
+            acc(*pda(&w.pid, &[sid]).value(), ProgramId::default(), 0, vec![], false)
+        })
+        .collect();
+    (w, schedules)
+}
+
+fn create_batch(w: &World, schedules: &[lee_core::account::AccountWithMetadata], who: Vec<[u8; 32]>) -> Result<Run, String> {
+    let ix = Ix::CreateScheduleBatch {
+        batch_id: w.id, kind: 1, start: T0, cliff: T0, end: T0 + 30 * MIN, total_each: 600,
+        beneficiaries: who, cancelable: 1, transferable: 0, tranches: 0,
+        cancel_authority: Z, milestone_authority: Z, refund_to: REFUND,
+    };
+    let mut pre = vec![w.holding.clone(), acc(CREATOR, AUTH_TRANSFER, 0, vec![], true)];
+    pre.extend(schedules.iter().cloned());
+    run(&w.elf, &w.pid, &ix, pre)
+}
+
+#[test]
+fn f5_a_batch_creates_one_schedule_per_beneficiary_over_one_holding() {
+    let (w, schedules) = batch_world(3);
+    let who = vec![[0xB1; 32], [0xB2; 32], [0xB3; 32]];
+    let r = create_batch(&w, &schedules, who.clone()).unwrap();
+    for (i, s) in schedules.iter().enumerate() {
+        let st = r.schedule(s);
+        assert_eq!(st.beneficiary, who[i]);
+        assert_eq!(st.total, 600);
+        assert_eq!(st.escrow, *w.holding.account_id.value(), "every schedule points at the shared holding");
+    }
+}
+
+#[test]
+fn f5_a_batch_refuses_an_account_that_is_not_the_next_pda() {
+    let (w, mut schedules) = batch_world(2);
+    schedules.swap(0, 1);
+    refused(create_batch(&w, &schedules, vec![[0xB1; 32], [0xB2; 32]]), 7018);
+}
+
+#[test]
+fn f5_a_batch_refuses_a_count_mismatch() {
+    let (w, schedules) = batch_world(2);
+    refused(create_batch(&w, &schedules, vec![[0xB1; 32]]), 7018);
+}
+
+#[test]
+fn f5_a_batch_schedule_claims_and_cancels_only_its_own_share() {
+    let (mut w, schedules) = batch_world(2);
+    let r = create_batch(&w, &schedules, vec![BENEFICIARY, [0xB2; 32]]).unwrap();
+    let mut s0 = schedules[0].clone();
+    s0.account = r.post(&schedules[0]).clone();
+    // The runtime applies the PDA claim after the program runs; do it here.
+    s0.account.program_owner = w.pid;
+    w.holding.account.program_owner = w.pid;
+    w.holding.account.balance = 1200; // funded for both
+    let sid = batch_schedule_id(&w.id, 0);
+    let claim = run(&w.elf, &w.pid, &Ix::ClaimBatch { schedule_id: sid, batch_id: w.id }, vec![
+        s0.clone(), w.holding.clone(), native(DEST, 0),
+        acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true), clock(T0 + 10 * MIN),
+    ]).unwrap();
+    assert_eq!(claim.post(&native(DEST, 0)).balance, 200);
+    assert_eq!(claim.post(&w.holding).balance, 1000);
+    let cancel = run(&w.elf, &w.pid, &Ix::CancelBatch { schedule_id: sid, batch_id: w.id }, vec![
+        s0, w.holding.clone(), native(REFUND, 0),
+        acc(CREATOR, AUTH_TRANSFER, 0, vec![], true), clock(T0 + 10 * MIN),
+    ]).unwrap();
+    assert_eq!(cancel.post(&native(REFUND, 0)).balance, 400, "only schedule 0's unvested part");
+}
