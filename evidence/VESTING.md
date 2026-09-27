@@ -9,160 +9,211 @@ against the sequencer: a landed call must resolve, a refused one must not.
 | | |
 |---|---|
 | Program | `antumbra_vesting` |
-| ImageID | `cf1d5564469e42963ea5d6456bbeabf661c470982d87e256043a8eb5a835b560` |
-| Deploy transaction | [`e5053201…fbe36b4c`](https://explorer.testnet.lez.logos.co/transaction/e5053201c25ada30c2a09d4d595c40792957f360f5ecdca13abb39f3fbe36b4c) |
-| Block | 26204 |
-| Built from | [`9aeedf7`](https://github.com/edenbd1/antumbra-lez/commit/9aeedf7b49460677e8b8029dbb490a28d10e0d14) |
+| ImageID | `7763458b5b7d88d3d932a4ce62d44a34242811106dec8f6d2069f849591a2bb6` |
+| Deploy transaction | [`2b9e140b…b39d3813`](https://explorer.testnet.lez.logos.co/transaction/2b9e140b873e424cbed956b3652154eca9e997beb5711c2894471cacb39d3813) |
+| Block | 27115 |
+| Built from | [`ca8dc1b`](https://github.com/edenbd1/antumbra-lez/commit/ca8dc1b365986f7e62c281dce0c89df2aee8f449) |
 
 The deploy transaction's hash is `SHA256(u32_le(len) ‖ bytecode)` of
 `artifacts/programs/antumbra_vesting.bin`, so the committed file can be checked
 against the chain without an explorer.
 
-- clock at start: 1790451530002 ms
+- clock at start: 1790504948095 ms
 
 | call | outcome | block | transaction |
 |---|---|---|---|
-| `create_schedule` | landed | 26229 | [`01946f0b…e00d63ba`](https://explorer.testnet.lez.logos.co/transaction/01946f0be2fb1250309837f03d4c52d3d968906ee95f1ee83c152015e00d63ba) |
-| `fund_schedule` | landed | 26230 | [`9bfdcc64…ebfbeaaf`](https://explorer.testnet.lez.logos.co/transaction/9bfdcc64818450353b49f4cf3d696d657f29e70a75fd9dd7a9a580feebfbeaaf) |
-| `claim_with_fake_clock_refused` | **refused**, as required | — | `4bf670bd5da112fd8624e907cc264ddf29862f732417e0a2b17bace83180a7a0` |
-| `claim` | landed | 26233 | [`953324ae…7cf4d9fa`](https://explorer.testnet.lez.logos.co/transaction/953324aed53c43ee00d2caa0a5349edd299a6831c7bf0e969ed8fbf47cf4d9fa) |
+| `create_schedule` | landed | 27117 | [`66fd5d82…2495a657`](https://explorer.testnet.lez.logos.co/transaction/66fd5d82a041ccf2bbab8b0d2aa94f1ffb3b54faca55444bd2ab57372495a657) |
+| `fund_schedule` | landed | 27118 | [`fb8015a3…605e1652`](https://explorer.testnet.lez.logos.co/transaction/fb8015a321b3ee608d54a3972ece28b4cca51e75bdc975ff64907690605e1652) |
+| `claim_with_fake_clock_refused` | **refused**, as required | — | `729ebc0516a8b4d3fb93565237830f0c56f36ce822e9f58706e5803268667231` |
+| `claim` | landed | 27121 | [`5aed6579…d277de53`](https://explorer.testnet.lez.logos.co/transaction/5aed65790cb926ae309ea9a9ddd7f95410fe1817712c042959fef857d277de53) |
 
 - ✅ destination received the total = 2
 - ✅ holding emptied = 0
 
 | call | outcome | block | transaction |
 |---|---|---|---|
-| `claim_again_refused` | **refused**, as required | — | `a2d92f372492bad3d3a45f9dd289cca32e93fae96f5e4494742bdc25ca71d310` |
-| `claim_by_non_beneficiary_refused` | **refused**, as required | — | `c5cdf0132246c94431490ad14d04dda5dd4a311116b7a62c42b0f326bd559668` |
-| `accrual_create` | landed | 26239 | [`7bb5083f…1ee90cee`](https://explorer.testnet.lez.logos.co/transaction/7bb5083fb38f86ea93413d531fe466f33e76181a0de7c071d102c70d1ee90cee) |
-| `accrual_fund` | landed | 26240 | [`c9fdfed6…9a22c191`](https://explorer.testnet.lez.logos.co/transaction/c9fdfed61bb1d6132d8a9b3361e93a675cc7856d987b3be6e4d1acfe9a22c191) |
-| `accrual_claim` | landed | 26241 | [`0f3e6ab2…638098e0`](https://explorer.testnet.lez.logos.co/transaction/0f3e6ab2c6d25bfb826b012db06f247d7f2c6a8bf6d56aca5f1c1e14638098e0) |
+| `claim_again_refused` | **refused**, as required | — | `4d847c267e924dd85826748a9d00af4990bb20e9159770b7d8eddc117c71e2de` |
+| `claim_by_non_beneficiary_refused` | **refused**, as required | — | `aa4953aa97484fc800f9d878670c90a50451a33aa0419a2fdf559d32b07bc777` |
+| `accrual_create` | landed | 27127 | [`0ebb91c8…d18b64cc`](https://explorer.testnet.lez.logos.co/transaction/0ebb91c884f24250f8f6f5ee3bbdfa3fcebbe20016e6d9dc831c84c8d18b64cc) |
+| `accrual_fund` | landed | 27128 | [`864450f8…eeb348d6`](https://explorer.testnet.lez.logos.co/transaction/864450f82f3de2f1326af99778908269d09f4dfbcbfa544a3fd91c1deeb348d6) |
+| `accrual_claim` | landed | 27129 | [`c0694765…c518b20d`](https://explorer.testnet.lez.logos.co/transaction/c06947659f5dd4d60f6d8f81d331b353089bcea60f37808f7c6d84e4c518b20d) |
 
-- claim recorded clock time 1790452252288 ms, 120 s into a 1800 s schedule
+- claim recorded clock time 1790505670439 ms, 120 s into a 1800 s schedule
 - ✅ paid = floor(total × elapsed ÷ duration) at the recorded time = 40
 - ✅ the schedule's claimed field agrees = 40
 
 | call | outcome | block | transaction |
 |---|---|---|---|
-| `cancel_create` | landed | 26242 | [`fbc1bab0…c6c3568d`](https://explorer.testnet.lez.logos.co/transaction/fbc1bab0be8f55120e5426518450bde825b1902a39efa255e38ab86ec6c3568d) |
-| `cancel_fund` | landed | 26243 | [`a746c397…3c27ebab`](https://explorer.testnet.lez.logos.co/transaction/a746c397541af64cd9be80830f75bd8e01f7efdb87009a449a4ead0e3c27ebab) |
-| `cancel_by_stranger_refused` | **refused**, as required | — | `c23fa5ed7f844f5db597d51e0c7f0b69fed704e0f64957968e30cd5ddef1f755` |
-| `cancel_to_other_refund_refused` | **refused**, as required | — | `bcd6a9c867a9bb849f058a4e160e15290d779788d56d59ada9d312676f52addf` |
-| `cancel` | landed | 26250 | [`dc24bfd7…0b87b480`](https://explorer.testnet.lez.logos.co/transaction/dc24bfd72800b507586b504778527f42d3f9984a9831f58373628af30b87b480) |
+| `cancel_create` | landed | 27130 | [`e44dccb4…7a8c1a28`](https://explorer.testnet.lez.logos.co/transaction/e44dccb48c46f58b89aec3c5f7a1e97f6dda001b86167f8dc6aa6b827a8c1a28) |
+| `cancel_fund` | landed | 27131 | [`bdbca874…d8cc982f`](https://explorer.testnet.lez.logos.co/transaction/bdbca874225fe82e33865a5bde67e7280b0f37405ed4ae121a406790d8cc982f) |
+| `cancel_by_stranger_refused` | **refused**, as required | — | `01fb0a830cbc987d5670e45acd07377b16cc19892a673ee19c3e6f0dee24b36e` |
+| `cancel_to_other_refund_refused` | **refused**, as required | — | `88f93e46d1420aa61b1b749ff8a5e12d8ddb67b7947fbb14a908efcb730ab413` |
+| `cancel` | landed | 27137 | [`33e1329c…e2796916`](https://explorer.testnet.lez.logos.co/transaction/33e1329ce24dd26ac9adff98b85392eeeddd9d0ea23c5c73d5e84889e2796916) |
 
-- cancelled at clock time 1790452794116 ms; vested then: 160 of 600
-- ✅ refund received the unvested part = 440
-- ✅ holding keeps exactly the vested part = 160
+- cancelled at clock time 1790506152085 ms; vested then: 140 of 600
+- ✅ refund received the unvested part = 460
+- ✅ holding keeps exactly the vested part = 140
 
 | call | outcome | block | transaction |
 |---|---|---|---|
-| `claim_after_cancel` | landed | 26251 | [`d62012eb…08e831c8`](https://explorer.testnet.lez.logos.co/transaction/d62012eb1ca8cf71a242f5271ba17864c89c29d5ff789854cffb7f8708e831c8) |
+| `claim_after_cancel` | landed | 27138 | [`15be34dc…cff13d9b`](https://explorer.testnet.lez.logos.co/transaction/15be34dc2154d52bb96d36ae3e79bbb65f281cda0954e7cceb9545f6cff13d9b) |
 
-- ✅ beneficiary still receives the vested part = 160
+- ✅ beneficiary still receives the vested part = 140
 - ✅ holding closes at zero = 0
 
 | call | outcome | block | transaction |
 |---|---|---|---|
-| `cancel_twice_refused` | **refused**, as required | — | `154c433dc5353ad8b953f49c46de3a2c66ff0e7c498f62aa9b264d822135a606` |
-| `ms_create` | landed | 26255 | [`0b932049…b7bc486b`](https://explorer.testnet.lez.logos.co/transaction/0b932049dddd27aac3cef7d9306b20a82c66ef5d672be5d9b3841148b7bc486b) |
-| `ms_fund` | landed | 26256 | [`0775837b…e8b4d8b2`](https://explorer.testnet.lez.logos.co/transaction/0775837b9557de7d2fbec908e1a37a844fdff50c6fe1a1be6893e8b9e8b4d8b2) |
-| `ms_claim_before_refused` | **refused**, as required | — | `ae4692f9dfe1aa2aa2d8d93d65a33ecabf50ed9928e929de52ac9450cc5f84aa` |
-| `ms_signal_by_creator_refused` | **refused**, as required | — | `0469d81a1f5a047a125a8aa7508dc1e77aa4d2042440f53700f45a31b571d86b` |
-| `ms_signal_0` | landed | 26262 | [`05a8b858…4d9e79ef`](https://explorer.testnet.lez.logos.co/transaction/05a8b858d28af7145d06344d77466269e3683b9372d34d26de9b65a24d9e79ef) |
-| `ms_signal_0_again_refused` | **refused**, as required | — | `a35d1f4a736e9c1fcf649bacdbaf25f59da074a52850c411a198954f02c34f3b` |
-| `ms_claim_1` | landed | 26266 | [`9b978bdd…aeb732f5`](https://explorer.testnet.lez.logos.co/transaction/9b978bdd4a528ba77c91632d53e1f8c0c9e0946a4f09ad8c8d019046aeb732f5) |
+| `cancel_twice_refused` | **refused**, as required | — | `284335c730dc7683a55463d985f5b4763d6afe2d51fa0baa8bd2576d8d5c64f5` |
+| `ms_create` | landed | 27141 | [`24592f91…5e286de9`](https://explorer.testnet.lez.logos.co/transaction/24592f9110a405caf28b0a11e34a53e3c9eef9582f09caaaa8cf93ee5e286de9) |
+| `ms_fund` | landed | 27142 | [`44871aef…2053db2b`](https://explorer.testnet.lez.logos.co/transaction/44871aef64c28b59297dac0bb64efcef7fbc9add4acf280103c008c22053db2b) |
+| `ms_claim_before_refused` | **refused**, as required | — | `689ea2a9f2be3a86fa6e56c45d133855a234edc752e94b2b7b6c738395815682` |
+| `ms_signal_by_creator_refused` | **refused**, as required | — | `4af3516bfbe7770136348ddc5d1e8a2ffe88022d6ed9cfab5c39f516d850cd80` |
+| `ms_signal_0` | landed | 27148 | [`68e4c2a1…b3d72e4d`](https://explorer.testnet.lez.logos.co/transaction/68e4c2a10a67af6a6d0965a33943ad7b68f47fe343626aa8aef06de1b3d72e4d) |
+| `ms_signal_0_again_refused` | **refused**, as required | — | `8c1f935255089f00e88f54a26165991b5c8c13300fb3d62ea5b20d69a4df2537` |
+| `ms_claim_1` | landed | 27151 | [`d5fa47e2…dbc64e47`](https://explorer.testnet.lez.logos.co/transaction/d5fa47e207eb58f5482abc813b5a982c4161762df4fcc4f53aacbab8dbc64e47) |
 
 - ✅ one tranche paid = 1
 
 | call | outcome | block | transaction |
 |---|---|---|---|
-| `ms_signal_1` | landed | 26267 | [`fa09dda5…aaaddbd7`](https://explorer.testnet.lez.logos.co/transaction/fa09dda51b6e322999b1d50c8e074dc06303d2867c8ba7fd7dfbcd8caaaddbd7) |
-| `ms_claim_2` | landed | 26268 | [`4c0a1b8e…02fa08e3`](https://explorer.testnet.lez.logos.co/transaction/4c0a1b8e43434424445b92d9f6b622fbf7a8043ef977c7993b4f23df02fa08e3) |
+| `ms_signal_1` | landed | 27152 | [`c1c6166f…9a9e35ab`](https://explorer.testnet.lez.logos.co/transaction/c1c6166f05e884d411f94c1d40705b54a432affba1e013c4941bd74e9a9e35ab) |
+| `ms_claim_2` | landed | 27153 | [`ccb27a68…c56cc4d6`](https://explorer.testnet.lez.logos.co/transaction/ccb27a6807c982716f376cdd6f25b1765bfea54dfdeff9a7aac53e2cc56cc4d6) |
 
 - ✅ both tranches drain the holding to zero = 0
 
 | call | outcome | block | transaction |
 |---|---|---|---|
-| `ms_signal_2_refused` | **refused**, as required | — | `42b70feed29fe0b8867c8923f911099fdcd7e7749ce224584575768d0e29e50e` |
-| `xfer_create` | landed | 26271 | [`fae11ae5…bb79c847`](https://explorer.testnet.lez.logos.co/transaction/fae11ae52389acbd11471d7c119659dd4a3789359c7efdefa9ad15d9bb79c847) |
-| `xfer_by_creator_refused` | **refused**, as required | — | `12eba75f7145935d7ac6e31291f011148b1eea0146f53109367537bbb7ecad8c` |
-| `xfer_by_holder` | landed | 26275 | [`33de8ed4…0286335a`](https://explorer.testnet.lez.logos.co/transaction/33de8ed46543fcab36d564e709f48db4da5fa36c68e6868377d35bda0286335a) |
+| `ms_signal_2_refused` | **refused**, as required | — | `6a70a115061d3d10d109b67e11c1babf3ac3d2419e5057e71a88211447b7ebb7` |
+| `xfer_create` | landed | 27156 | [`597500eb…ac307b7e`](https://explorer.testnet.lez.logos.co/transaction/597500eb4c1b0217f3b1e0c1b7b2ac4c4bfc2699635085758edb1dd2ac307b7e) |
+| `xfer_by_creator_refused` | **refused**, as required | — | `7ba6e689e80dc49c4d88f2aff112ea9646ce118756ef69d4586f390fd109a0a6` |
+| `xfer_by_holder` | landed | 27159 | [`9e7226fc…63727cfc`](https://explorer.testnet.lez.logos.co/transaction/9e7226fcd63767f237e229498c5c42d90af51c8a3b6e5656bc89f73f63727cfc) |
 
 - ✅ the schedule names the new beneficiary = nKk7En4yD4wDK8Q8jVY6epQs2kdc75NiFJ4N6rnmJ9k
 
 | call | outcome | block | transaction |
 |---|---|---|---|
-| `cancel_by_creator_when_delegated_refused` | **refused**, as required | — | `d1c4d45ff44f76471a30e8cf53d45a2d4841ab2507e4442c58e8210d38b543a8` |
-| `make_non_cancelable` | landed | 26278 | [`6e7afe2e…ccd59c92`](https://explorer.testnet.lez.logos.co/transaction/6e7afe2e6c482ed8d573d4b610e2cfedd36ea1678977c18548ad4cadccd59c92) |
-| `cancel_after_refused` | **refused**, as required | — | `af65cd45b7b1ba45ab5d0b6ebca747f3b956cce209f5dedd141174ce307671c1` |
-| `make_non_cancelable_again_refused` | **refused**, as required | — | `514d47d1dbfed677524cc673e99e2c72806c096aa882828abe5eea0741b53904` |
+| `cancel_by_creator_when_delegated_refused` | **refused**, as required | — | `6d48f407eb16e2ed1ed00332a716e45c114d4c0acf84dea8c69d133f7c9bfd40` |
+| `make_non_cancelable` | landed | 27163 | [`ba5f1a9f…1b5f6954`](https://explorer.testnet.lez.logos.co/transaction/ba5f1a9f4881542a7b024b96754cdd2b3524adc1116cbcdbb24388621b5f6954) |
+| `cancel_after_refused` | **refused**, as required | — | `346ae2e3e66b6d2d582c7c20884519788e6614eb54349c751c545ab836e40224` |
+| `make_non_cancelable_again_refused` | **refused**, as required | — | `693e61eacddf61603745e097837915398d8d50ce9a7fba522647f3a7ea435697` |
 
 - ✅ cancelable reads 0 = 0
 - ✅ cancelled_at still reads 0 = 0
 
 | call | outcome | block | transaction |
 |---|---|---|---|
-| `token_create` | landed | 26284 | [`15c6473c…15677a4e`](https://explorer.testnet.lez.logos.co/transaction/15c6473c1580e2f1cd0eada5aeaa6752908e786fdb21f4d84f00d39215677a4e) |
-| `token_fund` | landed | 26285 | [`20f4c11c…9521aa98`](https://explorer.testnet.lez.logos.co/transaction/20f4c11cf1640260d3a914c5b80dcfbf8717153a6639c5e53e03e7af9521aa98) |
+| `token_create` | landed | 27169 | [`5561945b…a9b920c2`](https://explorer.testnet.lez.logos.co/transaction/5561945b0fc97a241b280d8560818699a8ae48b4a833604d3dcbc064a9b920c2) |
+| `token_fund` | landed | 27170 | [`88e300de…c4593981`](https://explorer.testnet.lez.logos.co/transaction/88e300deb4c26c71510823a6c73d88af271542b980317fcd03055c5ec4593981) |
 
 - ✅ token escrow holds 100, owned by the token program = 100/1047643340
 
 | call | outcome | block | transaction |
 |---|---|---|---|
-| `token_claim_into_native_refused` | **refused**, as required | — | `988635bba436bdeab9e7ce4c15c190ae1746619c35d17bb92c78547c886854dd` |
-| `token_claim` | landed | 26288 | [`5da8f6c9…850a0242`](https://explorer.testnet.lez.logos.co/transaction/5da8f6c9c5b76af69c292557b50bee38eda0f19fd9457e7bc20ffbd0850a0242) |
+| `token_claim_into_native_refused` | **refused**, as required | — | `ddcb3dc6da26fa6996c32d8627c9b6f38b4f34a715cb012f86e841059f8a02d3` |
+| `token_claim` | landed | 27173 | [`5d532784…83aa86bd`](https://explorer.testnet.lez.logos.co/transaction/5d532784a093a4ec188fd03347dc0356e9f93c7070aec92b0326c0f383aa86bd) |
 
 - ✅ beneficiary token holding received 100 = 100
 - ✅ token escrow emptied = 0
 
 | call | outcome | block | transaction |
 |---|---|---|---|
-| `token_cancel_create` | landed | 26289 | [`dcb2043b…0843e473`](https://explorer.testnet.lez.logos.co/transaction/dcb2043b1bd281fa42bfb893fc2d1744aca48866d83ceb4b1cd90fed0843e473) |
-| `token_cancel_fund` | landed | 26290 | [`ccf0147a…d32b96af`](https://explorer.testnet.lez.logos.co/transaction/ccf0147af9aa5c2d6c42930cd8d4c2f056f3dba5464c886124aa504bd32b96af) |
-| `token_cancel` | landed | 26291 | [`d87e8c2c…64212446`](https://explorer.testnet.lez.logos.co/transaction/d87e8c2c22ef255e59f8a0a576e5e70c7f83e0c08958b0c846dee06c64212446) |
+| `token_cancel_create` | landed | 27174 | [`f5f1725b…1a9d4b0c`](https://explorer.testnet.lez.logos.co/transaction/f5f1725b2f2f1aa197aa32888944971a25827f9b0429ba295ad67c881a9d4b0c) |
 
-- cancelled at clock time 1790455261785 ms; vested then: 6692 of 100000
-- ✅ creator's token holding got the unvested part back = 93308
-- ✅ token escrow keeps exactly the vested part = 6692
-
-| call | outcome | block | transaction |
-|---|---|---|---|
-| `private_native_create` | landed | 26292 | [`340058d6…2f700947`](https://explorer.testnet.lez.logos.co/transaction/340058d6773a8a50fb31a4cec2dcd6ddd7edfce88e66a2197dbb83952f700947) |
-| `private_native_fund` | landed | 26293 | [`024836f1…e39025ee`](https://explorer.testnet.lez.logos.co/transaction/024836f10b98cac6250278fdb16c096f8c22670b01cb8ef8310df83de39025ee) |
-
-- private_native_claim: first attempt cab3bda56a27c37306c002074fa4f68cb61fda497b879257afb8b9dee4c1f83d did not land (clock tick during proving?); retrying once
+- token_cancel_fund: expected to land, refused instead (57de53ff778c710c…); re-run below
+- token_cancel: expected to land, refused instead (050cbed553fe5471…); re-run below
+- cancelled at clock time 0 ms; vested then: 0 of 100000
+- not met in this run, re-run below: creator's token holding got the unvested part back: 0 != 100000
+- ✅ token escrow keeps exactly the vested part = 0
 
 | call | outcome | block | transaction |
 |---|---|---|---|
-| `private_native_claim` | landed | 26311 | [`cd45d412…9d4db72b`](https://explorer.testnet.lez.logos.co/transaction/cd45d41255422914fb8f2bbbe5c298e14d76b229c429cd425e7d75ab9d4db72b) |
+| `private_native_create` | landed | 27180 | [`d01d018e…e0cf8e8e`](https://explorer.testnet.lez.logos.co/transaction/d01d018e901b86aa129d78f314c56e8083de3df2c16dbcc268376f90e0cf8e8e) |
+| `private_native_fund` | landed | 27181 | [`fffbe623…24df45e7`](https://explorer.testnet.lez.logos.co/transaction/fffbe623c97da705df48f8a7cd9d6f09cf3778d6fd6e57361113e48624df45e7) |
+| `private_native_claim` | landed | 27189 | [`62c0ff8d…87dbb201`](https://explorer.testnet.lez.logos.co/transaction/62c0ff8df2c1a10c89601df66a23d3b353ae437dfd4849afa5c4acc987dbb201) |
 
 - ✅ public holding emptied into the private account = 0
 - ✅ the private account, as its owner decrypts it, gained the 3 = 3
 
 | call | outcome | block | transaction |
 |---|---|---|---|
-| `private_token_create` | landed | 26312 | [`00071b9b…8646606e`](https://explorer.testnet.lez.logos.co/transaction/00071b9b7482e1945ee5a6c8ff529f2b5dd31fc058b1dde4047a8fb38646606e) |
-| `private_token_fund` | landed | 26313 | [`fe8503c3…6ea79964`](https://explorer.testnet.lez.logos.co/transaction/fe8503c308642c561d423016d9aab85deb9cd9f1ff9d9642599446db6ea79964) |
-| `private_token_claim` | landed | 26322 | [`4a433724…2952f621`](https://explorer.testnet.lez.logos.co/transaction/4a433724f46638ecef8f3592055d8a9aa6d403bc14f8ddafa2d9a8e52952f621) |
+| `private_token_create` | landed | 27190 | [`c8308976…0f182198`](https://explorer.testnet.lez.logos.co/transaction/c8308976bc499b74742a7814acdcd3e7885fac3698426cff0ed1c6aa0f182198) |
+| `private_token_fund` | landed | 27191 | [`60b2d15a…28db5bb7`](https://explorer.testnet.lez.logos.co/transaction/60b2d15ad768ed2390a835b92262ca42a3cc65197ba4c5acd3db869f28db5bb7) |
+| `private_token_claim` | landed | 27200 | [`0853b5d0…4097456e`](https://explorer.testnet.lez.logos.co/transaction/0853b5d0a0222d00decea1d678ad323e4897d84b67f187fab87a7aae4097456e) |
 
 - ✅ token escrow emptied into the private holding = 0
 - ✅ the private token holding, as its owner decrypts it, gained the 50 = 50
 
 | call | outcome | block | transaction |
 |---|---|---|---|
-| `showcase_create` | landed | 26323 | [`d843e8a8…774c1b0a`](https://explorer.testnet.lez.logos.co/transaction/d843e8a8e48b9c85f441e16c984d55c37107f34bd7ac3a3f868c51ad774c1b0a) |
-| `showcase_fund` | landed | 26324 | [`788d5faa…571daa48`](https://explorer.testnet.lez.logos.co/transaction/788d5faa0a097dd1bfb22658180c73e660bf38e73d636450d4557e3a571daa48) |
-| `showcase_claim` | landed | 26325 | [`2c1bca9b…cac6bc8d`](https://explorer.testnet.lez.logos.co/transaction/2c1bca9bb98a02f692fdda43d0c7477091391713e4f9ad765247eb4ccac6bc8d) |
+| `showcase_create` | landed | 27201 | [`08ff44f6…f7d39125`](https://explorer.testnet.lez.logos.co/transaction/08ff44f68b25568054b3fff214d229a45d250809ede0a9c78674e05bf7d39125) |
 
-- kScheduleAccount = CzBDQC7tnM8Eh6qfVW2bGtHzCsSn8cNJ9y98bPWf8UTc
-- kScheduleHolding = Dj1Di9ZJqwRwEq9ZAfFh8aQqfVNt4jNSWu9LKrE8ScaD
+- showcase_fund: expected to land, refused instead (599e2556c3b02b50…); re-run below
+- showcase_claim: expected to land, refused instead (75e084ce051ecc53…); re-run below
+- kScheduleAccount = CAHqaSdXF49avHvARduZeLsg2RrLVcbffnAHk8qkBxsq
+- kScheduleHolding = 3shLXRzqSHPEu6eRzicZosyWxnQukCccyS3K6qEZULmD
 
 | call | outcome | block | transaction |
 |---|---|---|---|
-| `delegated_create` | landed | 27061 | [`c0d781ad…74dae801`](https://explorer.testnet.lez.logos.co/transaction/c0d781ad6763d7a31ca9a60e8d95528ed82e6cfeb46e575895e4e5b674dae801) |
-| `delegated_fund` | landed | 27062 | [`982e8acd…efdecce4`](https://explorer.testnet.lez.logos.co/transaction/982e8acd418198dc83fe87f4f463e6d350e713ba50c469fe313b8d79efdecce4) |
-| `delegated_cancel_by_creator_refused` | **refused**, as required | — | `d4038697f53d6571a08837f77db4b30c0a63fd790bee8c678146d73d91ffaddf` |
-| `delegated_cancel_by_authority` | landed | 27065 | [`a389cc77…f0ed25d0`](https://explorer.testnet.lez.logos.co/transaction/a389cc77420f5f295be9f3ec5b13656fb3bcb4cb1004df5ea0dd40bdf0ed25d0) |
+| `delegated_create` | landed | 27207 | [`c00c38f3…9da1f6ef`](https://explorer.testnet.lez.logos.co/transaction/c00c38f3d1bd64542bb277effb6313d2f262ef8c92b303fe0e5e5bf69da1f6ef) |
+| `delegated_fund` | landed | 27208 | [`bc3df68e…60a9a6db`](https://explorer.testnet.lez.logos.co/transaction/bc3df68e7a3d001b7cdc291f02f1c43accced809381651ad2db49e7160a9a6db) |
+| `delegated_cancel_by_creator_refused` | **refused**, as required | — | `fc167361ff259149c6c547df53f80dc50be278c49781156c8df232852b0706d1` |
+| `delegated_cancel_by_authority` | landed | 27211 | [`fa9e4332…1170f47c`](https://explorer.testnet.lez.logos.co/transaction/fa9e4332bbd38fbb3a558aca722199fa83f26faace0da5a4b7a60e5e1170f47c) |
 
-- cancelled by the nominated authority at clock time 1790501820098 ms; vested then: 8 of 60
+- cancelled by the nominated authority at clock time 1790510606133 ms; vested then: 8 of 60
 - ✅ the refund account got the unvested part = 52
+
+| call | outcome | block | transaction |
+|---|---|---|---|
+| `batch_create` | landed | 27212 | [`18a84d00…43dfcde2`](https://explorer.testnet.lez.logos.co/transaction/18a84d000f3918e420e961ad4caeb4aac30fed97c7d8b0170d69a51843dfcde2) |
+| `batch_fund` | landed | 27213 | [`6b09e0d6…2c8504b9`](https://explorer.testnet.lez.logos.co/transaction/6b09e0d6cade5e1bb1095fc8bac0dcb8cae65d925534876b64abc6052c8504b9) |
+
+- ✅ one transfer funded all 8 schedules = 480
+
+| call | outcome | block | transaction |
+|---|---|---|---|
+| `batch_claim` | landed | 27214 | [`dd3a056b…704b1231`](https://explorer.testnet.lez.logos.co/transaction/dd3a056b58c64b2e6abf17f6001bea88b3c463154f4ed2748d0e37d3704b1231) |
+
+- ✅ schedule 0 of the batch paid its own accrual = 4
+
+| call | outcome | block | transaction |
+|---|---|---|---|
+| `batch_cancel_one` | landed | 27215 | [`15f44cc1…7bf6271f`](https://explorer.testnet.lez.logos.co/transaction/15f44cc18ad063b713c4497f3ea58d7b2f8e3d01849aecdfcdc010527bf6271f) |
+
+- ✅ cancelling schedule 1 returned only its unvested part = 54
+- ✅ the other schedules' escrow is untouched = 422
+
+| call | outcome | block | transaction |
+|---|---|---|---|
+| `batch_of_16` | landed | - | [`32fdc901…4641807f`](https://explorer.testnet.lez.logos.co/transaction/32fdc9011229d1d87ebfd88fb13d4d40dadff45995a2059ae776413b4641807f) |
+| `batch_of_32` | landed | - | [`9a8523e8…2a3e2969`](https://explorer.testnet.lez.logos.co/transaction/9a8523e8d4195ff5d61fcf3914dd986fc576cdeb4df6c2c50fc49e832a3e2969) |
+| `batch_of_64` | landed | - | [`503cbcf6…c6ccd209`](https://explorer.testnet.lez.logos.co/transaction/503cbcf67b1fa34d663c396ca42435140f20ac1ed16876c0508c06ddc6ccd209) |
+| `batch_of_128` | landed | - | [`e04b60e1…59d80f7a`](https://explorer.testnet.lez.logos.co/transaction/e04b60e15f4f66992544810fe137df3b166fbc28a8ad7cec9ecaa96f59d80f7a) |
+
+- largest batch tried in section 11: 128 schedules, all landed
+- continuation: the test token's supply holding ran down to 69,549 ANTV during the run above, fewer than sections 7 and 9 fund, so 2,000,000 ANTV were minted (tx 58f2f92b1fc4f2b7fa2014f3c61db6845b3defc32acc2340153383accce2d3cf) and those sections re-run, followed by the batch ceiling
+
+| call | outcome | block | transaction |
+|---|---|---|---|
+| `token_cancel_create` | landed | 27221 | [`8421ffaf…c0669f55`](https://explorer.testnet.lez.logos.co/transaction/8421ffafd19e268773992b1be991a79d9356d247ade43a6e37819d04c0669f55) |
+| `token_cancel_fund` | landed | 27222 | [`cb8ca59e…95afd515`](https://explorer.testnet.lez.logos.co/transaction/cb8ca59e53b8ed10b2742b41ee0846674ac32f0b4c145fa8848290e795afd515) |
+| `token_cancel` | landed | 27223 | [`dcccf4b6…50f13312`](https://explorer.testnet.lez.logos.co/transaction/dcccf4b61984a3772752bad27a322308926e7df1e3c6892a590bb5d250f13312) |
+
+- cancelled at clock time 1790511329595 ms; vested then: 6689 of 100000
+- ✅ creator's token holding got the unvested part back = 93311
+- ✅ token escrow keeps exactly the vested part = 6689
+
+| call | outcome | block | transaction |
+|---|---|---|---|
+| `showcase_create` | landed | 27224 | [`c51c37d0…b62eac46`](https://explorer.testnet.lez.logos.co/transaction/c51c37d05be31311a68af7c39a7929ddcfa6c6a8771640234d3cd35eb62eac46) |
+| `showcase_fund` | landed | 27225 | [`aa598224…301685be`](https://explorer.testnet.lez.logos.co/transaction/aa5982242b55678e2272b622acdf6e86bab9165320ce4b0561269559301685be) |
+| `showcase_claim` | landed | 27226 | [`67f1b3ac…96112c19`](https://explorer.testnet.lez.logos.co/transaction/67f1b3ac80a53e235293f961303559ee5701920ac58f975f9ea0960d96112c19) |
+
+- kScheduleAccount = tEnLNnoHheKEqyUpZpWLQ59ECDwTe7rm3MDttpXxPL2
+- kScheduleHolding = 6RDFqaQnosx1Nh2E17wY7wz8Zc5MDxGQARBPzfnh7U51
+
+| call | outcome | block | transaction |
+|---|---|---|---|
+| `batch_of_256` | landed | - | [`1d2a0c9e…e17dff44`](https://explorer.testnet.lez.logos.co/transaction/1d2a0c9ea9c74322fb5a57cd88c109638627ea218fb0bd5169438c07e17dff44) |
+
+- a batch of 512 did not land:
+- measured maximum batch: 256 schedules in one creation transaction; 512 did not land

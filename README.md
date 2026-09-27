@@ -224,7 +224,7 @@ rather than asserted.
 |---|---|---|---|---|
 | `antumbra_curve` | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `49db0fc9…a56fc510` | [`f074ffe1…4d8c3855`](https://explorer.testnet.lez.logos.co/transaction/f074ffe110131ed108d7ea37d6445d7492ff36842ed63399b005dc364d8c3855) | 17265 |
 | `antumbra_lbp` | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `51f28557…b6c7a82d` | [`fbfe7e39…7bbe4859`](https://explorer.testnet.lez.logos.co/transaction/fbfe7e3960cd787a26699cd2690d6a663f88c895f4a68ee6bf7dffa47bbe4859) | 17266 |
-| `antumbra_vesting` | [`9aeedf7`](https://github.com/edenbd1/antumbra-lez/commit/9aeedf7b49460677e8b8029dbb490a28d10e0d14) | `cf1d5564…a835b560` | [`e5053201…fbe36b4c`](https://explorer.testnet.lez.logos.co/transaction/e5053201c25ada30c2a09d4d595c40792957f360f5ecdca13abb39f3fbe36b4c) | 26204 |
+| `antumbra_vesting` | [`ca8dc1b`](https://github.com/edenbd1/antumbra-lez/commit/ca8dc1b365986f7e62c281dce0c89df2aee8f449) | `7763458b…591a2bb6` | [`2b9e140b…b39d3813`](https://explorer.testnet.lez.logos.co/transaction/2b9e140b873e424cbed956b3652154eca9e997beb5711c2894471cacb39d3813) | 27115 |
 
 **The vesting program reads the chain's clock, escrows native balance or a
 token-program token, and pays claims into public or shielded accounts.** Every

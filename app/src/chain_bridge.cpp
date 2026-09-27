@@ -22,8 +22,8 @@ const char* kPoolAccount     = "25ekuB2nQ84WLvoVjWejf63Z714X9vvjnb7Jz4R3Kkdg";
 // The vesting schedule the panel follows: a year-long token position left
 // accruing on purpose, written by scripts/replay-vesting.sh (section 9), which
 // prints these two addresses.
-const char* kScheduleAccount = "CzBDQC7tnM8Eh6qfVW2bGtHzCsSn8cNJ9y98bPWf8UTc";
-const char* kScheduleHolding = "Dj1Di9ZJqwRwEq9ZAfFh8aQqfVNt4jNSWu9LKrE8ScaD";
+const char* kScheduleAccount = "tEnLNnoHheKEqyUpZpWLQ59ECDwTe7rm3MDttpXxPL2";
+const char* kScheduleHolding = "6RDFqaQnosx1Nh2E17wY7wz8Zc5MDxGQARBPzfnh7U51";
 
 // The sequencer-written clock the vesting program itself reads, so "claimable
 // now" here is computed against the same time a claim would be.

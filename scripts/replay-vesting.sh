@@ -48,7 +48,7 @@ OUT="${OUT:-/tmp/vesting-replay.tsv}"
 : "${PTOK:?base58 id of the beneficiary private token holding}"
 W="${WALLET:-$HOME/data/ns.com/lp-0002/_external/lez/target/release/wallet}"
 TAG="${TAG:-v2}"   # suffix for schedule ids, so a rerun on the same chain does not collide
-SECTIONS="${SECTIONS:-1 2 3 4 5 6 7 8 9 10}"
+SECTIONS="${SECTIONS:-1 2 3 4 5 6 7 8 9 10 11 12}"
 want() { case " $SECTIONS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
 IDL=idl/antumbra_vesting.idl.json
@@ -344,6 +344,81 @@ step delegated_cancel_by_authority yes -- cancel --schedule-id "$ID" --refund "$
 P="$(pda "$ID")"; C="$(field "$P" cancelled_at)"; V="$(linear_vested 60 $S $E $C)"
 note "cancelled by the nominated authority at clock time $C ms; vested then: $V of 60"
 expect_eq "the refund account got the unvested part" "$(( $(bal "$CREFUND") - R0 ))" "$(( 60 - V ))"
+fi
+
+if want 11; then
+# F5: one creation for N beneficiaries, one funding for all of them. LEZ refuses
+# a transaction in which two chained calls debit one payer, so the batch shares
+# one holding that a single transfer fills; each schedule still keeps its own
+# total, claimed amount and cancellation.
+echo; echo "-- 11. batch creation: N beneficiaries, one creation, one funding, and the measured maximum --"
+BID=batch-$TAG; N=8; S="$(clock_ms)"; E=$((S + 30*MIN))
+WHO="$BHEX"; for i in $(seq 2 $N); do WHO="$WHO,$SHEX"; done
+step batch_create yes -- create-schedule-batch --batch-id "$BID" --kind 1 --start $S --cliff $S --end $E \
+  --total-each 60 --beneficiaries "$WHO" --cancelable 1 --transferable 0 --tranches 0 \
+  --cancel-authority $Z --milestone-authority $Z --refund-to "$RHEX" --creator "$CREATOR" \
+  --schedules "$(python3 scripts/batch-pdas.py "$BIN" "$BID" $N pdas)"
+BH="$(spel --idl "$IDL" --program "$BIN" --dry-run -- fund-batch --batch-id "$BID" --amount 1 --creator "$CREATOR" 2>/dev/null | grep -oE "PDA holding → [A-Za-z0-9]+" | awk '{print $NF}')"
+step batch_fund yes -- fund-batch --batch-id "$BID" --amount $((60 * N)) --creator "$CREATOR"
+expect_eq "one transfer funded all $N schedules" "$(bal "$BH")" "$((60 * N))"
+SID0="$(python3 scripts/batch-pdas.py "$BIN" "$BID" 1 ids)"
+B0="$(bal "$NDEST")"
+step batch_claim yes -- claim-batch --schedule-id "$SID0" --batch-id "$BID" --destination "$NDEST" --beneficiary "$BENEFICIARY" --clock "$CLOCK"
+P="$(pda "$SID0")"; T="$(field "$P" last_seen)"; PAID=$(( $(bal "$NDEST") - B0 ))
+expect_eq "schedule 0 of the batch paid its own accrual" "$PAID" "$(linear_vested 60 $S $E $T)"
+SID1="$(python3 scripts/batch-pdas.py "$BIN" "$BID" 2 ids | cut -d, -f2)"
+R0="$(bal "$CREFUND")"
+step batch_cancel_one yes -- cancel-batch --schedule-id "$SID1" --batch-id "$BID" --refund "$CREFUND" --authority "$CREATOR" --clock "$CLOCK"
+C="$(field "$(pda "$SID1")" cancelled_at)"
+expect_eq "cancelling schedule 1 returned only its unvested part" "$(( $(bal "$CREFUND") - R0 ))" "$(( 60 - $(linear_vested 60 $S $E $C) ))"
+expect_eq "the other schedules' escrow is untouched" "$(bal "$BH")" "$(( 60 * N - PAID - ($(bal "$CREFUND") - R0) ))"
+# The maximum, measured: creation alone, doubling until the chain refuses.
+MAX=$N
+for M in 16 32 64 128; do
+  WHO="$BHEX"; for i in $(seq 2 $M); do WHO="$WHO,$BHEX"; done
+  MB=max$M-$TAG
+  log="$(spel --idl "$IDL" --program "$BIN" -- create-schedule-batch --batch-id "$MB" --kind 1 --start $S --cliff $S \
+    --end $E --total-each 1 --beneficiaries "$WHO" --cancelable 0 --transferable 0 --tranches 0 \
+    --cancel-authority $Z --milestone-authority $Z --refund-to "$RHEX" --creator "$CREATOR" \
+    --schedules "$(python3 scripts/batch-pdas.py "$BIN" "$MB" $M pdas)" 2>&1)"
+  h="$(printf '%s' "$log" | grep -oE 'tx_hash: [0-9a-f]{64}' | head -1 | awk '{print $2}')"
+  landed=no
+  if [ -n "$h" ]; then for i in $(seq 1 9); do rpc getTransaction "$h" | grep -q '"result":\[' && { landed=yes; break; }; sleep 10; done; fi
+  if [ "$landed" = yes ]; then
+    MAX=$M; printf 'batch_of_%s\tyes\tLANDED\t-\t%s\n' "$M" "$h" >> "$OUT"; echo "  ✅ a batch of $M landed: $h"
+  else
+    note "a batch of $M did not land ($(printf '%s' "$log" | grep -iE 'error|too|limit|size' | head -1 | cut -c1-120))"; break
+  fi
+done
+note "largest batch tried in section 11: $MAX schedules, all landed"
+fi
+
+if want 12; then
+# The ceiling, found rather than assumed: keep doubling a creation-only batch
+# until the chain refuses one. Reported as the largest that landed and the
+# smallest that did not.
+echo; echo "-- 12. the batch ceiling: doubling until the chain refuses --"
+S="$(clock_ms)"; E=$((S + 30*MIN)); LAST=0; FIRST_NO=""
+for M in ${BATCH_SIZES:-256 512 1024 2048 4096}; do
+  WHO="$BHEX"; for i in $(seq 2 $M); do WHO="$WHO,$BHEX"; done
+  MB=ceil$M-$TAG
+  log="$(spel --idl "$IDL" --program "$BIN" -- create-schedule-batch --batch-id "$MB" --kind 1 --start $S --cliff $S \
+    --end $E --total-each 1 --beneficiaries "$WHO" --cancelable 0 --transferable 0 --tranches 0 \
+    --cancel-authority $Z --milestone-authority $Z --refund-to "$RHEX" --creator "$CREATOR" \
+    --schedules "$(python3 scripts/batch-pdas.py "$BIN" "$MB" $M pdas)" 2>&1)"
+  h="$(printf '%s' "$log" | grep -oE 'tx_hash: [0-9a-f]{64}' | head -1 | awk '{print $2}')"
+  landed=no
+  if [ -n "$h" ]; then for i in $(seq 1 9); do rpc getTransaction "$h" | grep -q '"result":\[' && { landed=yes; break; }; sleep 10; done; fi
+  if [ "$landed" = yes ]; then
+    LAST=$M; printf 'batch_of_%s\tyes\tLANDED\t-\t%s\n' "$M" "$h" >> "$OUT"; echo "  ✅ a batch of $M landed: $h"
+  else
+    FIRST_NO=$M
+    note "a batch of $M did not land: $(printf '%s' "$log" | grep -iE 'error|too|limit|size|exceed' | head -1 | cut -c1-140)"
+    break
+  fi
+done
+if [ -n "$FIRST_NO" ]; then note "measured maximum batch: $LAST schedules in one creation transaction; $FIRST_NO did not land"
+else note "measured maximum batch: $LAST schedules in one creation transaction (largest tried)"; fi
 fi
 
 echo

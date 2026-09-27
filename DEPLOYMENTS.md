@@ -41,6 +41,11 @@ What that program does that the earlier one, recorded further down, did not:
   the creator, and a refund account fixed at creation so whoever cancels cannot
   redirect the unvested part.
 - **The cliff pays its lump**: at the cliff, everything accrued since the start.
+- **Batch creation** (F5): N beneficiaries in one creation transaction over one
+  shared holding filled by one transfer — LEZ refuses two chained calls debiting
+  one payer, so separate escrows cannot be funded at once — each schedule keeping
+  its own accounting. Measured on testnet: 256 schedules in one creation; 512 did
+  not land.
 
 **The testnet was reset on 2026-09-08** (its genesis block is dated 13:33 UTC
 that day): every transaction from before then — ours, and every other team's —
@@ -71,7 +76,7 @@ it. Neither substitutes for the other.
 |---|---|---|---|---|---|
 | `antumbra_curve` | [015](https://github.com/logos-co/rfp/issues/179) | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `49db0fc91883668a5ccb85242aa1cdf923a557a7327f7c0613ad526fa56fc510` | [`f074ffe1…4d8c3855`](https://explorer.testnet.lez.logos.co/transaction/f074ffe110131ed108d7ea37d6445d7492ff36842ed63399b005dc364d8c3855) | 17265 |
 | `antumbra_lbp` | [016](https://github.com/logos-co/rfp/issues/180) | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `51f28557602ae6daff97e51127ba6dbc5ddfe6048ea7cd89ca5e170ab6c7a82d` | [`fbfe7e39…7bbe4859`](https://explorer.testnet.lez.logos.co/transaction/fbfe7e3960cd787a26699cd2690d6a663f88c895f4a68ee6bf7dffa47bbe4859) | 17266 |
-| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/186) | [`9aeedf7`](https://github.com/edenbd1/antumbra-lez/commit/9aeedf7b49460677e8b8029dbb490a28d10e0d14) | `cf1d5564469e42963ea5d6456bbeabf661c470982d87e256043a8eb5a835b560` | [`e5053201…fbe36b4c`](https://explorer.testnet.lez.logos.co/transaction/e5053201c25ada30c2a09d4d595c40792957f360f5ecdca13abb39f3fbe36b4c) | 26204 |
+| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/186) | [`ca8dc1b`](https://github.com/edenbd1/antumbra-lez/commit/ca8dc1b365986f7e62c281dce0c89df2aee8f449) | `7763458b5b7d88d3d932a4ce62d44a34242811106dec8f6d2069f849591a2bb6` | [`2b9e140b…b39d3813`](https://explorer.testnet.lez.logos.co/transaction/2b9e140b873e424cbed956b3652154eca9e997beb5711c2894471cacb39d3813) | 27115 |
 
 The four facts in that table — freeze commit, ImageID, deploy transaction,
 block — are the convention `logos-co/lez-payment-streams` sets for its own live
@@ -559,7 +564,7 @@ have written "atomic deshield" into a milestone and discovered it in month four.
 
 ```bash
 curl -s -X POST https://testnet.lez.logos.co -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"getTransaction","params":["e5053201c25ada30c2a09d4d595c40792957f360f5ecdca13abb39f3fbe36b4c"]}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"getTransaction","params":["2b9e140b873e424cbed956b3652154eca9e997beb5711c2894471cacb39d3813"]}'
 ```
 
 A deployed transaction returns `"result":[<tx>,<block>]`. The control that makes
