@@ -11,7 +11,7 @@ Counts are `env::cycle_count()` deltas taken inside the guest, with the 90-cycle
 `core::hint::black_box` wraps each call so the optimiser cannot hoist a pure
 function out of the timed region. Repeated runs are byte-identical.
 
-The number that matters is LEZ's 32,000,000-cycle public-execution cap.
+The number that matters is LEZ's public-execution cap, 2^25 = 33,554,432 cycles (`1024 * 1024 * 32` in the sequencer).
 
 | op | cases | median | min | max |
 |---|---:|---:|---:|---:|

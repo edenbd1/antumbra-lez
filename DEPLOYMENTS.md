@@ -19,7 +19,7 @@ is paid at close. A weighted-pool buy does the same on its own at-close fee
 model. A vesting schedule is funded, and a claim pays the beneficiary out of an
 escrow the program owns. Every figure below was read back from the chain on both
 sides of the transaction that changed it, and
-[`scripts/verify-onchain.sh`](scripts/verify-onchain.sh) re-checks all thirty-six
+[`scripts/verify-onchain.sh`](scripts/verify-onchain.sh) re-checks every one
 in one command — including two that must **not** resolve, because a check with
 no negative control is not a check.
 

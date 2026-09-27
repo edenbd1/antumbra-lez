@@ -35,30 +35,86 @@ pub const Z: [u8; 32] = [0; 32];
 #[derive(Serialize, Clone)]
 pub enum Ix {
     CreateSchedule {
-        schedule_id: [u8; 32], kind: u8, start: u64, cliff: u64, end: u64, total: u128,
-        beneficiary: [u8; 32], cancelable: u8, transferable: u8, tranches: u32,
-        cancel_authority: [u8; 32], milestone_authority: [u8; 32], refund_to: [u8; 32],
+        schedule_id: [u8; 32],
+        kind: u8,
+        start: u64,
+        cliff: u64,
+        end: u64,
+        total: u128,
+        beneficiary: [u8; 32],
+        cancelable: u8,
+        transferable: u8,
+        tranches: u32,
+        cancel_authority: [u8; 32],
+        milestone_authority: [u8; 32],
+        refund_to: [u8; 32],
     },
     CreateTokenSchedule {
-        schedule_id: [u8; 32], kind: u8, start: u64, cliff: u64, end: u64, total: u128,
-        beneficiary: [u8; 32], cancelable: u8, transferable: u8, tranches: u32,
-        cancel_authority: [u8; 32], milestone_authority: [u8; 32],
+        schedule_id: [u8; 32],
+        kind: u8,
+        start: u64,
+        cliff: u64,
+        end: u64,
+        total: u128,
+        beneficiary: [u8; 32],
+        cancelable: u8,
+        transferable: u8,
+        tranches: u32,
+        cancel_authority: [u8; 32],
+        milestone_authority: [u8; 32],
     },
-    FundSchedule { schedule_id: [u8; 32], amount: u128 },
-    FundTokenSchedule { schedule_id: [u8; 32], amount: u128 },
-    Cancel { schedule_id: [u8; 32] },
-    MakeNonCancelable { schedule_id: [u8; 32] },
-    TransferBeneficiary { schedule_id: [u8; 32], new_beneficiary: [u8; 32] },
-    SignalMilestone { schedule_id: [u8; 32], index: u32 },
-    Claim { schedule_id: [u8; 32] },
+    FundSchedule {
+        schedule_id: [u8; 32],
+        amount: u128,
+    },
+    FundTokenSchedule {
+        schedule_id: [u8; 32],
+        amount: u128,
+    },
+    Cancel {
+        schedule_id: [u8; 32],
+    },
+    MakeNonCancelable {
+        schedule_id: [u8; 32],
+    },
+    TransferBeneficiary {
+        schedule_id: [u8; 32],
+        new_beneficiary: [u8; 32],
+    },
+    SignalMilestone {
+        schedule_id: [u8; 32],
+        index: u32,
+    },
+    Claim {
+        schedule_id: [u8; 32],
+    },
     CreateScheduleBatch {
-        batch_id: [u8; 32], kind: u8, start: u64, cliff: u64, end: u64, total_each: u128,
-        beneficiaries: Vec<[u8; 32]>, cancelable: u8, transferable: u8, tranches: u32,
-        cancel_authority: [u8; 32], milestone_authority: [u8; 32], refund_to: [u8; 32],
+        batch_id: [u8; 32],
+        kind: u8,
+        start: u64,
+        cliff: u64,
+        end: u64,
+        total_each: u128,
+        beneficiaries: Vec<[u8; 32]>,
+        cancelable: u8,
+        transferable: u8,
+        tranches: u32,
+        cancel_authority: [u8; 32],
+        milestone_authority: [u8; 32],
+        refund_to: [u8; 32],
     },
-    FundBatch { batch_id: [u8; 32], amount: u128 },
-    ClaimBatch { schedule_id: [u8; 32], batch_id: [u8; 32] },
-    CancelBatch { schedule_id: [u8; 32], batch_id: [u8; 32] },
+    FundBatch {
+        batch_id: [u8; 32],
+        amount: u128,
+    },
+    ClaimBatch {
+        schedule_id: [u8; 32],
+        batch_id: [u8; 32],
+    },
+    CancelBatch {
+        schedule_id: [u8; 32],
+        batch_id: [u8; 32],
+    },
 }
 
 impl Ix {
@@ -107,12 +163,17 @@ pub struct Schedule {
 }
 
 pub fn elf() -> Vec<u8> {
-    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../artifacts/programs/antumbra_vesting.bin");
+    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../artifacts/programs/antumbra_vesting.bin");
     std::fs::read(&p).unwrap_or_else(|e| panic!("cannot read {}: {e}", p.display()))
 }
 
 pub fn program_id(elf: &[u8]) -> ProgramId {
-    risc0_binfmt::ProgramBinary::decode(elf).expect("decode").compute_image_id().expect("image id").into()
+    risc0_binfmt::ProgramBinary::decode(elf)
+        .expect("decode")
+        .compute_image_id()
+        .expect("image id")
+        .into()
 }
 
 /// SPEL's public PDA: one seed used as is, several combined by SHA-256, then
@@ -140,7 +201,13 @@ pub fn lit(s: &str) -> [u8; 32] {
     b
 }
 
-pub fn acc(id: [u8; 32], owner: ProgramId, balance: u128, data: Vec<u8>, signer: bool) -> AccountWithMetadata {
+pub fn acc(
+    id: [u8; 32],
+    owner: ProgramId,
+    balance: u128,
+    data: Vec<u8>,
+    signer: bool,
+) -> AccountWithMetadata {
     AccountWithMetadata {
         account: Account {
             program_owner: owner,
@@ -160,7 +227,12 @@ pub fn clock(ms: u64) -> AccountWithMetadata {
 }
 
 /// A fungible token holding: `TokenHolding::Fungible { definition, balance }`.
-pub fn token_holding(id: [u8; 32], definition: [u8; 32], balance: u128, signer: bool) -> AccountWithMetadata {
+pub fn token_holding(
+    id: [u8; 32],
+    definition: [u8; 32],
+    balance: u128,
+    signer: bool,
+) -> AccountWithMetadata {
     let mut d = vec![0u8];
     d.extend_from_slice(&definition);
     d.extend_from_slice(&balance.to_le_bytes());
@@ -195,7 +267,12 @@ impl Run {
 
 /// Execute one instruction. `Err` carries the program's own message, which
 /// starts `Program error [<code>]`.
-pub fn run(elf: &[u8], pid: &ProgramId, ix: &Ix, pre: Vec<AccountWithMetadata>) -> Result<Run, String> {
+pub fn run(
+    elf: &[u8],
+    pid: &ProgramId,
+    ix: &Ix,
+    pre: Vec<AccountWithMetadata>,
+) -> Result<Run, String> {
     let data = risc0_zkvm::serde::to_vec(ix).map_err(|e| e.to_string())?;
     let caller: Option<ProgramId> = None;
     let mut b = ExecutorEnv::builder();
@@ -205,7 +282,9 @@ pub fn run(elf: &[u8], pid: &ProgramId, ix: &Ix, pre: Vec<AccountWithMetadata>) 
     b.write(&pre).unwrap();
     b.write(&data).unwrap();
     let env = b.build().map_err(|e| e.to_string())?;
-    let info = default_executor().execute(env, elf).map_err(|e| format!("{e:#}"))?;
+    let info = default_executor()
+        .execute(env, elf)
+        .map_err(|e| format!("{e:#}"))?;
     let cycles = info.segments.iter().map(|s| u64::from(s.cycles)).sum();
     let output: ProgramOutput = info.journal.decode().map_err(|e| e.to_string())?;
     Ok(Run { output, cycles })
@@ -259,38 +338,82 @@ impl World {
             self.holding.account.program_owner = self.pid;
             self.holding.account.balance = escrowed;
         } else {
-            self.holding = token_holding(*self.holding.account_id.value(), state.token_definition, escrowed, false);
+            self.holding = token_holding(
+                *self.holding.account_id.value(),
+                state.token_definition,
+                escrowed,
+                false,
+            );
         }
     }
 
     pub fn linear(&self, start: u64, end: u64, total: u128) -> Schedule {
         Schedule {
-            kind: 1, start, cliff: start, end, total, claimed: 0, last_seen: 0,
-            beneficiary: BENEFICIARY, escrow: *self.holding.account_id.value(), creator: CREATOR,
-            cancelable: 1, transferable: 1, cancelled_at: 0, signalled: 0, tranches: 0,
-            asset: 0, token_definition: Z, refund_to: REFUND, cancel_authority: CREATOR,
+            kind: 1,
+            start,
+            cliff: start,
+            end,
+            total,
+            claimed: 0,
+            last_seen: 0,
+            beneficiary: BENEFICIARY,
+            escrow: *self.holding.account_id.value(),
+            creator: CREATOR,
+            cancelable: 1,
+            transferable: 1,
+            cancelled_at: 0,
+            signalled: 0,
+            tranches: 0,
+            asset: 0,
+            token_definition: Z,
+            refund_to: REFUND,
+            cancel_authority: CREATOR,
             milestone_authority: CREATOR,
         }
     }
 
-    pub fn claim(&self, now: u64, dest: AccountWithMetadata, signer: [u8; 32]) -> Result<Run, String> {
-        run(&self.elf, &self.pid, &Ix::Claim { schedule_id: self.id }, vec![
-            self.schedule.clone(),
-            self.holding.clone(),
-            dest,
-            acc(signer, AUTH_TRANSFER, 0, vec![], true),
-            clock(now),
-        ])
+    pub fn claim(
+        &self,
+        now: u64,
+        dest: AccountWithMetadata,
+        signer: [u8; 32],
+    ) -> Result<Run, String> {
+        run(
+            &self.elf,
+            &self.pid,
+            &Ix::Claim {
+                schedule_id: self.id,
+            },
+            vec![
+                self.schedule.clone(),
+                self.holding.clone(),
+                dest,
+                acc(signer, AUTH_TRANSFER, 0, vec![], true),
+                clock(now),
+            ],
+        )
     }
 
-    pub fn cancel(&self, now: u64, refund: AccountWithMetadata, authority: [u8; 32]) -> Result<Run, String> {
-        run(&self.elf, &self.pid, &Ix::Cancel { schedule_id: self.id }, vec![
-            self.schedule.clone(),
-            self.holding.clone(),
-            refund,
-            acc(authority, AUTH_TRANSFER, 0, vec![], true),
-            clock(now),
-        ])
+    pub fn cancel(
+        &self,
+        now: u64,
+        refund: AccountWithMetadata,
+        authority: [u8; 32],
+    ) -> Result<Run, String> {
+        run(
+            &self.elf,
+            &self.pid,
+            &Ix::Cancel {
+                schedule_id: self.id,
+            },
+            vec![
+                self.schedule.clone(),
+                self.holding.clone(),
+                refund,
+                acc(authority, AUTH_TRANSFER, 0, vec![], true),
+                clock(now),
+            ],
+        )
     }
 }
 

@@ -22,7 +22,9 @@ fn refused(r: Result<Run, String>, want: u32) {
 fn f1_claim_reads_the_clock_and_pays_exactly_the_linear_amount() {
     let mut w = World::new("linear");
     w.with(w.linear(T0, T0 + 30 * MIN, 600), 600);
-    let r = w.claim(T0 + 7 * MIN + 333, native(DEST, 0), BENEFICIARY).unwrap();
+    let r = w
+        .claim(T0 + 7 * MIN + 333, native(DEST, 0), BENEFICIARY)
+        .unwrap();
     let want = 600u128 * u128::from(7 * MIN + 333) / u128::from(30 * MIN);
     assert_eq!(r.post(&w.holding).balance, 600 - want);
     assert_eq!(r.post(&native(DEST, 0)).balance, want);
@@ -37,10 +39,18 @@ fn f1_a_clock_the_caller_owns_is_refused() {
     // Right address, wrong owner: an account some other program wrote.
     let mut fake = clock(T0 + 10 * MIN);
     fake.account.program_owner = AUTH_TRANSFER;
-    let r = run(&w.elf, &w.pid, &Ix::Claim { schedule_id: w.id }, vec![
-        w.schedule.clone(), w.holding.clone(), native(DEST, 0),
-        acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true), fake,
-    ]);
+    let r = run(
+        &w.elf,
+        &w.pid,
+        &Ix::Claim { schedule_id: w.id },
+        vec![
+            w.schedule.clone(),
+            w.holding.clone(),
+            native(DEST, 0),
+            acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true),
+            fake,
+        ],
+    );
     refused(r, 7014);
 }
 
@@ -50,10 +60,18 @@ fn f1_an_account_the_clock_program_owns_but_is_not_a_clock_is_refused() {
     w.with(w.linear(T0, T0 + MIN, 10), 10);
     let mut other = clock(T0 + 10 * MIN);
     other.account_id = lee_core::account::AccountId::new(*b"/LEZ/ClockProgramAccount/0000077");
-    let r = run(&w.elf, &w.pid, &Ix::Claim { schedule_id: w.id }, vec![
-        w.schedule.clone(), w.holding.clone(), native(DEST, 0),
-        acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true), other,
-    ]);
+    let r = run(
+        &w.elf,
+        &w.pid,
+        &Ix::Claim { schedule_id: w.id },
+        vec![
+            w.schedule.clone(),
+            w.holding.clone(),
+            native(DEST, 0),
+            acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true),
+            other,
+        ],
+    );
     refused(r, 7014);
 }
 
@@ -70,10 +88,19 @@ fn pr1_a_claim_accepts_the_50_block_clock_that_a_private_proof_can_match() {
     // minutes lands, the 50-block clock does not.
     let mut w = World::new("coarse");
     w.with(w.linear(T0, T0 + 30 * MIN, 600), 600);
-    let r = run(&w.elf, &w.pid, &Ix::Claim { schedule_id: w.id }, vec![
-        w.schedule.clone(), w.holding.clone(), native(DEST, 0),
-        acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true), clock_50(T0 + 15 * MIN),
-    ]).unwrap();
+    let r = run(
+        &w.elf,
+        &w.pid,
+        &Ix::Claim { schedule_id: w.id },
+        vec![
+            w.schedule.clone(),
+            w.holding.clone(),
+            native(DEST, 0),
+            acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true),
+            clock_50(T0 + 15 * MIN),
+        ],
+    )
+    .unwrap();
     assert_eq!(r.post(&native(DEST, 0)).balance, 300);
 }
 
@@ -81,10 +108,18 @@ fn pr1_a_claim_accepts_the_50_block_clock_that_a_private_proof_can_match() {
 fn f3_a_cancel_refuses_the_coarse_clock_so_it_cannot_be_backdated() {
     let mut w = World::new("coarsecancel");
     w.with(w.linear(T0, T0 + 30 * MIN, 600), 600);
-    let r = run(&w.elf, &w.pid, &Ix::Cancel { schedule_id: w.id }, vec![
-        w.schedule.clone(), w.holding.clone(), native(REFUND, 0),
-        acc(CREATOR, AUTH_TRANSFER, 0, vec![], true), clock_50(T0 + 15 * MIN),
-    ]);
+    let r = run(
+        &w.elf,
+        &w.pid,
+        &Ix::Cancel { schedule_id: w.id },
+        vec![
+            w.schedule.clone(),
+            w.holding.clone(),
+            native(REFUND, 0),
+            acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
+            clock_50(T0 + 15 * MIN),
+        ],
+    );
     refused(r, 7014);
 }
 
@@ -95,8 +130,13 @@ fn f1a_the_cliff_unlocks_its_lump_and_nothing_before_it() {
     s.kind = 0;
     s.cliff = T0 + 365 * MIN;
     w.with(s, 1_000_000);
-    refused(w.claim(T0 + 365 * MIN - 1, native(DEST, 0), BENEFICIARY), 7003);
-    let r = w.claim(T0 + 365 * MIN, native(DEST, 0), BENEFICIARY).unwrap();
+    refused(
+        w.claim(T0 + 365 * MIN - 1, native(DEST, 0), BENEFICIARY),
+        7003,
+    );
+    let r = w
+        .claim(T0 + 365 * MIN, native(DEST, 0), BENEFICIARY)
+        .unwrap();
     assert_eq!(r.post(&native(DEST, 0)).balance, 250_000);
 }
 
@@ -140,7 +180,10 @@ fn r1_a_refused_claim_writes_nothing_and_a_retry_pays() {
     assert!(w.claim(T0 - 1, native(DEST, 0), BENEFICIARY).is_err()); // nothing vested
     let r = w.claim(T0 + MIN, native(DEST, 0), BENEFICIARY).unwrap();
     assert_eq!(r.post(&native(DEST, 0)).balance, 10);
-    assert!(r.calls().is_empty(), "a native claim is one program, one transaction (P1)");
+    assert!(
+        r.calls().is_empty(),
+        "a native claim is one program, one transaction (P1)"
+    );
 }
 
 #[test]
@@ -171,7 +214,9 @@ fn f3_the_vested_part_stays_claimable_after_cancellation_and_no_more() {
     let mut s = w.linear(T0, T0 + 30 * MIN, 600);
     s.cancelled_at = T0 + 10 * MIN;
     w.with(s, 200);
-    let r = w.claim(T0 + 29 * MIN, native(DEST, 0), BENEFICIARY).unwrap();
+    let r = w
+        .claim(T0 + 29 * MIN, native(DEST, 0), BENEFICIARY)
+        .unwrap();
     assert_eq!(r.post(&native(DEST, 0)).balance, 200);
 }
 
@@ -196,11 +241,25 @@ fn f3_make_non_cancelable_is_one_way() {
     let mut w = World::new("oneway");
     w.with(w.linear(T0, T0 + MIN, 10), 10);
     let creator = acc(CREATOR, AUTH_TRANSFER, 0, vec![], true);
-    let r = run(&w.elf, &w.pid, &Ix::MakeNonCancelable { schedule_id: w.id }, vec![w.schedule.clone(), creator.clone()]).unwrap();
+    let r = run(
+        &w.elf,
+        &w.pid,
+        &Ix::MakeNonCancelable { schedule_id: w.id },
+        vec![w.schedule.clone(), creator.clone()],
+    )
+    .unwrap();
     let s = r.schedule(&w.schedule);
     assert_eq!(s.cancelable, 0);
     w.with(s, 10);
-    refused(run(&w.elf, &w.pid, &Ix::MakeNonCancelable { schedule_id: w.id }, vec![w.schedule.clone(), creator]), 7010);
+    refused(
+        run(
+            &w.elf,
+            &w.pid,
+            &Ix::MakeNonCancelable { schedule_id: w.id },
+            vec![w.schedule.clone(), creator],
+        ),
+        7010,
+    );
 }
 
 #[test]
@@ -219,9 +278,32 @@ fn soft_a_nominated_cancel_authority_replaces_the_creator() {
 fn f4_only_the_holder_moves_a_transferable_position() {
     let mut w = World::new("xfer");
     w.with(w.linear(T0, T0 + MIN, 10), 10);
-    let ix = Ix::TransferBeneficiary { schedule_id: w.id, new_beneficiary: DEST };
-    refused(run(&w.elf, &w.pid, &ix, vec![w.schedule.clone(), acc(CREATOR, AUTH_TRANSFER, 0, vec![], true)]), 7004);
-    let r = run(&w.elf, &w.pid, &ix, vec![w.schedule.clone(), acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true)]).unwrap();
+    let ix = Ix::TransferBeneficiary {
+        schedule_id: w.id,
+        new_beneficiary: DEST,
+    };
+    refused(
+        run(
+            &w.elf,
+            &w.pid,
+            &ix,
+            vec![
+                w.schedule.clone(),
+                acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
+            ],
+        ),
+        7004,
+    );
+    let r = run(
+        &w.elf,
+        &w.pid,
+        &ix,
+        vec![
+            w.schedule.clone(),
+            acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true),
+        ],
+    )
+    .unwrap();
     assert_eq!(r.schedule(&w.schedule).beneficiary, DEST);
 }
 
@@ -231,8 +313,22 @@ fn f4_a_non_transferable_position_cannot_move() {
     let mut s = w.linear(T0, T0 + MIN, 10);
     s.transferable = 0;
     w.with(s, 10);
-    let ix = Ix::TransferBeneficiary { schedule_id: w.id, new_beneficiary: DEST };
-    refused(run(&w.elf, &w.pid, &ix, vec![w.schedule.clone(), acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true)]), 7012);
+    let ix = Ix::TransferBeneficiary {
+        schedule_id: w.id,
+        new_beneficiary: DEST,
+    };
+    refused(
+        run(
+            &w.elf,
+            &w.pid,
+            &ix,
+            vec![
+                w.schedule.clone(),
+                acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true),
+            ],
+        ),
+        7012,
+    );
 }
 
 // ---------------------------------------------------------------- milestones (R4, soft)
@@ -245,8 +341,22 @@ fn r4_signalling_a_milestone_twice_is_refused() {
     s.tranches = 2;
     s.signalled = 0b01;
     w.with(s, 2);
-    let ix = Ix::SignalMilestone { schedule_id: w.id, index: 0 };
-    refused(run(&w.elf, &w.pid, &ix, vec![w.schedule.clone(), acc(CREATOR, AUTH_TRANSFER, 0, vec![], true)]), 7013);
+    let ix = Ix::SignalMilestone {
+        schedule_id: w.id,
+        index: 0,
+    };
+    refused(
+        run(
+            &w.elf,
+            &w.pid,
+            &ix,
+            vec![
+                w.schedule.clone(),
+                acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
+            ],
+        ),
+        7013,
+    );
 }
 
 #[test]
@@ -257,9 +367,32 @@ fn soft_a_nominated_milestone_authority_replaces_the_creator() {
     s.tranches = 2;
     s.milestone_authority = STRANGER;
     w.with(s, 2);
-    let ix = Ix::SignalMilestone { schedule_id: w.id, index: 0 };
-    refused(run(&w.elf, &w.pid, &ix, vec![w.schedule.clone(), acc(CREATOR, AUTH_TRANSFER, 0, vec![], true)]), 7015);
-    let r = run(&w.elf, &w.pid, &ix, vec![w.schedule.clone(), acc(STRANGER, AUTH_TRANSFER, 0, vec![], true)]).unwrap();
+    let ix = Ix::SignalMilestone {
+        schedule_id: w.id,
+        index: 0,
+    };
+    refused(
+        run(
+            &w.elf,
+            &w.pid,
+            &ix,
+            vec![
+                w.schedule.clone(),
+                acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
+            ],
+        ),
+        7015,
+    );
+    let r = run(
+        &w.elf,
+        &w.pid,
+        &ix,
+        vec![
+            w.schedule.clone(),
+            acc(STRANGER, AUTH_TRANSFER, 0, vec![], true),
+        ],
+    )
+    .unwrap();
     assert_eq!(r.schedule(&w.schedule).signalled, 0b01);
 }
 
@@ -271,8 +404,22 @@ fn a_cancelled_milestone_schedule_refuses_further_signals() {
     s.tranches = 2;
     s.cancelled_at = T0;
     w.with(s, 0);
-    let ix = Ix::SignalMilestone { schedule_id: w.id, index: 0 };
-    refused(run(&w.elf, &w.pid, &ix, vec![w.schedule.clone(), acc(CREATOR, AUTH_TRANSFER, 0, vec![], true)]), 7011);
+    let ix = Ix::SignalMilestone {
+        schedule_id: w.id,
+        index: 0,
+    };
+    refused(
+        run(
+            &w.elf,
+            &w.pid,
+            &ix,
+            vec![
+                w.schedule.clone(),
+                acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
+            ],
+        ),
+        7011,
+    );
 }
 
 // ---------------------------------------------------------------- tokens (F1)
@@ -288,8 +435,15 @@ fn f1_a_token_claim_is_a_chained_transfer_under_our_pda_seed() {
     let r = w.claim(T0 + MIN, dest, BENEFICIARY).unwrap();
     let calls = r.calls();
     assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].program_id, TOKEN, "the pinned token program, not an owner field");
-    assert_eq!(calls[0].pda_seeds.len(), 1, "our holding's seed authorises it to the callee");
+    assert_eq!(
+        calls[0].program_id, TOKEN,
+        "the pinned token program, not an owner field"
+    );
+    assert_eq!(
+        calls[0].pda_seeds.len(),
+        1,
+        "our holding's seed authorises it to the callee"
+    );
     assert!(calls[0].pre_states[0].is_authorized);
     // Neither balance is written by us: the token program moves them.
     assert_eq!(r.post(&w.holding).data, w.holding.account.data);
@@ -302,7 +456,14 @@ fn f1_a_token_claim_into_a_holding_of_another_token_is_refused() {
     s.asset = 1;
     s.token_definition = DEFINITION;
     w.with(s, 100);
-    refused(w.claim(T0 + MIN, token_holding(DEST, [0x99; 32], 0, false), BENEFICIARY), 7016);
+    refused(
+        w.claim(
+            T0 + MIN,
+            token_holding(DEST, [0x99; 32], 0, false),
+            BENEFICIARY,
+        ),
+        7016,
+    );
     refused(w.claim(T0 + MIN, native(DEST, 0), BENEFICIARY), 7016);
 }
 
@@ -312,24 +473,69 @@ fn f1_a_token_claim_into_a_holding_of_another_token_is_refused() {
 fn creation_refuses_a_refund_account_equal_to_the_cancel_authority() {
     let w = World::new("create");
     let ix = Ix::CreateSchedule {
-        schedule_id: w.id, kind: 1, start: T0, cliff: T0, end: T0 + MIN, total: 10,
-        beneficiary: BENEFICIARY, cancelable: 1, transferable: 0, tranches: 0,
-        cancel_authority: Z, milestone_authority: Z, refund_to: CREATOR,
+        schedule_id: w.id,
+        kind: 1,
+        start: T0,
+        cliff: T0,
+        end: T0 + MIN,
+        total: 10,
+        beneficiary: BENEFICIARY,
+        cancelable: 1,
+        transferable: 0,
+        tranches: 0,
+        cancel_authority: Z,
+        milestone_authority: Z,
+        refund_to: CREATOR,
     };
-    refused(run(&w.elf, &w.pid, &ix, vec![w.schedule.clone(), w.holding.clone(), acc(CREATOR, AUTH_TRANSFER, 0, vec![], true)]), 7017);
+    refused(
+        run(
+            &w.elf,
+            &w.pid,
+            &ix,
+            vec![
+                w.schedule.clone(),
+                w.holding.clone(),
+                acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
+            ],
+        ),
+        7017,
+    );
 }
 
 #[test]
 fn creation_writes_the_terms_and_defaults_the_authorities_to_the_creator() {
     let w = World::new("create2");
     let ix = Ix::CreateSchedule {
-        schedule_id: w.id, kind: 1, start: T0, cliff: T0, end: T0 + MIN, total: 10,
-        beneficiary: BENEFICIARY, cancelable: 1, transferable: 0, tranches: 0,
-        cancel_authority: Z, milestone_authority: Z, refund_to: REFUND,
+        schedule_id: w.id,
+        kind: 1,
+        start: T0,
+        cliff: T0,
+        end: T0 + MIN,
+        total: 10,
+        beneficiary: BENEFICIARY,
+        cancelable: 1,
+        transferable: 0,
+        tranches: 0,
+        cancel_authority: Z,
+        milestone_authority: Z,
+        refund_to: REFUND,
     };
-    let r = run(&w.elf, &w.pid, &ix, vec![w.schedule.clone(), w.holding.clone(), acc(CREATOR, AUTH_TRANSFER, 0, vec![], true)]).unwrap();
+    let r = run(
+        &w.elf,
+        &w.pid,
+        &ix,
+        vec![
+            w.schedule.clone(),
+            w.holding.clone(),
+            acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
+        ],
+    )
+    .unwrap();
     let s = r.schedule(&w.schedule);
-    assert_eq!((s.cancel_authority, s.milestone_authority, s.refund_to), (CREATOR, CREATOR, REFUND));
+    assert_eq!(
+        (s.cancel_authority, s.milestone_authority, s.refund_to),
+        (CREATOR, CREATOR, REFUND)
+    );
     assert_eq!(s.escrow, *w.holding.account_id.value());
     let _: ProgramId = w.pid;
 }
@@ -341,19 +547,42 @@ fn batch_world(n: u32) -> (World, Vec<lee_core::account::AccountWithMetadata>) {
     let schedules = (0..n)
         .map(|i| {
             let sid = batch_schedule_id(&w.id, i);
-            acc(*pda(&w.pid, &[sid]).value(), ProgramId::default(), 0, vec![], false)
+            acc(
+                *pda(&w.pid, &[sid]).value(),
+                ProgramId::default(),
+                0,
+                vec![],
+                false,
+            )
         })
         .collect();
     (w, schedules)
 }
 
-fn create_batch(w: &World, schedules: &[lee_core::account::AccountWithMetadata], who: Vec<[u8; 32]>) -> Result<Run, String> {
+fn create_batch(
+    w: &World,
+    schedules: &[lee_core::account::AccountWithMetadata],
+    who: Vec<[u8; 32]>,
+) -> Result<Run, String> {
     let ix = Ix::CreateScheduleBatch {
-        batch_id: w.id, kind: 1, start: T0, cliff: T0, end: T0 + 30 * MIN, total_each: 600,
-        beneficiaries: who, cancelable: 1, transferable: 0, tranches: 0,
-        cancel_authority: Z, milestone_authority: Z, refund_to: REFUND,
+        batch_id: w.id,
+        kind: 1,
+        start: T0,
+        cliff: T0,
+        end: T0 + 30 * MIN,
+        total_each: 600,
+        beneficiaries: who,
+        cancelable: 1,
+        transferable: 0,
+        tranches: 0,
+        cancel_authority: Z,
+        milestone_authority: Z,
+        refund_to: REFUND,
     };
-    let mut pre = vec![w.holding.clone(), acc(CREATOR, AUTH_TRANSFER, 0, vec![], true)];
+    let mut pre = vec![
+        w.holding.clone(),
+        acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
+    ];
     pre.extend(schedules.iter().cloned());
     run(&w.elf, &w.pid, &ix, pre)
 }
@@ -367,7 +596,11 @@ fn f5_a_batch_creates_one_schedule_per_beneficiary_over_one_holding() {
         let st = r.schedule(s);
         assert_eq!(st.beneficiary, who[i]);
         assert_eq!(st.total, 600);
-        assert_eq!(st.escrow, *w.holding.account_id.value(), "every schedule points at the shared holding");
+        assert_eq!(
+            st.escrow,
+            *w.holding.account_id.value(),
+            "every schedule points at the shared holding"
+        );
     }
 }
 
@@ -375,7 +608,10 @@ fn f5_a_batch_creates_one_schedule_per_beneficiary_over_one_holding() {
 fn f5_a_batch_refuses_an_account_that_is_not_the_next_pda() {
     let (w, mut schedules) = batch_world(2);
     schedules.swap(0, 1);
-    refused(create_batch(&w, &schedules, vec![[0xB1; 32], [0xB2; 32]]), 7018);
+    refused(
+        create_batch(&w, &schedules, vec![[0xB1; 32], [0xB2; 32]]),
+        7018,
+    );
 }
 
 #[test]
@@ -395,15 +631,104 @@ fn f5_a_batch_schedule_claims_and_cancels_only_its_own_share() {
     w.holding.account.program_owner = w.pid;
     w.holding.account.balance = 1200; // funded for both
     let sid = batch_schedule_id(&w.id, 0);
-    let claim = run(&w.elf, &w.pid, &Ix::ClaimBatch { schedule_id: sid, batch_id: w.id }, vec![
-        s0.clone(), w.holding.clone(), native(DEST, 0),
-        acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true), clock(T0 + 10 * MIN),
-    ]).unwrap();
+    let claim = run(
+        &w.elf,
+        &w.pid,
+        &Ix::ClaimBatch {
+            schedule_id: sid,
+            batch_id: w.id,
+        },
+        vec![
+            s0.clone(),
+            w.holding.clone(),
+            native(DEST, 0),
+            acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true),
+            clock(T0 + 10 * MIN),
+        ],
+    )
+    .unwrap();
     assert_eq!(claim.post(&native(DEST, 0)).balance, 200);
     assert_eq!(claim.post(&w.holding).balance, 1000);
-    let cancel = run(&w.elf, &w.pid, &Ix::CancelBatch { schedule_id: sid, batch_id: w.id }, vec![
-        s0, w.holding.clone(), native(REFUND, 0),
-        acc(CREATOR, AUTH_TRANSFER, 0, vec![], true), clock(T0 + 10 * MIN),
-    ]).unwrap();
-    assert_eq!(cancel.post(&native(REFUND, 0)).balance, 400, "only schedule 0's unvested part");
+    let cancel = run(
+        &w.elf,
+        &w.pid,
+        &Ix::CancelBatch {
+            schedule_id: sid,
+            batch_id: w.id,
+        },
+        vec![
+            s0,
+            w.holding.clone(),
+            native(REFUND, 0),
+            acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
+            clock(T0 + 10 * MIN),
+        ],
+    )
+    .unwrap();
+    assert_eq!(
+        cancel.post(&native(REFUND, 0)).balance,
+        400,
+        "only schedule 0's unvested part"
+    );
+}
+
+#[test]
+fn r2_a_second_cancellation_is_refused() {
+    let mut w = World::new("cancel2");
+    let mut s = w.linear(T0, T0 + 30 * MIN, 600);
+    s.cancelled_at = T0 + 5 * MIN;
+    w.with(s, 500);
+    refused(w.cancel(T0 + 10 * MIN, native(REFUND, 0), CREATOR), 7011);
+}
+
+#[test]
+fn r4_a_signal_past_the_last_milestone_is_refused() {
+    let mut w = World::new("msrange");
+    let mut s = w.linear(0, 1, 2);
+    s.kind = 2;
+    s.tranches = 2;
+    w.with(s, 2);
+    let ix = Ix::SignalMilestone {
+        schedule_id: w.id,
+        index: 2,
+    };
+    refused(
+        run(
+            &w.elf,
+            &w.pid,
+            &ix,
+            vec![
+                w.schedule.clone(),
+                acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
+            ],
+        ),
+        7013,
+    );
+}
+
+/// F5 asks for the maximum batch size. It is set by the public-execution cycle
+/// cap, not by transaction size: measured here by bisection on the deployed
+/// binary, 299 schedules fit in one creation and 300 exceed 2^25 cycles.
+#[test]
+fn f5_the_largest_batch_is_299_schedules_and_300_exceeds_the_cycle_cap() {
+    let who = |n: u32| -> Vec<[u8; 32]> {
+        (0..n)
+            .map(|i| {
+                let mut b = [0xB0; 32];
+                b[..4].copy_from_slice(&i.to_le_bytes());
+                b
+            })
+            .collect()
+    };
+    let (w, s) = batch_world(299);
+    let r = create_batch(&w, &s, who(299)).expect("299 schedules fit");
+    assert!(r.cycles < MAX_NUM_CYCLES_PUBLIC_EXECUTION);
+    let (w, s) = batch_world(300);
+    let e = create_batch(&w, &s, who(300))
+        .err()
+        .expect("300 schedules exceed the cap");
+    assert!(
+        e.contains("Session limit exceeded"),
+        "refused for another reason: {e}"
+    );
 }
