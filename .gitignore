@@ -1,4 +1,7 @@
 target
 Cargo.lock
+# The guests are built in Docker with --locked: their lockfiles are what makes
+# a rebuild reproduce the deployed bytes, so they are committed.
+!programs/*/Cargo.lock
 target/
 app/build692/

@@ -113,6 +113,41 @@ jobs:
             sed -n '/^| op |/,/^$/p' /tmp/cycles.txt
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # The deploy hash on chain is SHA256(len ‖ bytecode), so a rebuild that
+  # produces the same hash is the deployed program, byte for byte. This job
+  # rebuilds the vesting guest from the tree in RISC Zero's pinned Docker
+  # builder and compares against the transaction hash recorded when it was
+  # deployed — a value fixed outside this build, so the check cannot agree
+  # with itself. Before the guest lockfiles were committed a fresh clone
+  # resolved newer crates and did not build at all.
+  reproduce:
+    name: A clean rebuild is the deployed vesting program
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: RISC0
+        run: |
+          curl -L https://risczero.com/install | bash
+          echo "$HOME/.risc0/bin" >> "$GITHUB_PATH"
+
+      - name: cargo-risczero 3.0.5
+        run: rzup install cargo-risczero 3.0.5
+
+      - name: Rebuild in Docker
+        run: cargo risczero build --manifest-path programs/vesting/Cargo.toml
+
+      - name: Its deploy hash is the one on chain, and the committed artifact's
+        run: |
+          set -e
+          . evidence/vesting-deploy.env
+          h() { python3 -c "import hashlib,struct,sys; b=open(sys.argv[1],'rb').read(); print(hashlib.sha256(struct.pack('<I',len(b))+b).hexdigest())" "$1"; }
+          built=$(h programs/vesting/target/riscv32im-risc0-zkvm-elf/docker/antumbra_vesting.bin)
+          committed=$(h artifacts/programs/antumbra_vesting.bin)
+          echo "rebuilt    $built"; echo "committed  $committed"; echo "deploy tx  $DEPLOY_TX"
+          [ "$built" = "$DEPLOY_TX" ] && [ "$committed" = "$DEPLOY_TX" ]
+          echo "the rebuild is the program deployed at block $DEPLOY_BLOCK" >> "$GITHUB_STEP_SUMMARY"
+
   # Documentation rots in three ways that are decidable from the tree alone: a
   # path in backticks that is not in it, a link whose target does not resolve
   # from the document carrying it, and a line citation past the end of its file.

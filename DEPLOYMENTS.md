@@ -594,6 +594,11 @@ spel program-id artifacts/programs/antumbra_curve.bin
 Run from the repository root, not from the program directory: the Docker build
 context is taken from there, and the guests depend on `antumbra` by path.
 
+The guests build with `--locked`, and their lockfiles are committed: a fresh
+clone rebuilds `antumbra_vesting.bin` to deploy hash `2b9e140b…b39d3813`, the
+transaction that deployed it, and CI's `reproduce` job checks exactly that on
+every push.
+
 Needs Docker (the guest builder image is `linux/amd64` and runs under emulation
 on Apple silicon), `cargo risczero` 3.0.5, and `spel`.
 
