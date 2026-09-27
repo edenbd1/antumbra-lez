@@ -231,7 +231,11 @@ def main():
         for f in failures:
             print("  " + f)
         return 1
-    print("every explorer link points at something this chain has")
+    if gone:
+        print("every live explorer link points at something this chain has, and "
+              "every declared pre-reset one does not")
+    else:
+        print("every explorer link points at something this chain has")
     return 0
 
 
