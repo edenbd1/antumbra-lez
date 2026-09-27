@@ -65,7 +65,9 @@ check() { # program label tx expect_present
   if [ -n "$ONLY" ]; then
     mine="$(belongs "$1" "$2")"
     # CONTROL and REFUSED are the negative controls; they always run.
-    case "$1" in CONTROL|rpc) mine=shared ;; REFUSED) mine=vesting ;; esac
+    # vesting-payout is the one refusal from before the 2026-09-08 reset: its
+    # absence is now trivially true, so it is not counted as vesting evidence.
+    case "$1" in CONTROL|rpc) mine=shared ;; REFUSED) mine=vesting; [ "$2" = vesting-payout ] && mine=history ;; esac
     # `mine` may name more than one program, so this is membership, not equality.
     case " $mine " in *" shared "*|*" $ONLY "*) : ;; *) return 0 ;; esac
   fi
@@ -200,7 +202,7 @@ echo
 if [ "$fail" -eq 0 ]; then
   {
   if [ -n "$ONLY" ]; then
-    echo "All $ran expected checks for \`$ONLY\` resolve — run without --only for all of them."
+    echo "All $ran expected checks for \`$ONLY\` resolve."
     echo "The never-deployed hash still does not, which is what makes the rest mean"
     echo "something."
   else

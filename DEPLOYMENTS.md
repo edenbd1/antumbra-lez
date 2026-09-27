@@ -1,5 +1,15 @@
 # Deployed on the public LEZ testnet
 
+> **Where things stand.** The public testnet was reset on **2026-09-08**, which
+> erased every transaction made before it. `antumbra_vesting` was redeployed and
+> its whole lifecycle re-driven afterwards: that is the first section below, the
+> page [`evidence/VESTING.md`](evidence/VESTING.md), and
+> `./scripts/verify-onchain.sh --only vesting`, which checks it live. The curve and
+> LBP sections further down record runs made **before** the reset; their hashes
+> no longer resolve and are listed in
+> [`evidence/pre-reset-hashes.txt`](evidence/pre-reset-hashes.txt), so a full run
+> of `verify-onchain.sh` without `--only vesting` reports them missing.
+
 Three SPEL programs, one per open RFP proposal, live on
 `https://testnet.lez.logos.co` and fetchable by anyone.
 
@@ -74,8 +84,8 @@ it. Neither substitutes for the other.
 
 | Program | RFP | Freeze commit | ImageID | Deploy | Block |
 |---|---|---|---|---|---|
-| `antumbra_curve` | [015](https://github.com/logos-co/rfp/issues/179) | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `49db0fc91883668a5ccb85242aa1cdf923a557a7327f7c0613ad526fa56fc510` | [`f074ffe1…4d8c3855`](https://explorer.testnet.lez.logos.co/transaction/f074ffe110131ed108d7ea37d6445d7492ff36842ed63399b005dc364d8c3855) | 17265 |
-| `antumbra_lbp` | [016](https://github.com/logos-co/rfp/issues/180) | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `51f28557602ae6daff97e51127ba6dbc5ddfe6048ea7cd89ca5e170ab6c7a82d` | [`fbfe7e39…7bbe4859`](https://explorer.testnet.lez.logos.co/transaction/fbfe7e3960cd787a26699cd2690d6a663f88c895f4a68ee6bf7dffa47bbe4859) | 17266 |
+| `antumbra_curve` | [015](https://github.com/logos-co/rfp/issues/184) | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `49db0fc91883668a5ccb85242aa1cdf923a557a7327f7c0613ad526fa56fc510` | [`f074ffe1…4d8c3855`](https://explorer.testnet.lez.logos.co/transaction/f074ffe110131ed108d7ea37d6445d7492ff36842ed63399b005dc364d8c3855) | 17265 |
+| `antumbra_lbp` | [016](https://github.com/logos-co/rfp/issues/185) | [`b5aa3da`](https://github.com/edenbd1/antumbra-lez/commit/b5aa3da) | `51f28557602ae6daff97e51127ba6dbc5ddfe6048ea7cd89ca5e170ab6c7a82d` | [`fbfe7e39…7bbe4859`](https://explorer.testnet.lez.logos.co/transaction/fbfe7e3960cd787a26699cd2690d6a663f88c895f4a68ee6bf7dffa47bbe4859) | 17266 |
 | `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/186) | [`ca8dc1b`](https://github.com/edenbd1/antumbra-lez/commit/ca8dc1b365986f7e62c281dce0c89df2aee8f449) | `7763458b5b7d88d3d932a4ce62d44a34242811106dec8f6d2069f849591a2bb6` | [`2b9e140b…b39d3813`](https://explorer.testnet.lez.logos.co/transaction/2b9e140b873e424cbed956b3652154eca9e997beb5711c2894471cacb39d3813) | 27115 |
 
 The four facts in that table — freeze commit, ImageID, deploy transaction,
@@ -86,14 +96,15 @@ program. They are what makes a deployment checkable rather than asserted.
 quote the deployments that were *driven*, which are the earlier programs, not the
 top table. Both sets were live side by side until the 2026-09-08 reset removed
 them; the earlier ImageIDs are recorded here rather than left for a reviewer to
-reconcile. RFP-017 now cites the redeployed `4c6e62a5…` above, which is the build
-every post-reset vesting transaction ran against:
+reconcile. RFP-017 now cites the current vesting build, `7763458b…` in the table
+above, which every vesting transaction in [`evidence/VESTING.md`](evidence/VESTING.md)
+ran against:
 
 | Program | RFP | Freeze commit | ImageID | Deploy | Block | Driven by |
 |---|---|---|---|---|---|---|
-| `antumbra_curve` | [015](https://github.com/logos-co/rfp/issues/179) | [`8c09b33`](https://github.com/edenbd1/antumbra-lez/commit/8c09b33) | `bcd6d07d27bb0d2ea8c237c46125018e5115815173025a1a24aca505835f1a23` | [`25a8f405…b42f1718`](https://explorer.testnet.lez.logos.co/transaction/25a8f4051b60ff471cb30d9655217e7b172b9b43f3977be327956fd2b42f1718) | 16339 | `create_sale`, `execute_buy` |
-| `antumbra_lbp` | [016](https://github.com/logos-co/rfp/issues/180) | [`8c09b33`](https://github.com/edenbd1/antumbra-lez/commit/8c09b33) | `249648dcf6e2fe70e81c0315bdc5737037d3f343e3362697575dd0a30bbe0e08` | [`f765ec06…98b4eac2`](https://explorer.testnet.lez.logos.co/transaction/f765ec06ae391c8d9e754f40947398cf15d66c9967f2fda23894d30098b4eac2) | 16342 | `create_pool`, `execute_buy` |
-| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/178) | [`8c09b33`](https://github.com/edenbd1/antumbra-lez/commit/8c09b33) | `26134c7901b2cb8c2dac5889155ef17be988d5cd7b77f2af8df10e39a6c235be` | [`f45a7b2f…0b928030`](https://explorer.testnet.lez.logos.co/transaction/f45a7b2fc835e75e9633e6fe8cd00687146f2b05b22591ff38baeec80b928030) | 16335 | `create_schedule`, `record_claim` |
+| `antumbra_curve` | [015](https://github.com/logos-co/rfp/issues/184) | [`8c09b33`](https://github.com/edenbd1/antumbra-lez/commit/8c09b33) | `bcd6d07d27bb0d2ea8c237c46125018e5115815173025a1a24aca505835f1a23` | [`25a8f405…b42f1718`](https://explorer.testnet.lez.logos.co/transaction/25a8f4051b60ff471cb30d9655217e7b172b9b43f3977be327956fd2b42f1718) | 16339 | `create_sale`, `execute_buy` |
+| `antumbra_lbp` | [016](https://github.com/logos-co/rfp/issues/185) | [`8c09b33`](https://github.com/edenbd1/antumbra-lez/commit/8c09b33) | `249648dcf6e2fe70e81c0315bdc5737037d3f343e3362697575dd0a30bbe0e08` | [`f765ec06…98b4eac2`](https://explorer.testnet.lez.logos.co/transaction/f765ec06ae391c8d9e754f40947398cf15d66c9967f2fda23894d30098b4eac2) | 16342 | `create_pool`, `execute_buy` |
+| `antumbra_vesting` | [017](https://github.com/logos-co/rfp/issues/186) | [`8c09b33`](https://github.com/edenbd1/antumbra-lez/commit/8c09b33) | `26134c7901b2cb8c2dac5889155ef17be988d5cd7b77f2af8df10e39a6c235be` | [`f45a7b2f…0b928030`](https://explorer.testnet.lez.logos.co/transaction/f45a7b2fc835e75e9633e6fe8cd00687146f2b05b22591ff38baeec80b928030) | 16335 | `create_schedule`, `record_claim` |
 
 Each ImageID there is checkable without trusting this table: fetch any driven
 transaction and read its `program_id` field, which is the ImageID that executed
