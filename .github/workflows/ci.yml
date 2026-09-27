@@ -131,8 +131,12 @@ jobs:
           curl -L https://risczero.com/install | bash
           echo "$HOME/.risc0/bin" >> "$GITHUB_PATH"
 
+      # The build itself runs in the pinned Docker image; cargo-risczero still
+      # refuses to start without a host guest toolchain installed.
       - name: cargo-risczero 3.0.5
-        run: rzup install cargo-risczero 3.0.5
+        run: |
+          rzup install cargo-risczero 3.0.5
+          rzup install rust
 
       - name: Rebuild in Docker
         run: cargo risczero build --manifest-path programs/vesting/Cargo.toml
