@@ -156,3 +156,13 @@ against the chain without an explorer.
 
 - kScheduleAccount = CzBDQC7tnM8Eh6qfVW2bGtHzCsSn8cNJ9y98bPWf8UTc
 - kScheduleHolding = Dj1Di9ZJqwRwEq9ZAfFh8aQqfVNt4jNSWu9LKrE8ScaD
+
+| call | outcome | block | transaction |
+|---|---|---|---|
+| `delegated_create` | landed | 27061 | [`c0d781ad…74dae801`](https://explorer.testnet.lez.logos.co/transaction/c0d781ad6763d7a31ca9a60e8d95528ed82e6cfeb46e575895e4e5b674dae801) |
+| `delegated_fund` | landed | 27062 | [`982e8acd…efdecce4`](https://explorer.testnet.lez.logos.co/transaction/982e8acd418198dc83fe87f4f463e6d350e713ba50c469fe313b8d79efdecce4) |
+| `delegated_cancel_by_creator_refused` | **refused**, as required | — | `d4038697f53d6571a08837f77db4b30c0a63fd790bee8c678146d73d91ffaddf` |
+| `delegated_cancel_by_authority` | landed | 27065 | [`a389cc77…f0ed25d0`](https://explorer.testnet.lez.logos.co/transaction/a389cc77420f5f295be9f3ec5b13656fb3bcb4cb1004df5ea0dd40bdf0ed25d0) |
+
+- cancelled by the nominated authority at clock time 1790501820098 ms; vested then: 8 of 60
+- ✅ the refund account got the unvested part = 52

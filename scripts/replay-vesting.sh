@@ -48,7 +48,7 @@ OUT="${OUT:-/tmp/vesting-replay.tsv}"
 : "${PTOK:?base58 id of the beneficiary private token holding}"
 W="${WALLET:-$HOME/data/ns.com/lp-0002/_external/lez/target/release/wallet}"
 TAG="${TAG:-v2}"   # suffix for schedule ids, so a rerun on the same chain does not collide
-SECTIONS="${SECTIONS:-1 2 3 4 5 6 7 8 9}"
+SECTIONS="${SECTIONS:-1 2 3 4 5 6 7 8 9 10}"
 want() { case " $SECTIONS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
 IDL=idl/antumbra_vesting.idl.json
@@ -328,6 +328,22 @@ step showcase_fund yes -- fund-token-schedule --schedule-id "$ID" --amount 36500
 step showcase_claim yes -- claim --schedule-id "$ID" --destination "$BEN_ATA" --beneficiary "$BENEFICIARY" --clock "$CLOCK"
 note "kScheduleAccount = $(pda "$ID")"
 note "kScheduleHolding = $(hold "$ID")"
+fi
+
+if want 10; then
+echo; echo "-- 10. the nominated cancel authority cancels, and the creator could not --"
+ID=delegated-$TAG; S="$(clock_ms)"; E=$((S + 30*MIN))
+step delegated_create yes -- create-schedule --schedule-id "$ID" --kind 1 --start $S --cliff $S --end $E \
+  --total 60 --beneficiary "$BHEX" --cancelable 1 --transferable 0 --tranches 0 \
+  --cancel-authority "$AHEX" --milestone-authority $Z --refund-to "$RHEX" --creator "$CREATOR"
+H="$(hold "$ID")"
+step delegated_fund yes -- fund-schedule --schedule-id "$ID" --amount 60 --creator "$CREATOR"
+step delegated_cancel_by_creator_refused no -- cancel --schedule-id "$ID" --refund "$CREFUND" --authority "$CREATOR" --clock "$CLOCK"
+R0="$(bal "$CREFUND")"
+step delegated_cancel_by_authority yes -- cancel --schedule-id "$ID" --refund "$CREFUND" --authority "$AUTH2" --clock "$CLOCK"
+P="$(pda "$ID")"; C="$(field "$P" cancelled_at)"; V="$(linear_vested 60 $S $E $C)"
+note "cancelled by the nominated authority at clock time $C ms; vested then: $V of 60"
+expect_eq "the refund account got the unvested part" "$(( $(bal "$CREFUND") - R0 ))" "$(( 60 - V ))"
 fi
 
 echo

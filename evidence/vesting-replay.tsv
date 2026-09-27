@@ -76,3 +76,9 @@ showcase_fund	yes	LANDED	26324	788d5faa0a097dd1bfb22658180c73e660bf38e73d636450d
 showcase_claim	yes	LANDED	26325	2c1bca9bb98a02f692fdda43d0c7477091391713e4f9ad765247eb4ccac6bc8d
 # kScheduleAccount = CzBDQC7tnM8Eh6qfVW2bGtHzCsSn8cNJ9y98bPWf8UTc
 # kScheduleHolding = Dj1Di9ZJqwRwEq9ZAfFh8aQqfVNt4jNSWu9LKrE8ScaD
+delegated_create	yes	LANDED	27061	c0d781ad6763d7a31ca9a60e8d95528ed82e6cfeb46e575895e4e5b674dae801
+delegated_fund	yes	LANDED	27062	982e8acd418198dc83fe87f4f463e6d350e713ba50c469fe313b8d79efdecce4
+delegated_cancel_by_creator_refused	no	REFUSED	-	d4038697f53d6571a08837f77db4b30c0a63fd790bee8c678146d73d91ffaddf
+delegated_cancel_by_authority	yes	LANDED	27065	a389cc77420f5f295be9f3ec5b13656fb3bcb4cb1004df5ea0dd40bdf0ed25d0
+# cancelled by the nominated authority at clock time 1790501820098 ms; vested then: 8 of 60
+# check ok: the refund account got the unvested part = 52

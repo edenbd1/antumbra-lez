@@ -1,5 +1,11 @@
 # antumbra-lez
 
+> **Reviewing RFP-017 (vesting)?** The program, and every call made against it on
+> the public testnet, is on one page: [`evidence/VESTING.md`](evidence/VESTING.md).
+> Re-check it with `./scripts/verify-onchain.sh --only vesting`; the deployed binary's
+> requirement tests are in [`executor-tests/`](executor-tests/). The rest of this
+> README describes the shared pricing library behind RFP-015 and RFP-016 as well.
+
 [![CI](https://github.com/edenbd1/antumbra-lez/actions/workflows/ci.yml/badge.svg)](https://github.com/edenbd1/antumbra-lez/actions/workflows/ci.yml)
 
 Integer-only constant-product bonding curve math for the Logos Execution Zone,
