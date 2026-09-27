@@ -177,7 +177,10 @@ jobs:
         run: |
           set -euo pipefail
           QT=/tmp/Qt/6.9.2/macos
-          clang++ -std=c++17 -Wall -Wextra -F$QT/lib \
+          # -include arm_acle.h: Qt 6.9.2's qyieldcpu.h calls __yield() without
+          # declaring it, which the runner's newer Xcode clang makes an error.
+          # It changes how the harness compiles, not the module under test.
+          clang++ -std=c++17 -Wall -Wextra -include arm_acle.h -F$QT/lib \
             -I$QT/lib/QtCore.framework/Headers -I$QT/lib/QtGui.framework/Headers \
             -I$QT/lib/QtWidgets.framework/Headers \
             -framework QtWidgets -framework QtGui -framework QtCore \
