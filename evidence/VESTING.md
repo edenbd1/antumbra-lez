@@ -121,7 +121,7 @@ against the chain without an explorer.
 
 - token_cancel_fund: expected to land, refused instead (57de53ff778c710c…); re-run below
 - token_cancel: expected to land, refused instead (050cbed553fe5471…); re-run below
-- cancelled at clock time 0 ms; vested then: 0 of 100000
+- (empty reading: the step before it did not land) cancelled at clock time 0 ms; vested then: 0 of 100000
 - not met in this run, re-run below: creator's token holding got the unvested part back: 0 != 100000
 - ✅ token escrow keeps exactly the vested part = 0
 

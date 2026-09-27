@@ -57,7 +57,7 @@ token_claim	yes	LANDED	27173	5d532784a093a4ec188fd03347dc0356e9f93c7070aec92b032
 token_cancel_create	yes	LANDED	27174	f5f1725b2f2f1aa197aa32888944971a25827f9b0429ba295ad67c881a9d4b0c
 # token_cancel_fund: expected to land, refused instead (57de53ff778c710c…); re-run below
 # token_cancel: expected to land, refused instead (050cbed553fe5471…); re-run below
-# cancelled at clock time 0 ms; vested then: 0 of 100000
+# (empty reading: the step before it did not land) cancelled at clock time 0 ms; vested then: 0 of 100000
 # not met in this run, re-run below: creator's token holding got the unvested part back: 0 != 100000
 # check ok: token escrow keeps exactly the vested part = 0
 private_native_create	yes	LANDED	27180	d01d018e901b86aa129d78f314c56e8083de3df2c16dbcc268376f90e0cf8e8e

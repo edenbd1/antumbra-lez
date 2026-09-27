@@ -17,6 +17,10 @@ for line in open(main).read().splitlines():
         out.append("# not met in this run, re-run below: " + line[len("# check FAIL:"):].strip())
         continue
     if line.startswith("#"):
+        # A reading taken after a step that did not land reads an empty field;
+        # say so rather than let it pass for a measurement.
+        if "clock time 0 ms" in line:
+            line = "# (empty reading: the step before it did not land) " + line[1:].strip()
         out.append(line); continue
     label, expect, verdict, block, h = line.split("\t")
     if (verdict == "LANDED") != (expect == "yes"):
