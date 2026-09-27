@@ -4,4 +4,5 @@ Cargo.lock
 # a rebuild reproduce the deployed bytes, so they are committed.
 !programs/*/Cargo.lock
 target/
-app/build692/
+app/build*/
+app/aqtinstall.log

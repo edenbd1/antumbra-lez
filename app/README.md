@@ -40,9 +40,14 @@ outright — and rejected *silently* from the user's side, because Basecamp's fi
 log truncates before the loader messages. A tile appears, clicking it produces
 nothing, and there is no visible error.
 
-The dylib **extracted from the packaged `.lgx`** was load-tested too, not just
-the one in `build/`. A package that ships a different binary from the one you
-verified has verified nothing.
+The dylib **extracted from the packaged `.lgx`** is the one tested, not one
+left in a build directory: a package that ships a different binary from the one
+you verified has verified nothing. CI does this on every push — the `basecamp`
+job unpacks `antumbra-lez.lgx` on macOS, installs Qt 6.9.2, the version Basecamp
+bundles, and runs [`tests/ui_plugin_load_test.cpp`](tests/ui_plugin_load_test.cpp):
+the binary binds every symbol, QPluginLoader accepts it and refuses a file that
+is not a plugin, the IID and metadata are what Basecamp compares against, and a
+widget comes back through the vtable and is taken back.
 
 ## And loading is not running, which cost us the host process
 

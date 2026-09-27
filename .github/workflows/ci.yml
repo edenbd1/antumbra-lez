@@ -152,6 +152,48 @@ jobs:
           [ "$built" = "$DEPLOY_TX" ] && [ "$committed" = "$DEPLOY_TX" ]
           echo "the rebuild is the program deployed at block $DEPLOY_BLOCK" >> "$GITHUB_STEP_SUMMARY"
 
+  # The Basecamp module, as shipped. Not the build directory's copy: the dylib is
+  # unpacked from the committed .lgx, and loaded with Qt 6.9.2 — the version
+  # Basecamp 0.2.2 bundles, and a ceiling, since Qt refuses a plugin built
+  # against a newer minor than the host's. The harness asserts every step
+  # Basecamp's loader takes, and counts its assertions so a skipped one fails.
+  basecamp:
+    name: The shipped module loads the way Basecamp loads a ui plugin
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Qt 6.9.2, the version Basecamp bundles
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/aqt
+          /tmp/aqt/bin/pip -q install aqtinstall
+          /tmp/aqt/bin/python -m aqt install-qt mac desktop 6.9.2 clang_64 \
+            --archives qtbase qtdeclarative qtshadertools --outputdir /tmp/Qt
+          test -d /tmp/Qt/6.9.2/macos/lib/QtQuickWidgets.framework
+
+      - name: Build the load harness
+        run: |
+          set -euo pipefail
+          QT=/tmp/Qt/6.9.2/macos
+          clang++ -std=c++17 -Wall -Wextra -F$QT/lib \
+            -I$QT/lib/QtCore.framework/Headers -I$QT/lib/QtGui.framework/Headers \
+            -I$QT/lib/QtWidgets.framework/Headers \
+            -framework QtWidgets -framework QtGui -framework QtCore \
+            -Wl,-rpath,$QT/lib app/tests/ui_plugin_load_test.cpp -o ui_plugin_load_test
+
+      - name: The darwin-arm64 variant of antumbra-lez.lgx loads
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_PLUGIN_PATH: /tmp/Qt/6.9.2/macos/plugins
+        run: |
+          set -euo pipefail
+          mkdir unpacked && tar xzf app/antumbra-lez.lgx -C unpacked
+          ./ui_plugin_load_test unpacked/variants/darwin-arm64/antumbra_lez.dylib antumbra_lez 2>&1 | tee load.out
+          grep -q "assertions, all of them ran" load.out \
+            || { echo "the harness did not report a complete run"; exit 1; }
+
   # Documentation rots in three ways that are decidable from the tree alone: a
   # path in backticks that is not in it, a link whose target does not resolve
   # from the document carrying it, and a line citation past the end of its file.
