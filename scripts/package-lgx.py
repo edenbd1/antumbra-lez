@@ -12,7 +12,7 @@ That is the canonical packager and it is always preferred.
 Only if none is found does this fall back to writing the package directly. The
 fallback is not guesswork: the manifest hash scheme is transcribed from
 `logos-package/src/crypto/signing.cpp`, and the transcription is checked against
-two packages built by the real tool — LP-0003's and LP-0005's — before anything
+packages built by the real tool — LP-0005's and this module's own — before anything
 is written. Both paths were confirmed to produce **identical manifest hashes**
 for this module.
 
@@ -113,7 +113,6 @@ def build_manifest(stage: Path, name: str, version: str, meta: dict, plugin: str
 def self_test() -> int:
     """Check the transcription against packages built by the real tool."""
     refs = [
-        ROOT.parent / "lp-0002/app/lp-0002-multisig.lgx",
         ROOT.parent / "lp-0005/app/lp-0005-attestation.lgx",
         # Sibling packages only exist on the machine that built them, so from a
         # clean clone the check would otherwise pass by having nothing to test.

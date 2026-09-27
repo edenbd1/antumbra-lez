@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //
-// Top-level Qt plugin object for the LP-0003 airdrop claim surface. Owns the
+// Top-level Qt plugin object for the Antumbra panel. Owns the
 // QQuickWidget that hosts the QML scene and exposes the ChainBridge to it as a
 // context property.
 
