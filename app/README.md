@@ -44,7 +44,7 @@ The dylib **extracted from the packaged `.lgx`** is the one tested, not one
 left in a build directory: a package that ships a different binary from the one
 you verified has verified nothing. CI does this on every push — the `basecamp`
 job unpacks `antumbra-lez.lgx` on macOS, installs Qt 6.9.2, the version Basecamp
-bundles, and runs [`tests/ui_plugin_load_test.cpp`](tests/ui_plugin_load_test.cpp):
+bundles, and runs [`app/tests/ui_plugin_load_test.cpp`](tests/ui_plugin_load_test.cpp):
 the binary binds every symbol, QPluginLoader accepts it and refuses a file that
 is not a plugin, the IID and metadata are what Basecamp compares against, and a
 widget comes back through the vtable and is taken back.
