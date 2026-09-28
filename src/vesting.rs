@@ -306,3 +306,6 @@ fn linear_between(from: u64, to: u64, now: u64, total: u128) -> u128 {
     // mul_div_floor cannot fail.
     crate::mul_div_floor(total, elapsed, span).unwrap_or(0)
 }
+
+#[cfg(kani)]
+mod proofs;

@@ -11,3 +11,6 @@ description = "Integer-only arithmetic for LEZ launchpads and vesting: 256-bit i
 
 [profile.release]
 overflow-checks = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }

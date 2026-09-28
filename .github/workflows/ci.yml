@@ -197,6 +197,21 @@ jobs:
           grep -q "assertions, all of them ran" load.out \
             || { echo "the harness did not report a complete run"; exit 1; }
 
+  # Model checking, not testing: each harness in src/vesting/proofs.rs is
+  # checked by Kani for every input in its stated domain — every u64 timestamp,
+  # totals and durations bounded as the file explains. A property that fails
+  # anywhere in that domain fails here with a counterexample.
+  kani:
+    name: The vesting invariants, model-checked with Kani
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Every harness in src/vesting/proofs.rs
+        uses: model-checking/kani-github-action@v1
+        with:
+          args: -Z stubbing
+
   # Documentation rots in three ways that are decidable from the tree alone: a
   # path in backticks that is not in it, a link whose target does not resolve
   # from the document carrying it, and a line citation past the end of its file.
