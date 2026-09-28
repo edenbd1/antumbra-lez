@@ -115,6 +115,10 @@ pub enum Ix {
         schedule_id: [u8; 32],
         batch_id: [u8; 32],
     },
+    ClaimAt {
+        schedule_id: [u8; 32],
+        as_of: u64,
+    },
 }
 
 impl Ix {
@@ -133,6 +137,7 @@ impl Ix {
             Ix::FundBatch { .. } => "fund_batch",
             Ix::ClaimBatch { .. } => "claim_batch",
             Ix::CancelBatch { .. } => "cancel_batch",
+            Ix::ClaimAt { .. } => "claim_at",
         }
     }
 }
@@ -390,6 +395,29 @@ impl World {
                 dest,
                 acc(signer, AUTH_TRANSFER, 0, vec![], true),
                 clock(now),
+            ],
+        )
+    }
+
+    /// `claim_at`: the same claim with no clock account, priced at `as_of`.
+    pub fn claim_at(
+        &self,
+        as_of: u64,
+        dest: AccountWithMetadata,
+        signer: [u8; 32],
+    ) -> Result<Run, String> {
+        run(
+            &self.elf,
+            &self.pid,
+            &Ix::ClaimAt {
+                schedule_id: self.id,
+                as_of,
+            },
+            vec![
+                self.schedule.clone(),
+                self.holding.clone(),
+                dest,
+                acc(signer, AUTH_TRANSFER, 0, vec![], true),
             ],
         )
     }

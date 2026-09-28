@@ -732,3 +732,52 @@ fn f5_the_largest_batch_is_299_schedules_and_300_exceeds_the_cycle_cap() {
         "refused for another reason: {e}"
     );
 }
+
+// ------------------------------------------------ claim_at: no clock account (Pr1)
+
+#[test]
+fn pr1_claim_at_prices_at_as_of_and_binds_the_transaction_to_it() {
+    let mut w = World::new("claimat");
+    w.with(w.linear(T0, T0 + 30 * MIN, 600), 600);
+    let as_of = T0 + 2 * MIN;
+    let r = w.claim_at(as_of, native(DEST, 0), BENEFICIARY).unwrap();
+    assert_eq!(
+        r.post(&native(DEST, 0)).balance,
+        40,
+        "40 of 600 vests two minutes into thirty"
+    );
+    assert_eq!(r.schedule(&w.schedule).last_seen, as_of);
+    let window = r.output.timestamp_validity_window;
+    assert_eq!(
+        window.start(),
+        Some(as_of),
+        "the transaction is valid only from as_of on"
+    );
+    assert_eq!(window.end(), None);
+    // What the sequencer checks against the block's timestamp at inclusion:
+    // a block earlier than as_of refuses the transaction, so as_of can never
+    // run ahead of the chain's own time.
+    assert!(!window.is_valid_for(as_of - 1));
+    assert!(window.is_valid_for(as_of));
+    assert!(
+        window.is_valid_for(as_of + 50 * 60 * MIN),
+        "a proof that takes minutes stays valid"
+    );
+}
+
+#[test]
+fn pr1_claim_at_refuses_an_instant_before_the_schedules_last_event() {
+    let mut w = World::new("claimatback");
+    let mut s = w.linear(T0, T0 + 30 * MIN, 600);
+    s.last_seen = T0 + 10 * MIN;
+    s.claimed = 200;
+    w.with(s, 400);
+    refused(w.claim_at(T0 + 9 * MIN, native(DEST, 0), BENEFICIARY), 7005);
+}
+
+#[test]
+fn f2_claim_at_is_the_named_beneficiarys_alone() {
+    let mut w = World::new("claimatwho");
+    w.with(w.linear(T0, T0 + 30 * MIN, 600), 600);
+    refused(w.claim_at(T0 + 2 * MIN, native(DEST, 0), STRANGER), 7004);
+}

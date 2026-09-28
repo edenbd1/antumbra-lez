@@ -379,11 +379,10 @@ mod antumbra_vesting {
         holding: &mut AccountWithMetadata,
         destination: &mut AccountWithMetadata,
         beneficiary: &AccountWithMetadata,
-        clock: &AccountWithMetadata,
+        t: u64,
         seed_id: &[u8; 32],
     ) -> Result<Vec<nssa_core::program::ChainedCall>, SpelError> {
         let mut state = load(schedule, me)?;
-        let t = now(clock, true)?;
         if &state.beneficiary != beneficiary.account_id.value() {
             return Err(SpelError::custom(E_NOT_BENEFICIARY, "signer is not the beneficiary this schedule names"));
         }
@@ -739,7 +738,7 @@ mod antumbra_vesting {
         clock: AccountWithMetadata,
         schedule_id: [u8; 32],
     ) -> SpelResult {
-        let calls = claim_core(ctx.self_program_id, &mut schedule, &mut holding, &mut destination, &beneficiary, &clock, &schedule_id)?;
+        let calls = claim_core(ctx.self_program_id, &mut schedule, &mut holding, &mut destination, &beneficiary, now(&clock, true)?, &schedule_id)?;
         Ok(SpelOutput::execute(vec![schedule, holding, destination, beneficiary, clock], calls))
     }
 
@@ -857,7 +856,7 @@ mod antumbra_vesting {
         batch_id: [u8; 32],
     ) -> SpelResult {
         let _ = schedule_id;
-        let calls = claim_core(ctx.self_program_id, &mut schedule, &mut holding, &mut destination, &beneficiary, &clock, &batch_id)?;
+        let calls = claim_core(ctx.self_program_id, &mut schedule, &mut holding, &mut destination, &beneficiary, now(&clock, true)?, &batch_id)?;
         Ok(SpelOutput::execute(vec![schedule, holding, destination, beneficiary, clock], calls))
     }
 
@@ -877,5 +876,32 @@ mod antumbra_vesting {
         let _ = schedule_id;
         let calls = cancel_core(ctx.self_program_id, &mut schedule, &mut holding, &mut refund, &authority, &clock, &batch_id)?;
         Ok(SpelOutput::execute(vec![schedule, holding, refund, authority, clock], calls))
+    }
+
+    /// A claim that reads no clock account (Pr1). The beneficiary names the
+    /// instant `as_of` the claim is priced at, and the program binds the
+    /// transaction to it: the output's timestamp validity window starts at
+    /// `as_of`, and the sequencer refuses any transaction whose window does not
+    /// contain the block's timestamp — public and privacy-preserving alike. So
+    /// `as_of` can never be later than the chain's own time, a claim can never
+    /// pay more than has vested, and an earlier `as_of` only pays less.
+    ///
+    /// What it buys: a private claim's proof no longer carries a clock account
+    /// among its public inputs, so the minutes a proof takes can never make it
+    /// stale, whichever clock cadence the runtime offers.
+    #[instruction]
+    pub fn claim_at(
+        ctx: ProgramContext,
+        #[account(pda = [arg("schedule_id")])] mut schedule: AccountWithMetadata,
+        #[account(mut, pda = [arg("schedule_id"), literal("holding")])]
+        mut holding: AccountWithMetadata,
+        #[account(mut)] mut destination: AccountWithMetadata,
+        #[account(signer)] beneficiary: AccountWithMetadata,
+        schedule_id: [u8; 32],
+        as_of: u64,
+    ) -> SpelResult {
+        let calls = claim_core(ctx.self_program_id, &mut schedule, &mut holding, &mut destination, &beneficiary, as_of, &schedule_id)?;
+        Ok(SpelOutput::execute(vec![schedule, holding, destination, beneficiary], calls)
+            .with_timestamp_validity_window(as_of..))
     }
 }
