@@ -1,0 +1,236 @@
+{
+  "version": "0.3.0",
+  "name": "antumbra_vesting",
+  "lez": "v0.3.0 (db66590ab821a4e142c211017a3866d007f6fa77)",
+  "notes": [
+    "Hand-maintained in SPEL's IDL shape: SPEL has no LEZ v0.3 support. scripts/check-idl.py decodes borsh vectors emitted by the core crate with this file and fails on any drift.",
+    "The instruction is a borsh enum: one u8 discriminant, then the args in order.",
+    "Every account row selects one shard. shard=self is this program's shard; shard=asset is the native shard (all-zero id) for Asset::Native, the token program's shard for Asset::Token. A signer handle is a signing row with shard=self that the program never writes.",
+    "PDAs derive from the program's header account: AccountId::for_public_pda(header, seed). One seed is used as is; several are combined as SHA-256 of their concatenation. Const seeds are zero-padded to 32 bytes.",
+    "Refusals are guest panics whose message starts with E<code>:"
+  ],
+  "instructions": [
+    {
+      "name": "create_schedule",
+      "discriminant": 0,
+      "accounts": [
+        { "name": "schedule", "writable": true, "signer": false, "init": true, "shard": "self",
+          "pda": { "seeds": [ { "kind": "arg", "path": "schedule_id" } ] } },
+        { "name": "holding", "writable": true, "signer": false, "init": false, "shard": "asset",
+          "pda": { "seeds": [ { "kind": "arg", "path": "schedule_id" }, { "kind": "const", "value": "holding" } ] } },
+        { "name": "creator", "writable": true, "signer": true, "init": false, "shard": "asset" }
+      ],
+      "args": [
+        { "name": "schedule_id", "type": { "array": ["u8", 32] } },
+        { "name": "beneficiary", "type": "account_id" },
+        { "name": "asset", "type": { "defined": "Asset" } },
+        { "name": "terms", "type": { "defined": "Terms" } }
+      ],
+      "effects": "writes the schedule; chains a transfer of exactly terms.total from creator to holding"
+    },
+    {
+      "name": "create_schedule_batch",
+      "discriminant": 1,
+      "accounts": [
+        { "name": "holding", "writable": true, "signer": false, "init": false, "shard": "asset",
+          "pda": { "seeds": [ { "kind": "arg", "path": "batch_id" }, { "kind": "const", "value": "holding" } ] } },
+        { "name": "creator", "writable": true, "signer": true, "init": false, "shard": "asset" },
+        { "name": "schedules", "writable": true, "signer": false, "init": true, "shard": "self", "rest": true,
+          "pda": { "seeds": [ { "kind": "arg", "path": "batch_id" }, { "kind": "index_u32_le", "path": "i" } ] } }
+      ],
+      "args": [
+        { "name": "batch_id", "type": { "array": ["u8", 32] } },
+        { "name": "beneficiaries", "type": { "vec": "account_id" } },
+        { "name": "asset", "type": { "defined": "Asset" } },
+        { "name": "terms", "type": { "defined": "Terms" } }
+      ],
+      "effects": "writes one schedule per beneficiary; chains one transfer of terms.total x n into the shared holding"
+    },
+    {
+      "name": "claim",
+      "discriminant": 2,
+      "accounts": [
+        { "name": "schedule", "writable": true, "signer": false, "init": false, "shard": "self",
+          "pda": { "seeds": [ { "kind": "arg", "path": "schedule_id" } ] } },
+        { "name": "holding", "writable": true, "signer": false, "init": false, "shard": "asset",
+          "pda": { "seeds": [ { "kind": "arg", "path": "batch_id ?? schedule_id" }, { "kind": "const", "value": "holding" } ] } },
+        { "name": "destination", "writable": true, "signer": false, "init": false, "shard": "asset", "private_ok": true },
+        { "name": "beneficiary", "writable": false, "signer": true, "init": false, "shard": "self" }
+      ],
+      "args": [
+        { "name": "schedule_id", "type": { "array": ["u8", 32] } },
+        { "name": "batch_id", "type": { "option": { "array": ["u8", 32] } } },
+        { "name": "asset", "type": { "defined": "Asset" } },
+        { "name": "amount", "type": "u128" },
+        { "name": "at", "type": "u64" }
+      ],
+      "timestamp_window": "[at, inf)",
+      "effects": "apply refuses unless amount <= vested(at) - claimed; chains a seeded transfer of amount from holding to destination"
+    },
+    {
+      "name": "cancel",
+      "discriminant": 3,
+      "accounts": [
+        { "name": "schedule", "writable": true, "signer": false, "init": false, "shard": "self",
+          "pda": { "seeds": [ { "kind": "arg", "path": "schedule_id" } ] } },
+        { "name": "holding", "writable": true, "signer": false, "init": false, "shard": "asset",
+          "pda": { "seeds": [ { "kind": "arg", "path": "batch_id ?? schedule_id" }, { "kind": "const", "value": "holding" } ] } },
+        { "name": "refund", "writable": true, "signer": false, "init": false, "shard": "asset" },
+        { "name": "authority", "writable": false, "signer": true, "init": false, "shard": "self" }
+      ],
+      "args": [
+        { "name": "schedule_id", "type": { "array": ["u8", 32] } },
+        { "name": "batch_id", "type": { "option": { "array": ["u8", 32] } } },
+        { "name": "asset", "type": { "defined": "Asset" } },
+        { "name": "at", "type": "u64" },
+        { "name": "refund", "type": "u128" }
+      ],
+      "timestamp_window": "[at, at + 120000)",
+      "effects": "apply refuses unless refund == total - vested(at) and at >= last_seen; chains a seeded transfer of refund to the refund account fixed at creation"
+    },
+    {
+      "name": "make_non_cancelable",
+      "discriminant": 4,
+      "accounts": [
+        { "name": "schedule", "writable": true, "signer": false, "init": false, "shard": "self",
+          "pda": { "seeds": [ { "kind": "arg", "path": "schedule_id" } ] } },
+        { "name": "creator", "writable": false, "signer": true, "init": false, "shard": "self" }
+      ],
+      "args": [
+        { "name": "schedule_id", "type": { "array": ["u8", 32] } }
+      ]
+    },
+    {
+      "name": "transfer_beneficiary",
+      "discriminant": 5,
+      "accounts": [
+        { "name": "schedule", "writable": true, "signer": false, "init": false, "shard": "self",
+          "pda": { "seeds": [ { "kind": "arg", "path": "schedule_id" } ] } },
+        { "name": "beneficiary", "writable": false, "signer": true, "init": false, "shard": "self" }
+      ],
+      "args": [
+        { "name": "schedule_id", "type": { "array": ["u8", 32] } },
+        { "name": "new_beneficiary", "type": "account_id" }
+      ]
+    },
+    {
+      "name": "signal_milestone",
+      "discriminant": 6,
+      "accounts": [
+        { "name": "schedule", "writable": true, "signer": false, "init": false, "shard": "self",
+          "pda": { "seeds": [ { "kind": "arg", "path": "schedule_id" } ] } },
+        { "name": "authority", "writable": false, "signer": true, "init": false, "shard": "self" }
+      ],
+      "args": [
+        { "name": "schedule_id", "type": { "array": ["u8", 32] } },
+        { "name": "index", "type": "u32" }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "VestingSchedule",
+      "shard": "self",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "kind", "type": "u8" },
+          { "name": "start", "type": "u64" },
+          { "name": "cliff", "type": "u64" },
+          { "name": "end", "type": "u64" },
+          { "name": "total", "type": "u128" },
+          { "name": "claimed", "type": "u128" },
+          { "name": "last_seen", "type": "u64" },
+          { "name": "beneficiary", "type": "account_id" },
+          { "name": "escrow", "type": "account_id" },
+          { "name": "creator", "type": "account_id" },
+          { "name": "cancelable", "type": "u8" },
+          { "name": "transferable", "type": "u8" },
+          { "name": "cancelled_at", "type": "u64" },
+          { "name": "signalled", "type": "u64" },
+          { "name": "tranches", "type": "u32" },
+          { "name": "asset", "type": "u8" },
+          { "name": "token_definition", "type": { "array": ["u8", 32] } },
+          { "name": "refund_to", "type": "account_id" },
+          { "name": "cancel_authority", "type": "account_id" },
+          { "name": "milestone_authority", "type": "account_id" }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "Asset",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          { "name": "Native", "fields": [] },
+          { "name": "Token", "fields": [ { "name": "definition_id", "type": "account_id" } ] }
+        ]
+      }
+    },
+    {
+      "name": "Terms",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "kind", "type": "u8" },
+          { "name": "start", "type": "u64" },
+          { "name": "cliff", "type": "u64" },
+          { "name": "end", "type": "u64" },
+          { "name": "total", "type": "u128" },
+          { "name": "tranches", "type": "u32" },
+          { "name": "cancelable", "type": "bool" },
+          { "name": "transferable", "type": "bool" },
+          { "name": "cancel_authority", "type": "account_id" },
+          { "name": "milestone_authority", "type": "account_id" },
+          { "name": "refund_to", "type": "account_id" }
+        ]
+      }
+    }
+  ],
+  "events": [
+    { "name": "ScheduleCreated", "selector": "87f5d98d1331dd90",
+      "fields": [ { "name": "schedule_id", "type": { "array": ["u8", 32] } }, { "name": "beneficiary", "type": "account_id" },
+                  { "name": "holding", "type": "account_id" }, { "name": "asset", "type": { "defined": "Asset" } },
+                  { "name": "kind", "type": "u8" }, { "name": "total", "type": "u128" } ] },
+    { "name": "BatchCreated", "selector": "a49e78b935fbb13a",
+      "fields": [ { "name": "batch_id", "type": { "array": ["u8", 32] } }, { "name": "holding", "type": "account_id" },
+                  { "name": "asset", "type": { "defined": "Asset" } }, { "name": "count", "type": "u32" },
+                  { "name": "total_each", "type": "u128" } ] },
+    { "name": "Claimed", "selector": "a834c84e41af4504",
+      "fields": [ { "name": "schedule_id", "type": { "array": ["u8", 32] } }, { "name": "amount", "type": "u128" },
+                  { "name": "at", "type": "u64" }, { "name": "destination", "type": "account_id" } ] },
+    { "name": "Cancelled", "selector": "e7bda4299cb30bf0",
+      "fields": [ { "name": "schedule_id", "type": { "array": ["u8", 32] } }, { "name": "at", "type": "u64" },
+                  { "name": "refund", "type": "u128" }, { "name": "refund_to", "type": "account_id" } ] },
+    { "name": "MadeNonCancelable", "selector": "e857fa3f984fed7b",
+      "fields": [ { "name": "schedule_id", "type": { "array": ["u8", 32] } } ] },
+    { "name": "BeneficiaryTransferred", "selector": "0741d12290c46687",
+      "fields": [ { "name": "schedule_id", "type": { "array": ["u8", 32] } }, { "name": "from", "type": "account_id" },
+                  { "name": "to", "type": "account_id" } ] },
+    { "name": "MilestoneSignalled", "selector": "99070f7186d38d3e",
+      "fields": [ { "name": "schedule_id", "type": { "array": ["u8", 32] } }, { "name": "index", "type": "u32" } ] }
+  ],
+  "errors": [
+    { "code": 7001, "name": "BadSchedule" },
+    { "code": 7002, "name": "NotAnchored" },
+    { "code": 7003, "name": "NothingClaimable" },
+    { "code": 7004, "name": "NotBeneficiary" },
+    { "code": 7005, "name": "TimeWentBackwards" },
+    { "code": 7006, "name": "EscrowMismatch" },
+    { "code": 7009, "name": "NotCreator" },
+    { "code": 7010, "name": "NotCancelable" },
+    { "code": 7011, "name": "AlreadyCancelled" },
+    { "code": 7012, "name": "NotTransferable" },
+    { "code": 7013, "name": "MilestoneBad" },
+    { "code": 7015, "name": "NotAuthority" },
+    { "code": 7016, "name": "WrongAsset" },
+    { "code": 7017, "name": "WrongRefund" },
+    { "code": 7018, "name": "Batch" },
+    { "code": 7019, "name": "AlreadyExists" },
+    { "code": 7020, "name": "RefundAmount" },
+    { "code": 7021, "name": "Accounts" },
+    { "code": 7022, "name": "NotSigned" }
+  ]
+}
