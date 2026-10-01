@@ -1,4 +1,5 @@
-//! A one-node LEZ v0.3 chain in memory, for the committed vesting binary.
+//! A one-node LEZ v0.3 chain in memory, for the committed vesting, curve and
+//! LBP binaries.
 //!
 //! Transactions are signed `PublicTransaction`s and go through
 //! `ValidatedStateDiff::from_public_transaction_with_cycle_budget`, the call
@@ -9,6 +10,7 @@
 //! plan sets.
 
 use antumbra_vesting_core::{Instruction, VestingSchedule};
+use borsh::BorshSerialize;
 use lee::{
     public_transaction::{Message, WitnessSet},
     Account, AccountId, PrivateKey, ProgramShardSelector, PublicKey, PublicTransaction, ShardData,
@@ -26,6 +28,18 @@ pub const GAS_CAP: u64 = 10_000_000;
 pub const VESTING: AccountId = AccountId::new(*b"antumbra/vesting/test-header/v03");
 
 pub const BIN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../artifacts/programs/v0.3/antumbra_vesting.bin");
+
+/// The header accounts the curve and LBP programs are deployed at in tests.
+pub const CURVE: AccountId = AccountId::new(*b"antumbra/curve/test-header/v0.3/");
+pub const LBP: AccountId = AccountId::new(*b"antumbra/lbp/test-header/v0.3/__");
+
+pub const CURVE_BIN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../artifacts/programs/v0.3/antumbra_curve.bin");
+pub const LBP_BIN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../artifacts/programs/v0.3/antumbra_lbp.bin");
+
+fn load(path: &str) -> lee::program::Program {
+    let bin = std::fs::read(path).unwrap_or_else(|_| panic!("build the guest first: {path}"));
+    lee::program::Program::new(bin.into()).expect("a RISC0 program binary")
+}
 
 pub struct Key {
     pub sk: PrivateKey,
@@ -62,8 +76,6 @@ impl Chain {
     /// definition, balance). Every definition named is created too.
     #[must_use]
     pub fn new(native: &[(AccountId, u128)], tokens: &[(AccountId, AccountId, u128)]) -> Self {
-        let bin = std::fs::read(BIN).expect("build the guest first: artifacts/programs/v0.3/antumbra_vesting.bin");
-        let program = lee::program::Program::new(bin.into()).expect("a RISC0 program binary");
         let token = programs::token_account_id();
         let mut accounts: Vec<(AccountId, Account)> =
             native.iter().map(|(id, b)| (*id, Account::funded(*b))).collect();
@@ -85,7 +97,12 @@ impl Chain {
         }
         let state = V03State::new()
             .with_public_accounts(accounts)
-            .with_named_programs([(VESTING, program), (token, programs::token())]);
+            .with_named_programs([
+                (VESTING, load(BIN)),
+                (CURVE, load(CURVE_BIN)),
+                (LBP, load(LBP_BIN)),
+                (token, programs::token()),
+            ]);
         Self {
             state,
             block: 10,
@@ -108,8 +125,20 @@ impl Chain {
         signers: &[&Key],
         budget: u64,
     ) -> Result<(), String> {
+        self.send_to(VESTING, ix, rows, signers, budget)
+    }
+
+    /// Send any program's instruction to the program at header `program`.
+    pub fn send_to<I: BorshSerialize>(
+        &mut self,
+        program: AccountId,
+        ix: &I,
+        rows: Vec<ProgramShardSelector>,
+        signers: &[&Key],
+        budget: u64,
+    ) -> Result<(), String> {
         let nonces = signers.iter().map(|k| self.state.get_account_by_id(k.id).nonce).collect();
-        let message = Message::try_new(VESTING, rows, nonces, ix).map_err(|e| e.to_string())?;
+        let message = Message::try_new(program, rows, nonces, ix).map_err(|e| e.to_string())?;
         let keys: Vec<&PrivateKey> = signers.iter().map(|k| &k.sk).collect();
         let tx = PublicTransaction::new(message.clone(), WitnessSet::for_message(&message, &keys));
         let r = ValidatedStateDiff::from_public_transaction_with_cycle_budget(&tx, &self.state, self.block, self.now, budget);
@@ -146,6 +175,12 @@ impl Chain {
     pub fn schedule(&self, schedule_id: &[u8; 32]) -> VestingSchedule {
         let id = antumbra_vesting_core::schedule_account(&VESTING, schedule_id);
         antumbra_vesting_core::load(self.state.get_account_by_id(id).data.shard(VESTING))
+    }
+
+    /// The raw bytes of `program`'s own shard on `account`.
+    #[must_use]
+    pub fn shard(&self, account: AccountId, program: AccountId) -> Vec<u8> {
+        self.state.get_account_by_id(account).data.shard(program).to_vec()
     }
 
     #[must_use]

@@ -53,14 +53,39 @@ name = "antumbra"
 version = "0.1.0"
 
 [[package]]
+name = "antumbra-curve-core"
+version = "0.3.0"
+dependencies = [
+ "antumbra",
+ "borsh",
+ "lee_core",
+ "risc0-zkvm",
+ "token_core",
+]
+
+[[package]]
 name = "antumbra-executor-tests"
 version = "0.3.0"
 dependencies = [
+ "antumbra",
+ "antumbra-curve-core",
+ "antumbra-lbp-core",
  "antumbra-vesting-core",
  "borsh",
  "lee",
  "lee_core",
  "programs",
+ "token_core",
+]
+
+[[package]]
+name = "antumbra-lbp-core"
+version = "0.3.0"
+dependencies = [
+ "antumbra",
+ "borsh",
+ "lee_core",
+ "risc0-zkvm",
  "token_core",
 ]
 
