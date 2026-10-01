@@ -12,26 +12,43 @@
 
 namespace {
 
-// The three PDAs the deployed programs write, from DEPLOYMENTS.md. They are
-// derived from the program id and the sale/pool/schedule id, so they are stable
-// and safe to compile in: a wrong address reads as an uninitialised account
-// rather than as someone else's state.
+// LEZ v0.3 accounts have no single owner and no single data field: an account
+// is a map of shards keyed by program account id (base58), and native balance
+// is the shard at the all-zero id. Every read below picks the one shard it
+// means, so an account another program also writes to cannot be misread.
+const char* kNativeShard  = "11111111111111111111111111111111";
+// Builtin program ids are SHA-256("/LEE-BuiltinProgram/v1/AccountId" || name),
+// the same on every v0.3 chain.
+const char* kClockProgram = "2hwaRW8sMnyKLLRbDRw8k68tiv9bnfq98oxcdtcp157Z";
+const char* kTokenProgram = "AxDdLwqkWgR9qaSctvABV1ZtvWJJyzXB8199xZueifPj";
+// The per-block clock account; its clock shard is { block_id: u64, timestamp: u64 }.
+const char* kClockAccount = "4BdcjoXkq786TMWcBGGHqcxeLYMZmn17rL4eM9ZyRWNU";
+
+// The vesting program's header account and the schedule the panel follows.
+// On v0.3 a program lives at whatever account it was deployed to, so these
+// come from the environment (or setVestingTarget) rather than being compiled
+// in. The testnet v0.3 deployment is pending funding; until it lands the panel
+// says so instead of showing a v0.2.4 address that no longer resolves.
+QString envOr(const char* name, const char* fallback) {
+    const QByteArray v = qgetenv(name);
+    return v.isEmpty() ? QString::fromLatin1(fallback) : QString::fromUtf8(v);
+}
+
+// The launchpad programs (RFP-015/016) are still v0.2.4 programs, and that
+// chain was reset; their accounts are not on v0.3.
 const char* kSaleAccount     = "4AjdDDLLpyumGxnLki51cQPt5hbvQoUvG81KMerGqmBh";
 const char* kSaleHolding     = "3kXqDQxkWMK13ZDCFkfamfktPXbMGndr5d1N5FVB8VrV";
 const char* kPoolAccount     = "25ekuB2nQ84WLvoVjWejf63Z714X9vvjnb7Jz4R3Kkdg";
-// The vesting schedule the panel follows: a year-long token position left
-// accruing on purpose, written by scripts/replay-vesting.sh (section 9), which
-// prints these two addresses.
-const char* kScheduleAccount = "tEnLNnoHheKEqyUpZpWLQ59ECDwTe7rm3MDttpXxPL2";
-const char* kScheduleHolding = "6RDFqaQnosx1Nh2E17wY7wz8Zc5MDxGQARBPzfnh7U51";
 
-// The sequencer-written clock the vesting program itself reads, so "claimable
-// now" here is computed against the same time a claim would be.
-const char* kClockAccount    = "4BdcjoXkq786TMWcBGGHqcxeLYMZmn17rL4eM9ZyRWNU";
-
-// ProgramId word 0 of the token program; an escrow owned by it holds a token
-// balance in its data rather than a native balance.
-const qint64 kTokenProgramWord0 = 1047643340;
+QByteArray shardOf(const QJsonObject& acc, const QString& program) {
+    const QJsonArray raw = acc.value(QStringLiteral("data")).toObject()
+                              .value(QStringLiteral("shards")).toObject()
+                              .value(program).toArray();
+    QByteArray out;
+    out.reserve(raw.size());
+    for (const QJsonValue& v : raw) out.append(static_cast<char>(v.toInt()));
+    return out;
+}
 
 // The two holdings are plain balances rather than decoded state: what they hold
 // is the value actually escrowed, which is the number a reader of an analytics
@@ -152,7 +169,11 @@ unsigned __int128 vestedAt(quint8 kind, quint64 start, quint64 cliff, quint64 en
 } // namespace
 
 ChainBridge::ChainBridge(QObject* parent)
-    : QObject(parent), m_rpc(QStringLiteral("https://testnet.lez.logos.co")) {
+    : QObject(parent),
+      m_rpc(envOr("ANTUMBRA_RPC", "https://testnet.lez.logos.co")),
+      m_program(envOr("ANTUMBRA_PROGRAM", "")),
+      m_schedule(envOr("ANTUMBRA_SCHEDULE", "")),
+      m_holding(envOr("ANTUMBRA_HOLDING", "")) {
     // Qt's macOS system-proxy lookup builds a QRegularExpression, PCRE2 tries to
     // JIT-compile it, and pthread_jit_write_protect_np traps: Basecamp runs under
     // the hardened runtime without com.apple.security.cs.allow-jit, so the first
@@ -168,7 +189,20 @@ void ChainBridge::setEndpoint(const QString& url) {
     if (!url.isEmpty()) m_rpc = url;
 }
 
+void ChainBridge::setVestingTarget(const QString& program, const QString& schedule,
+                                   const QString& holding) {
+    m_program = program;
+    m_schedule = schedule;
+    m_holding = holding;
+}
+
 void ChainBridge::refresh() {
+    if (m_program.isEmpty() || m_schedule.isEmpty() || m_holding.isEmpty()) {
+        emit failed(QStringLiteral("schedule"),
+                    QStringLiteral("no v0.3 deployment configured: testnet v0.3 deployment is pending "
+                                   "funding (set ANTUMBRA_PROGRAM, ANTUMBRA_SCHEDULE, ANTUMBRA_HOLDING)"));
+        return;
+    }
     emit statusChanged(QStringLiteral("reading %1…").arg(m_rpc));
     // The clock first: the schedule is only meaningful against it, so its
     // answer triggers the two vesting reads.
@@ -177,6 +211,7 @@ void ChainBridge::refresh() {
 
 void ChainBridge::refreshLaunchpad() {
     emit statusChanged(QStringLiteral("reading %1…").arg(m_rpc));
+    // v0.2.4 accounts: on a v0.3 sequencer these read as uninitialised.
     fetch(QStringLiteral("sale"), QString::fromLatin1(kSaleAccount));
     fetch(QStringLiteral("pool"), QString::fromLatin1(kPoolAccount));
     fetch(QStringLiteral("sale-escrow"), QString::fromLatin1(kSaleHolding));
@@ -210,36 +245,33 @@ void ChainBridge::fetch(const QString& label, const QString& accountId) {
         }
         const QJsonObject acc = result.toObject();
 
-        // The holdings are read for their balance alone: what a program has
-        // actually escrowed is the number an analytics panel exists to show,
-        // and the one a stale copy would most misrepresent.
-        const QJsonArray raw = acc.value(QStringLiteral("data")).toArray();
-        QByteArray data;
-        data.reserve(raw.size());
-        for (const QJsonValue& v : raw) data.append(static_cast<char>(v.toInt()));
-
         if (label == QLatin1String("clock")) {
+            const QByteArray data = shardOf(acc, QString::fromLatin1(kClockProgram));
             Reader r{data};
             r.u64();                                   // block_id
             m_nowMs = r.u64();                         // timestamp, ms
             if (!r.ok) { emit failed(label, QStringLiteral("clock account is short")); return; }
-            fetch(QStringLiteral("schedule"), QString::fromLatin1(kScheduleAccount));
-            fetch(QStringLiteral("schedule-escrow"), QString::fromLatin1(kScheduleHolding));
+            fetch(QStringLiteral("schedule"), m_schedule);
+            fetch(QStringLiteral("schedule-escrow"), m_holding);
             return;
         }
 
-        // The holdings are read for what they actually escrow: a native balance,
-        // or for a token-program holding the balance inside its data.
+        // The holdings are read for what they actually escrow: the token
+        // program's shard if it holds one (tag 0 = fungible, then the
+        // definition, then a u128 balance), else the native shard.
         if (label.endsWith(QLatin1String("-escrow"))) {
             const QString which = label.left(label.size() - 7);
-            const QJsonArray owner = acc.value(QStringLiteral("program_owner")).toArray();
+            const QByteArray token = shardOf(acc, QString::fromLatin1(kTokenProgram));
             QString held;
-            if (!owner.isEmpty() && owner.at(0).toInteger() == kTokenProgramWord0 && data.size() >= 49) {
-                Reader r{data};
+            if (token.size() >= 49 && token[0] == 0) {
+                Reader r{token};
                 r.skip(33);                            // tag, definition id
                 held = dec(r.u128v()) + QStringLiteral("  (token balance held by the escrow)");
             } else {
-                held = QString::number(acc.value(QStringLiteral("balance")).toDouble(), 'f', 0)
+                const QByteArray native = shardOf(acc, QString::fromLatin1(kNativeShard));
+                Reader r{native};
+                // An empty native shard is a zero balance, not an error.
+                held = (native.isEmpty() ? QStringLiteral("0") : dec(r.u128v()))
                        + QStringLiteral("  (native balance held by the escrow)");
             }
             emit escrowUpdated(which, held);
@@ -247,6 +279,12 @@ void ChainBridge::fetch(const QString& label, const QString& accountId) {
             return;
         }
 
+        // Program state is the program's own shard: the vesting schedule sits
+        // at the vesting program's header id. The launchpad accounts are
+        // v0.2.4 ones and carry no shard map.
+        const QByteArray data = label == QLatin1String("schedule")
+                                    ? shardOf(acc, m_program)
+                                    : QByteArray();
         Reader r{data};
         if (label == QLatin1String("sale")) {
             const QString vt = r.u128(), vc = r.u128(), sr = r.u128(),
@@ -274,10 +312,8 @@ void ChainBridge::fetch(const QString& label, const QString& accountId) {
             const quint32 tranches = r.u32();
             quint8 asset = 0;
             QByteArray definition;
-            if (data.size() > r.pos) {                  // the second layout appends these
-                asset = r.u8();
-                definition = r.bytes(32);
-            }
+            asset = r.u8();
+            definition = r.bytes(32);
             if (!r.ok) { emit failed(label, QStringLiteral("account data is short")); return; }
 
             const unsigned __int128 vested = vestedAt(kind, start, cliff, end, total, cancelledAt,

@@ -3,7 +3,8 @@
 // Bridge exposed to QML as `bridge`. It reads the live state of the three
 // Antumbra programs straight from a LEZ sequencer over JSON-RPC and decodes the
 // borsh account data, so the panel shows what the chain holds rather than a
-// cached copy of what we last wrote.
+// cached copy of what we last wrote. On LEZ v0.3 that data is one shard of an
+// account's `shards` map, picked by program id; there is no `program_owner`.
 //
 // It holds no keys and signs nothing: this is the analytics surface, and giving
 // it signing power would make a read-only panel a custody risk for no gain.
@@ -34,6 +35,10 @@ public:
     // Point the panel at a different sequencer. Defaults to public testnet.
     Q_INVOKABLE void setEndpoint(const QString& url);
     Q_INVOKABLE QString endpoint() const { return m_rpc; }
+    // The v0.3 program header, schedule PDA and holding PDA to follow. Also
+    // read from ANTUMBRA_PROGRAM / ANTUMBRA_SCHEDULE / ANTUMBRA_HOLDING.
+    Q_INVOKABLE void setVestingTarget(const QString& program, const QString& schedule,
+                                      const QString& holding);
 
 signals:
     void saleUpdated(const QString& vt, const QString& vc,
@@ -56,5 +61,8 @@ private:
 
     QNetworkAccessManager m_net;
     QString m_rpc;
+    QString m_program;
+    QString m_schedule;
+    QString m_holding;
     quint64 m_nowMs = 0;
 };
