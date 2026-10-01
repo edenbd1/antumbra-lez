@@ -123,6 +123,18 @@ BEN=$(new_pub); AUTH2=$(new_pub); SECOND=$(new_pub); REFUND=$(new_pub); NDEST=$(
 PNAT=$(new_priv); PTOK=$(new_priv)
 echo "# creator $CREATOR payer $PAYER beneficiary $BEN authority2 $AUTH2 second $SECOND refund $REFUND dest $NDEST private $PNAT $PTOK" >> "$OUT"
 P=(--payer "$PAYER")
+# On a chain with real fees every account that signs must be able to pay for
+# its own transaction (the sequencer refuses it with "Incorrect fee"
+# otherwise). FUND_EACH sends that much from PAYER to each such account; the
+# local debug chain does not need it.
+FUND_EACH="${FUND_EACH:-0}"
+fund() {
+  [ "$FUND_EACH" -gt 0 ] || return 0
+  local a; for a in "$@"; do
+    "$W" auth-transfer send --from "Public/$PAYER" --to "Public/$a" --amount "$FUND_EACH" 2>&1 | grep -E "hash" | sed "s/^/  fund $a: /"
+  done
+}
+fund "$BEN" "$AUTH2" "$SECOND" "$REFUND"
 
 echo "== 1. linear native: create funded, claim to the unit, refusals"
 if want 1; then
@@ -171,6 +183,7 @@ echo "== 3. token escrow: create funded in tokens, claim, cancel"
 if want 3; then
   # The creator holds the supply in its own token shard, and pays the fee.
   DEF=$(new_pub); SUPPLY=$CREATOR
+  fund "$DEF"
   "$W" token new --definition-account-id "Public/$DEF" --supply-account-id "Public/$SUPPLY" --name ANTV --total-supply 1000000 2>&1 | grep -E "hash|included" | sed "s/^/  wallet: /"
   for _ in $(seq 1 12); do [ "$(tok "$SUPPLY")" = 1000000 ] && break; sleep 5; done
   check "token supply minted" "$(tok "$SUPPLY")" 1000000
