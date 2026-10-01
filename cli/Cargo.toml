@@ -1,6 +1,7 @@
 # `antumbra-vesting`: the client for antumbra_vesting on LEZ v0.3, built on the
 # v0.3.0 `wallet` crate. It signs with the wallet's keys, names an LGO fee
 # payer for public transactions, and proves private claims locally.
+# `antumbra-market`: the same for antumbra_curve and antumbra_lbp.
 [workspace]
 
 [package]
@@ -14,8 +15,14 @@ publish = false
 name = "antumbra-vesting"
 path = "src/main.rs"
 
+[[bin]]
+name = "antumbra-market"
+path = "src/bin/market.rs"
+
 [dependencies]
 antumbra-vesting-core = { path = "../programs/vesting/core" }
+antumbra-curve-core   = { path = "../programs/curve/core" }
+antumbra-lbp-core     = { path = "../programs/lbp/core" }
 wallet     = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", rev = "db66590ab821a4e142c211017a3866d007f6fa77" }
 lee        = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", rev = "db66590ab821a4e142c211017a3866d007f6fa77" }
 lee_core   = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", rev = "db66590ab821a4e142c211017a3866d007f6fa77", features = ["host"] }
