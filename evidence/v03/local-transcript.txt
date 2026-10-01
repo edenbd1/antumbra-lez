@@ -1,0 +1,120 @@
+{"header":"EAkwPsUMwyKivN6KGkLAMUDMaZM929QiR9o7X3Z342tR","image_id":"72d5cdc05004a9502be72239829071982237638b49b8fe7d1b45fd7371a425f4","op":"deploy","segments":4}
+# run against http://127.0.0.1:3140, 2026-10-01T02:30:46Z
+# program EAkwPsUMwyKivN6KGkLAMUDMaZM929QiR9o7X3Z342tR 72d5cdc05004a9502be72239829071982237638b49b8fe7d1b45fd7371a425f4
+== 1. linear native: create funded, claim to the unit, refusals
+{"block":35,"label":"create-linear","op":"create","tx":"fb9f0be66fa9796e59947a32a64e43c4612836924938430108933bda16ea32db","verdict":"applied"}
+  ok  create-linear: applied
+  ok  linear escrow funded exactly: 600
+{"block":41,"label":"claim-overclaim","op":"claim","tx":"6c2165dc589017223aa4faef8fad7787d19a603bccdc80ad151ed51cb5db4e21","verdict":"reverted"}
+  ok  claim-overclaim: reverted
+{"block":47,"label":"claim-by-creator","op":"claim","tx":"2be66f61e8494b9ed0e60b5d2eb2be12321cdd49cd2345899f90950fd1575adb","verdict":"reverted"}
+  ok  claim-by-creator: reverted
+  ok  escrow untouched by refusals: 600
+{"block":53,"label":"claim-linear","op":"claim","tx":"337329424b9680c2cb28e9a6eccc1d412814a692301b70ddc59825b4bfe80e57","verdict":"applied"}
+  ok  claim-linear: applied
+  ok  claimed equals floor(600*(t-start)/(end-start)) at the claim's time: 29
+  ok  destination received the claim: 29
+{"block":59,"label":"create-duplicate","op":"create","tx":"122212121c646979fd52a90dc090a2110629f0dde5dd91512b5d3473673fc382","verdict":"reverted"}
+  ok  create-duplicate: reverted
+  ok  duplicate took no second funding: 571
+== 2. cancellation: unvested home, vested stays claimable
+{"block":65,"label":"create-cancelable","op":"create","tx":"dcab554a7199d573103edf89293900d5a51d0c7efa4eda35129a64b166922cb3","verdict":"applied"}
+  ok  create-cancelable: applied
+{"block":71,"label":"cancel-wrong-refund","op":"cancel","tx":"c286186b73b5bd0f6f70933f77b5b01aa7e30afb821a770823d82f19f92cda01","verdict":"reverted"}
+  ok  cancel-wrong-refund: reverted
+{"block":77,"label":"cancel-by-beneficiary","op":"cancel","tx":"e7ef06b298282711abff5c39b2af0f4cf0f08d7dd6d3a464b096fcfe656c7852","verdict":"reverted"}
+  ok  cancel-by-beneficiary: reverted
+{"block":83,"label":"cancel","op":"cancel","tx":"21f75cb7abc6ef4c276358cd79fbbcc310aafba0a6a37b279f4fc3538ebc89dc","verdict":"applied"}
+  ok  cancel: applied
+  ok  refund is exactly the unvested part: 571
+  ok  vested part stays in escrow: 29
+{"block":89,"label":"cancel-again","op":"cancel","tx":"57b02e4c05624a32e369fb387fbb8529b3fac8ff8ea2dc42095b0400571d18d2","verdict":"reverted"}
+  ok  cancel-again: reverted
+{"block":95,"label":"claim-after-cancel","op":"claim","tx":"c2fbbb2536593e824620afe7ac50d9a5ef396c51b66b15a3ec62231bbde70058","verdict":"applied"}
+  ok  claim-after-cancel: applied
+  ok  escrow empty after the vested part is claimed: 0
+== 3. token escrow: create funded in tokens, claim, cancel
+  wallet: Transaction hash is c56a9808809e24d297fa7aeb3b81d848ae47ed0242f7fb26125c490e23d92530
+  wallet: Transaction is included in block 101
+  ok  token supply minted: 1000000
+{"block":107,"label":"create-token","op":"create","tx":"15fba4b3d308d0e51adf1d2669d1c5dd95adfb59086c4dedb47ac926fcf3de3f","verdict":"applied"}
+  ok  create-token: applied
+  ok  token escrow funded exactly: 100000
+{"block":113,"label":"claim-token","op":"claim","tx":"f95c6011e4bdc79ad43269c53858edec8002258db0aac1361af26a6ed8b4db91","verdict":"applied"}
+  ok  claim-token: applied
+  ok  beneficiary token holding equals claimed: 4999
+{"block":119,"label":"cancel-token","op":"cancel","tx":"517ca50aff545ec880a7fa461129b664c5733dd6c6feb122dc305f324fc4ce8a","verdict":"applied"}
+  ok  cancel-token: applied
+  ok  token refund plus escrow plus claimed is the total: 100000
+== 4. milestones, signalled once by a nominated authority
+{"block":125,"label":"create-milestones","op":"create","tx":"0e15585f95b026291578263582ab6bf0649aa743aeb4a0a88628cdaf61655e32","verdict":"applied"}
+  ok  create-milestones: applied
+{"block":132,"label":"signal-by-creator","op":"signal","tx":"a9c84d70206406b0705c4501ca7a11491d24bdd8f1f1bba28cec9e7404fc186a","verdict":"reverted"}
+  ok  signal-by-creator: reverted
+{"block":138,"label":"signal-0","op":"signal","tx":"5d47b81ebcc65326600ead6c3d6a73439fb8c6ee987134220037a3d2583e1247","verdict":"applied"}
+  ok  signal-0: applied
+{"block":144,"label":"signal-0-again","op":"signal","tx":"4447f2293a10162086465297997a200d1217c58c5bcc2402e2cd39a1a4652000","verdict":"reverted"}
+  ok  signal-0-again: reverted
+{"block":150,"label":"signal-2","op":"signal","tx":"aee4978190dd1da24242dbd97788636b04e11017ef0f31b2ba6a00a6f43536ee","verdict":"applied"}
+  ok  signal-2: applied
+{"block":156,"label":"claim-milestones","op":"claim","tx":"f0d4c54f78bd7c2e4d14eca820f873c35c9f3de847e3fb80e7c8f1d2939a8038","verdict":"applied"}
+  ok  claim-milestones: applied
+  ok  two of four tranches paid: 500
+== 5. holder-only transfer; one-way non-cancelable
+{"block":162,"label":"create-transferable","op":"create","tx":"f9b74908bf0518773bd7d8402ef5ae8de63a26dd2ea1cf0ea887c5eb71643356","verdict":"applied"}
+  ok  create-transferable: applied
+{"block":168,"label":"transfer-by-creator","op":"transfer","tx":"8ea4ad8dbf02fb55c68d12d9ce0357d78fe04dad5e674e242b15f1a5005f4b82","verdict":"reverted"}
+  ok  transfer-by-creator: reverted
+{"block":174,"label":"transfer","op":"transfer","tx":"cea858b66b9d01e1738391b4706a052994407b03ad563438f801c4e2acd4a798","verdict":"applied"}
+  ok  transfer: applied
+{"block":180,"label":"claim-by-old-holder","op":"claim","tx":"b5edb8753270c03cae58ee2be57aebc1cf2f2836ae8a2067739aed2dae890285","verdict":"reverted"}
+  ok  claim-by-old-holder: reverted
+{"block":186,"label":"claim-by-new-holder","op":"claim","tx":"29b7a3e97cd073148747248886d4815e2694fc351f870ebe2bbea8cdd4d414c8","verdict":"applied"}
+  ok  claim-by-new-holder: applied
+  ok  new holder received the whole position: 300
+{"block":192,"label":"create-for-nc","op":"create","tx":"12988b80eb40b0b774ee4e14546f379e18889f444234e771ad7667615c9c7c9c","verdict":"applied"}
+  ok  create-for-nc: applied
+{"block":198,"label":"nc-by-beneficiary","op":"make-non-cancelable","tx":"87cc4f7a50fffd83f915dbeaa86404b673b85a7c8bde4e75c65d62b799ed124b","verdict":"reverted"}
+  ok  nc-by-beneficiary: reverted
+{"block":204,"label":"make-non-cancelable","op":"make-non-cancelable","tx":"7c259c770b97d28fa9715eba5c6f27659a6d80082b6528658486aa5c2c2ac987","verdict":"applied"}
+  ok  make-non-cancelable: applied
+{"block":210,"label":"cancel-after-nc","op":"cancel","tx":"6e656d57cb2f0d4abc4bf97351d747a81e6cb150585e2c8eb88e9139bb862959","verdict":"reverted"}
+  ok  cancel-after-nc: reverted
+== 6. nominated cancel authority
+{"block":216,"label":"create-with-authority","op":"create","tx":"460a5b2d4b9f375c18b22c4ed38076db717111b0dd2558bcaa44b2364fed6787","verdict":"applied"}
+  ok  create-with-authority: applied
+{"block":222,"label":"cancel-by-creator-not-authority","op":"cancel","tx":"f5b4c927073cac48ef18df5022c19f550e23c359dd4a15a7543758c18e9394a5","verdict":"reverted"}
+  ok  cancel-by-creator-not-authority: reverted
+{"block":228,"label":"cancel-by-authority","op":"cancel","tx":"897ce377086a16af3726084db9f3c97fe68b08b78254a45a32ce74176947c829","verdict":"applied"}
+  ok  cancel-by-authority: applied
+== 7. batch: one transfer funds N, each schedule moves only its share
+{"block":234,"label":"batch-8","op":"batch[8]","tx":"dc2c81df7e0b80331be308dc899be2132257c8f82e8b5a52269b86f11afe6a79","verdict":"applied"}
+  ok  batch-8: applied
+  ok  batch holding funded with 8 x 600: 4800
+{"block":240,"label":"batch-claim-0","op":"claim","tx":"faaeb140d871bf2785e582f73adcaff1fd8afc6501951189f5b2348af6dae5d6","verdict":"applied"}
+  ok  batch-claim-0: applied
+{"block":246,"label":"batch-cancel-1","op":"cancel","tx":"58584b34ebf3336577a4ac36ac3de24ae88c2b946b9dd883c2827e86378d1885","verdict":"applied"}
+  ok  batch-cancel-1: applied
+  ok  batch holding lost only schedule 0's claim and schedule 1's refund: 4210
+== 8. private claims: native and token into shielded accounts
+{"block":252,"label":"create-for-private","op":"create","tx":"b1f9c6f86e533a6d70ca1f039a04c732b7876993fdf70da35422648155655061","verdict":"applied"}
+  ok  create-for-private: applied
+{"block":339,"label":"claim-private-native","op":"claim-private","tx":"4bb80e79382d25e49f380a5b769496a9189ee32cd23c1e6d3a5dff132ee587c3","verdict":"applied"}
+  ok  claim-private-native: applied
+  ok  private native claim recorded on the schedule: 250
+  ok  the wallet decrypted the native claim into the shielded account: 250
+{"block":345,"label":"create-token-for-private","op":"create","tx":"4c454789e694e558ae91d647dd81ec6e0aa6b7e7629c4c2497cf5d0d9b8b1054","verdict":"applied"}
+  ok  create-token-for-private: applied
+{"block":444,"label":"claim-private-token","op":"claim-private","tx":"71b4ec56dd347f0cf6353a17520492779d609aa0f45ef59d2db0b3b4e4612f72","verdict":"applied"}
+  ok  claim-private-token: applied
+  ok  private token claim recorded on the schedule: 5000
+  ok  the wallet decrypted the token claim into the shielded account: 5000
+== 9. batch ceiling under the 10M gas cap
+{"block":450,"label":"batch-450","op":"batch[450]","tx":"30879d0f580df0464abf8b2aca8332700f3efb46ac70d52427ae3dea93d2fe13","verdict":"applied"}
+  ok  batch-450: applied
+{"block":460,"label":"batch-451","op":"batch[451]","tx":"a2b2839ea16a4884fd6c17622f396170c27bdfcecb6b1ef0903890803c7aaecb","verdict":"reverted"}
+  ok  batch-451: reverted
+== 10. a claim for a time the chain has not reached is never included
+{"block":470,"label":"claim-in-the-future","op":"claim","tx":"38ebef5776e0e8b095b739f2fa21b29bf9afc94f6c9c5293e972f87ef9a1b452","verdict":"reverted"}
+  ok  claim-in-the-future: reverted
+summary: 27 applied, 15 refused as expected, 20 state checks ok, failures=0

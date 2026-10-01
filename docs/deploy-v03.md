@@ -26,6 +26,12 @@ RISC0_DOCKER_CONTAINER_TAG=r0.1.91.1 cargo risczero build --manifest-path progra
 cmp programs/vesting/target/riscv32im-risc0-zkvm-elf/docker/antumbra_vesting.bin \
     artifacts/programs/v0.3/antumbra_vesting.bin && echo "rebuilt byte for byte"
 
+# On Apple Silicon the amd64 builder runs emulated and can exhaust an 8 GB Docker
+# VM; the committed artifact was built with CARGO_BUILD_JOBS=2 passed into the
+# same image (with codegen-units = 1 the job count should not change the bytes;
+# CI's reproduce job rebuilds with plain `cargo risczero build` on a Linux
+# runner and compares, which is what settles it).
+
 # the client
 cargo build --release --manifest-path cli/Cargo.toml
 export PATH="$PWD/cli/target/release:$PATH"
@@ -87,8 +93,9 @@ curl -s -X POST "$BEDROCK/channel/deposit" -H 'Content-Type: application/json' -
 4. Wait for finality (minutes), then `wallet account get --account-id Public/$PAYER`.
    Repeat for `$CREATOR`, or move LGO across with `wallet auth-transfer`.
 
-Budget: the local run used about the fees printed at the end of step 4 below;
-refusals are charged too, so fund both keys with headroom.
+Budget: on the local run the fee payer spent about 0.27 LGO for the deploy and
+roughly forty transactions; refusals are charged too, and base fees move with
+load, so fund both keys with a few LGO.
 
 ## 3. Deploy
 
@@ -125,6 +132,23 @@ locally and take minutes each. Rerunning on the same chain needs a new `TAG`.
 
 Then put the header, the ImageID, the deploy transactions and the manifest's
 hashes in `DEPLOYMENTS.md`, replacing "testnet v0.3 deployment: pending funding".
+
+## Local rehearsal (what produced `evidence/v03/`)
+
+```bash
+cd lez && cp lez/sequencer/service/configs/debug/sequencer_config.json /tmp/seq/ && cd /tmp/seq
+RUST_LOG=info sequencer_service sequencer_config.json --listen-address 127.0.0.1 &   # standalone build, port 3040
+export LEE_WALLET_HOME_DIR=/tmp/wallet-local   # wallet_config.json pointing at http://127.0.0.1:3040
+wallet check-health
+# the two funded genesis keys of the debug configuration (public test keys)
+wallet account import public --private-key 10a26a9aec7d34b82364eeae45c5294dbb0a764b000b94eeb9b58511dc487c4d
+wallet account import public --private-key 717940b1cc55e5d6b2066dbf1d9a3f26f212f4db08d02388177fcfedd8a9be1b
+SUPPRESS_VERBOSE_PRINTS=1 RPC=http://127.0.0.1:3040 DEPLOY=1 BATCH_MAX=450 TAG=local1 \
+  CREATOR=6iArKUXxhUJqS7kCaPNhwMWt3ro71PDyBj7jwAyE2VQV PAYER=7wHg9sbJwc6h3NP1S9bekfAzB8CHifEcxKswCKUt3YQo \
+  WALLET=wallet CLI=antumbra-vesting OUT=evidence/v03/local-e2e.tsv \
+  ./scripts/e2e-v03.sh | tee evidence/v03/local-transcript.txt
+./scripts/verify-onchain.sh --manifest evidence/v03/local-e2e.tsv --rpc http://127.0.0.1:3040
+```
 
 ## Upgrades
 

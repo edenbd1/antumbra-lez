@@ -1,6 +1,38 @@
 # Deployed on the public LEZ testnet
 
-> **Where things stand.** The public testnet was reset on **2026-09-08**, which
+## LEZ v0.3: testnet v0.3 deployment: pending funding
+
+The public testnet now runs LEZ v0.3 (`https://testnet.lez.logos.co` answers
+with the v0.3.0 builtin program ids and a fresh chain). `antumbra_vesting` has
+been ported to v0.3 ([`docs/v03-port-plan.md`](docs/v03-port-plan.md)) and its
+whole lifecycle driven on a **local v0.3.0 sequencer**; the transcript and the
+manifest are in [`evidence/v03/`](evidence/v03/). The public deployment waits on
+LGO, which on v0.3 reaches a LEZ account only through a Bedrock ChannelDeposit;
+the exact commands are in [`docs/deploy-v03.md`](docs/deploy-v03.md).
+
+| | v0.3 |
+|---|---|
+| Source | `programs/vesting/` on this branch, LEZ `v0.3.0` (`db66590a`) |
+| Artifact | `artifacts/programs/v0.3/antumbra_vesting.bin`, RISC Zero Docker builder `r0.1.91.1` |
+| ImageID | `72d5cdc05004a9502be72239829071982237638b49b8fe7d1b45fd7371a425f4` |
+| Local run | 27 applied, 15 refused as required, 20 state checks, 0 failures; private native and token claims; batch of 450 applied, 451 refused under 10M gas |
+| Public testnet | pending funding |
+
+When it lands, this section gets the header account, the ImageID, the deploy
+transactions and a testnet manifest beside the local one, and
+`./scripts/verify-onchain.sh` re-checks every line of it against the public
+sequencer.
+
+Everything below this section is **historical**: the v0.2.4 deployments and
+their evidence, kept as the record of what ran. None of those hashes resolves on
+the v0.3 chain (the v0.2.4 deploy `2b9e140b…` returns `null`), and
+`scripts/verify-onchain-v024.sh` is the checker they were verified with.
+
+---
+
+# Historical: LEZ v0.2.4
+
+> **Where things stood.** The public testnet was reset on **2026-09-08**, which
 > erased every transaction made before it. `antumbra_vesting` was redeployed and
 > its whole lifecycle re-driven afterwards: that is the first section below, the
 > page [`evidence/VESTING.md`](evidence/VESTING.md), and

@@ -43,9 +43,6 @@ if [ ! -f "$MANIFEST" ]; then
   exit 3
 fi
 
-rpc() { curl -s -m 25 -X POST "$RPC" -H 'Content-Type: application/json' \
-  -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"$1\",\"params\":[\"$2\"]}"; }
-
 python3 - "$MANIFEST" "$RPC" <<'PY'
 import hashlib, json, os, secrets, sys, urllib.request
 

@@ -1,10 +1,16 @@
 # antumbra-lez
 
-> **Reviewing RFP-017 (vesting)?** The program, and every call made against it on
-> the public testnet, is on one page: [`evidence/VESTING.md`](evidence/VESTING.md).
-> Re-check it with `./scripts/verify-onchain.sh --only vesting`; the deployed binary's
-> requirement tests are in [`executor-tests/`](executor-tests/). The rest of this
-> README describes the shared pricing library behind RFP-015 and RFP-016 as well.
+> **Reviewing RFP-017 (vesting)?** The program now targets **LEZ v0.3**
+> (`v0.3.0`, `db66590a`): source in [`programs/vesting/`](programs/vesting/), the
+> port and what changed in [`docs/v03-port-plan.md`](docs/v03-port-plan.md), the
+> requirement tests in [`executor-tests/`](executor-tests/) (the committed binary
+> run through the v0.3 state machine), the client in [`cli/`](cli/), and a full
+> lifecycle against a local v0.3 sequencer in [`evidence/v03/`](evidence/v03/).
+> **Testnet v0.3 deployment: pending funding**; the runbook is
+> [`docs/deploy-v03.md`](docs/deploy-v03.md). The v0.2.4 deployment and
+> [`evidence/VESTING.md`](evidence/VESTING.md) are historical: that chain was
+> upgraded to v0.3 and its hashes no longer resolve. The rest of this README
+> describes the shared pricing library behind RFP-015 and RFP-016 as well.
 
 [![CI](https://github.com/edenbd1/antumbra-lez/actions/workflows/ci.yml/badge.svg)](https://github.com/edenbd1/antumbra-lez/actions/workflows/ci.yml)
 
@@ -214,7 +220,18 @@ needs to see it.
 
 ## Deployed
 
-Three programs are live on the public LEZ testnet, and each deployment carries
+**LEZ v0.3.** `antumbra_vesting` has been ported to v0.3 and driven end to end on
+a local v0.3.0 sequencer ([`evidence/v03/`](evidence/v03/)). Testnet v0.3
+deployment: pending funding (LGO arrives only through a Bedrock deposit; see
+[`docs/deploy-v03.md`](docs/deploy-v03.md)). Once deployed,
+`./scripts/verify-onchain.sh` re-checks the run from its manifest.
+
+**Historical, LEZ v0.2.4.** The table below is the record of the v0.2.4
+deployments. That testnet has since been upgraded to v0.3, so these hashes no
+longer resolve; `scripts/verify-onchain-v024.sh` is the checker they were
+verified with.
+
+Three programs were live on the public LEZ testnet, and each deployment carries
 the same four facts: the commit it was frozen at, the ImageID, the deploy
 transaction and the block. That is the convention `logos-co/lez-payment-streams`
 sets for its own live program, and it is what makes a deployment checkable

@@ -1,0 +1,68 @@
+antumbra_vesting v0.3 against http://127.0.0.1:3140, from evidence/v03/local-e2e.tsv
+  ok   program header EAkwPsUMwyKi… names ImageID 72d5cdc05004a950…
+  ok   create-linear: applied, in block 35
+  ok   claim-overclaim: reverted, in block 41
+  ok   claim-by-creator: reverted, in block 47
+  ok   claim-linear: applied, in block 53
+  ok   create-duplicate: reverted, in block 59
+  ok   create-cancelable: applied, in block 65
+  ok   cancel-wrong-refund: reverted, in block 71
+  ok   cancel-by-beneficiary: reverted, in block 77
+  ok   cancel: applied, in block 83
+  ok   cancel-again: reverted, in block 89
+  ok   claim-after-cancel: applied, in block 95
+  ok   create-token: applied, in block 107
+  ok   claim-token: applied, in block 113
+  ok   cancel-token: applied, in block 119
+  ok   create-milestones: applied, in block 125
+  ok   signal-by-creator: reverted, in block 132
+  ok   signal-0: applied, in block 138
+  ok   signal-0-again: reverted, in block 144
+  ok   signal-2: applied, in block 150
+  ok   claim-milestones: applied, in block 156
+  ok   create-transferable: applied, in block 162
+  ok   transfer-by-creator: reverted, in block 168
+  ok   transfer: applied, in block 174
+  ok   claim-by-old-holder: reverted, in block 180
+  ok   claim-by-new-holder: applied, in block 186
+  ok   create-for-nc: applied, in block 192
+  ok   nc-by-beneficiary: reverted, in block 198
+  ok   make-non-cancelable: applied, in block 204
+  ok   cancel-after-nc: reverted, in block 210
+  ok   create-with-authority: applied, in block 216
+  ok   cancel-by-creator-not-authority: reverted, in block 222
+  ok   cancel-by-authority: applied, in block 228
+  ok   batch-8: applied, in block 234
+  ok   batch-claim-0: applied, in block 240
+  ok   batch-cancel-1: applied, in block 246
+  ok   create-for-private: applied, in block 252
+  ok   claim-private-native: applied, in block 339
+  ok   create-token-for-private: applied, in block 345
+  ok   claim-private-token: applied, in block 444
+  ok   batch-450: applied, in block 450
+  ok   batch-451: reverted, in block 460
+  ok   claim-in-the-future: reverted, in block 470
+  ok   final state of 74fLqwearMTN… shard EAkwPsUM… is as the run left it
+  ok   final state of ByZ7LapNrH7S… shard 11111111… is as the run left it
+  ok   final state of 5YoCAL1LwuWS… shard EAkwPsUM… is as the run left it
+  ok   final state of DyXrrESPWyGe… shard 11111111… is as the run left it
+  ok   final state of BxvgYBKnpB3n… shard EAkwPsUM… is as the run left it
+  ok   final state of AG95kQ9EjWEi… shard AxDdLwqk… is as the run left it
+  ok   final state of 3EaQy8kaLcSs… shard EAkwPsUM… is as the run left it
+  ok   final state of 75Hpi8b1ymYq… shard 11111111… is as the run left it
+  ok   final state of AYzgf8hFjtVy… shard EAkwPsUM… is as the run left it
+  ok   final state of 3vjTaZTLeaeq… shard 11111111… is as the run left it
+  ok   final state of 9dkkDge3fFFT… shard EAkwPsUM… is as the run left it
+  ok   final state of 3yrbReGVFnZS… shard 11111111… is as the run left it
+  ok   final state of DWs1b3Q5cjfQ… shard EAkwPsUM… is as the run left it
+  ok   final state of 6eRDe6JwSs56… shard 11111111… is as the run left it
+  ok   final state of FL9wdHPVCnbu… shard EAkwPsUM… is as the run left it
+  ok   final state of HDyWsiLYGUJh… shard 11111111… is as the run left it
+  ok   final state of FFxXiT1i7YZu… shard EAkwPsUM… is as the run left it
+  ok   final state of HDyWsiLYGUJh… shard 11111111… is as the run left it
+  ok   final state of 5mNsLcxMwv73… shard EAkwPsUM… is as the run left it
+  ok   final state of HySit7EZy9S3… shard 11111111… is as the run left it
+  ok   final state of D9qDyfuEkZ52… shard EAkwPsUM… is as the run left it
+  ok   final state of 7J539n8zasrM… shard AxDdLwqk… is as the run left it
+  ok   control: a random hash does not resolve
+66 checks pass, 0 fail (20 state checks recorded during the run)

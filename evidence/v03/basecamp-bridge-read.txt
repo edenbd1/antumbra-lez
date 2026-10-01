@@ -1,0 +1,23 @@
+endpoint http://127.0.0.1:3140
+schedule.asset = native balance
+schedule.cancelable = yes
+schedule.claimable = 571
+schedule.claimed = 29
+schedule.clock = 2026-10-01 03:08 UTC
+schedule.kind = linear
+schedule.next = none — fully vested
+schedule.total = 600
+schedule.vested = 600
+escrow.schedule = 571  (native balance held by the escrow)
+{"asset":0,"beneficiary":"7jEbM6XteYUddjFhNG27Nmj1CJW9mx4yoeP5dncNXbXT","cancel_authority":"6iArKUXxhUJqS7kCaPNhwMWt3ro71PDyBj7jwAyE2VQV","cancelable":1,"cancelled_at":0,"claimable":"571","claimed":"29","cliff":1790821845748,"clock":1790824136036,"creator":"6iArKUXxhUJqS7kCaPNhwMWt3ro71PDyBj7jwAyE2VQV","end":1790823645748,"escrow":"ByZ7LapNrH7SBsnQiwqkThBPfBgFdzcKBtgGoSncAxEp","kind":1,"last_seen":1790821935747,"milestone_authority":"6iArKUXxhUJqS7kCaPNhwMWt3ro71PDyBj7jwAyE2VQV","refund_to":"Fy6yDDcT2bFUBPps5wWvZZbqGFkZD828ZYkGMriPGLMX","signalled":0,"start":1790821845748,"token_definition":"11111111111111111111111111111111","total":"600","tranches":0,"transferable":0,"vested":"600"}
+endpoint http://127.0.0.1:3140
+schedule.asset = token EWzXgwQUQW1VuQ3CGAs2ZJSuscvc5wfieDSAB3GMhg1U
+schedule.cancelable = cancelled
+schedule.claimable = 1667
+schedule.claimed = 4999
+schedule.clock = 2026-10-01 03:08 UTC
+schedule.kind = linear
+schedule.next = none — cancelled at 2026-10-01 02:37 UTC
+schedule.total = 100000
+schedule.vested = 6666
+escrow.schedule = 1667  (token balance held by the escrow)
