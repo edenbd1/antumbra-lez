@@ -1,0 +1,576 @@
+{
+  "version": "0.3.0",
+  "name": "antumbra_curve",
+  "lez": "v0.3.0 (db66590ab821a4e142c211017a3866d007f6fa77)",
+  "notes": [
+    "Hand-maintained in SPEL's IDL shape: SPEL has no LEZ v0.3 support. scripts/check-idl.py decodes borsh vectors emitted by the core crate with this file and fails on any drift.",
+    "The instruction is a borsh enum: one u8 discriminant, then the args in order.",
+    "Every account row selects one shard. shard=self is this program's shard; shard=asset is the native shard (all-zero id) for Asset::Native, the token program's shard for Asset::Token (the sale's or pool's collateral). A signer handle is a signing row with shard=self that the program never writes.",
+    "PDAs derive from the program's header account: AccountId::for_public_pda(header, seed). One seed is used as is; several are combined as SHA-256 of their concatenation. Const seeds are zero-padded to 32 bytes.",
+    "The Sale layout is the v0.2.4 one with fields appended at the end; account_id fields are the 32 raw bytes.",
+    "Refusals are guest panics whose message starts with E<code>:"
+  ],
+  "instructions": [
+    {
+      "name": "create_sale",
+      "discriminant": 0,
+      "accounts": [
+        {
+          "name": "sale",
+          "writable": true,
+          "signer": false,
+          "init": true,
+          "shard": "self",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "sale_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": false,
+          "signer": true,
+          "init": false,
+          "shard": "self"
+        }
+      ],
+      "args": [
+        {
+          "name": "sale_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "collateral",
+          "type": {
+            "defined": "Asset"
+          }
+        },
+        {
+          "name": "vt",
+          "type": "u128"
+        },
+        {
+          "name": "vc",
+          "type": "u128"
+        },
+        {
+          "name": "sale_reserve",
+          "type": "u128"
+        },
+        {
+          "name": "seed_reserve",
+          "type": "u128"
+        },
+        {
+          "name": "fee_treasury",
+          "type": "account_id"
+        },
+        {
+          "name": "fee_rate",
+          "type": "u128"
+        }
+      ],
+      "effects": "writes the sale once (Curve::new and the 1% fee cap checked); the holding PDA [sale_id, \"holding\"] is recorded as its treasury; moves nothing"
+    },
+    {
+      "name": "execute_buy",
+      "discriminant": 1,
+      "accounts": [
+        {
+          "name": "sale",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "shard": "self",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "sale_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true,
+          "init": false,
+          "shard": "asset"
+        },
+        {
+          "name": "holding",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "shard": "asset",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "sale_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "sale_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "collateral",
+          "type": {
+            "defined": "Asset"
+          }
+        },
+        {
+          "name": "collateral_in",
+          "type": "u128"
+        },
+        {
+          "name": "min_tokens_out",
+          "type": "u128"
+        }
+      ],
+      "effects": "chains a transfer of collateral_in from buyer to holding; apply refuses unless Curve::buy(collateral_in - fee, min_tokens_out) succeeds on the stored curve, then advances it and accrues the fee"
+    },
+    {
+      "name": "collect_fees",
+      "discriminant": 2,
+      "accounts": [
+        {
+          "name": "sale",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "shard": "self",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "sale_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holding",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "shard": "asset",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "sale_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_treasury",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "shard": "asset"
+        }
+      ],
+      "args": [
+        {
+          "name": "sale_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "collateral",
+          "type": {
+            "defined": "Asset"
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u128"
+        }
+      ],
+      "effects": "permissionless; apply refuses unless fee_treasury is the one fixed at creation and amount == fees_accrued > 0; chains a seeded transfer of amount from holding to fee_treasury"
+    },
+    {
+      "name": "withdraw",
+      "discriminant": 3,
+      "accounts": [
+        {
+          "name": "sale",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "shard": "self",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "sale_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holding",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "shard": "asset",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "sale_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
+        },
+        {
+          "name": "destination",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "shard": "asset"
+        },
+        {
+          "name": "creator",
+          "writable": false,
+          "signer": true,
+          "init": false,
+          "shard": "self"
+        }
+      ],
+      "args": [
+        {
+          "name": "sale_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "collateral",
+          "type": {
+            "defined": "Asset"
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u128"
+        }
+      ],
+      "effects": "apply refuses unless the signer is the creator, sale_reserve == 0 and amount == real_collateral - withdrawn > 0; chains a seeded transfer of amount from holding to destination"
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Sale",
+      "shard": "self",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vt",
+            "type": "u128"
+          },
+          {
+            "name": "vc",
+            "type": "u128"
+          },
+          {
+            "name": "sale_reserve",
+            "type": "u128"
+          },
+          {
+            "name": "real_collateral",
+            "type": "u128"
+          },
+          {
+            "name": "seed_reserve",
+            "type": "u128"
+          },
+          {
+            "name": "creator",
+            "type": "account_id"
+          },
+          {
+            "name": "treasury",
+            "type": "account_id"
+          },
+          {
+            "name": "fee_treasury",
+            "type": "account_id"
+          },
+          {
+            "name": "fee_rate",
+            "type": "u128"
+          },
+          {
+            "name": "fees_accrued",
+            "type": "u128"
+          },
+          {
+            "name": "withdrawn",
+            "type": "u128"
+          },
+          {
+            "name": "collateral",
+            "type": "u8"
+          },
+          {
+            "name": "collateral_definition",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "Asset",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Native",
+            "fields": []
+          },
+          {
+            "name": "Token",
+            "fields": [
+              {
+                "name": "definition_id",
+                "type": "account_id"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "name": "SaleCreated",
+      "selector": "838709c7587a65c3",
+      "fields": [
+        {
+          "name": "sale_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "type": "account_id"
+        },
+        {
+          "name": "holding",
+          "type": "account_id"
+        },
+        {
+          "name": "collateral",
+          "type": {
+            "defined": "Asset"
+          }
+        },
+        {
+          "name": "vt",
+          "type": "u128"
+        },
+        {
+          "name": "vc",
+          "type": "u128"
+        },
+        {
+          "name": "sale_reserve",
+          "type": "u128"
+        },
+        {
+          "name": "seed_reserve",
+          "type": "u128"
+        },
+        {
+          "name": "fee_rate",
+          "type": "u128"
+        }
+      ]
+    },
+    {
+      "name": "BuyPaid",
+      "selector": "cba55ba7b4eb7bf5",
+      "fields": [
+        {
+          "name": "sale_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "buyer",
+          "type": "account_id"
+        },
+        {
+          "name": "collateral_in",
+          "type": "u128"
+        },
+        {
+          "name": "min_tokens_out",
+          "type": "u128"
+        }
+      ]
+    },
+    {
+      "name": "FeesCollected",
+      "selector": "7fe1b8cce9c3a263",
+      "fields": [
+        {
+          "name": "sale_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u128"
+        },
+        {
+          "name": "fee_treasury",
+          "type": "account_id"
+        }
+      ]
+    },
+    {
+      "name": "Withdrawn",
+      "selector": "0cf112a449860090",
+      "fields": [
+        {
+          "name": "sale_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u128"
+        },
+        {
+          "name": "destination",
+          "type": "account_id"
+        }
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 5001,
+      "name": "BadSale"
+    },
+    {
+      "code": 5002,
+      "name": "NotAnchored"
+    },
+    {
+      "code": 5003,
+      "name": "PricingRefused"
+    },
+    {
+      "code": 5004,
+      "name": "Closed"
+    },
+    {
+      "code": 5007,
+      "name": "TreasuryOverflow"
+    },
+    {
+      "code": 5008,
+      "name": "TreasuryMismatch"
+    },
+    {
+      "code": 5009,
+      "name": "FeeTreasuryMismatch"
+    },
+    {
+      "code": 5010,
+      "name": "FeeRateAboveCap"
+    },
+    {
+      "code": 5011,
+      "name": "NotCreator"
+    },
+    {
+      "code": 5012,
+      "name": "AlreadyExists"
+    },
+    {
+      "code": 5013,
+      "name": "Accounts"
+    },
+    {
+      "code": 5014,
+      "name": "NotSigned"
+    },
+    {
+      "code": 5015,
+      "name": "WrongAsset"
+    },
+    {
+      "code": 5016,
+      "name": "Amount"
+    }
+  ]
+}

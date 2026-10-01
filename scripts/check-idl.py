@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
-"""Fail if idl/antumbra_vesting.v03.idl.json has drifted from the Rust types.
+"""Fail if a hand-maintained v0.3 IDL has drifted from the Rust types.
 
-SPEL generated the v0.2.4 IDL from the program source. It has no v0.3
-support, so the v0.3 IDL is written by hand, and a hand-written IDL is only
-worth anything if something notices when it stops describing the program.
+SPEL generated the v0.2.4 IDLs from the program source. It has no v0.3
+support, so the v0.3 IDLs (idl/antumbra_{vesting,curve,lbp}.v03.idl.json) are
+written by hand, and a hand-written IDL is only worth anything if something
+notices when it stops describing the program.
 
-This is that something. The core crate's `idl_vectors` example borsh-encodes
-one sample of every instruction variant, of the stored schedule and of every
+This is that something. Each core crate's `idl_vectors` example borsh-encodes
+one sample of every instruction variant, of the stored state and of every
 event, and prints the values it used. This script decodes each sample using
 only the IDL and requires the same values back with every byte consumed. It
 also compares the discriminants, the event selectors, the refusal codes and
-the cancellation window. A field added, dropped, retyped or reordered on one
+the timestamp windows. A field added, dropped, retyped or reordered on one
 side only fails here.
 
-Usage: scripts/check-idl.py            (runs the example itself)
-       scripts/check-idl.py vectors.json
+Usage: scripts/check-idl.py                      (all three programs)
+       scripts/check-idl.py curve                (one program)
+       scripts/check-idl.py vesting vectors.json (one program, given vectors)
 """
 import json
 import pathlib
@@ -22,8 +24,9 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-IDL = json.loads((ROOT / "idl/antumbra_vesting.v03.idl.json").read_text())
-TYPES = {t["name"]: t["type"] for t in IDL["types"]}
+PROGRAMS = ("vesting", "curve", "lbp")
+IDL = {}
+TYPES = {}
 INTS = {"u8": 1, "u16": 2, "u32": 4, "u64": 8, "u128": 16}
 
 
@@ -91,13 +94,16 @@ def whole(fields, hexstr, name):
     return out
 
 
-def main():
-    if len(sys.argv) > 1:
-        vec = json.loads(pathlib.Path(sys.argv[1]).read_text())
+def check(program, vectors=None):
+    global IDL, TYPES
+    IDL = json.loads((ROOT / f"idl/antumbra_{program}.v03.idl.json").read_text())
+    TYPES = {t["name"]: t["type"] for t in IDL["types"]}
+    if vectors:
+        vec = json.loads(pathlib.Path(vectors).read_text())
     else:
         out = subprocess.run(
-            ["cargo", "run", "-q", "--example", "idl_vectors", "-p", "antumbra-vesting-core",
-             "--manifest-path", str(ROOT / "programs/vesting/Cargo.toml")],
+            ["cargo", "run", "-q", "--example", "idl_vectors", "-p", f"antumbra-{program}-core",
+             "--manifest-path", str(ROOT / f"programs/{program}/Cargo.toml")],
             check=True, capture_output=True, text=True)
         vec = json.loads(out.stdout)
 
@@ -122,13 +128,15 @@ def main():
         except ValueError as e:
             bad.append(f"{sample['name']}: {e}")
 
-    st = IDL["accounts"][0]["type"]
+    st = IDL["accounts"][0]
+    if st["name"] != vec["state"]["name"]:
+        bad.append(f"state account is {vec['state']['name']}, IDL says {st['name']}")
     try:
-        got = whole(lambda r: decode_defined(st, r), vec["state"]["hex"], "VestingSchedule")
+        got = whole(lambda r: decode_defined(st["type"], r), vec["state"]["hex"], st["name"])
         if got != vec["state"]["values"]:
-            bad.append(f"VestingSchedule: decodes to {got}")
+            bad.append(f"{st['name']}: decodes to {got}")
     except ValueError as e:
-        bad.append(f"VestingSchedule: {e}")
+        bad.append(f"{st['name']}: {e}")
 
     ev = {e["name"]: e for e in IDL["events"]}
     if [e["name"] for e in vec["events"]] != [e["name"] for e in IDL["events"]]:
@@ -150,18 +158,36 @@ def main():
 
     if vec["errors"] != IDL["errors"]:
         bad.append("error codes differ")
-    window = next(i for i in IDL["instructions"] if i["name"] == "cancel")["timestamp_window"]
-    if window != f"[at, at + {vec['cancel_window_ms']})":
-        bad.append(f"cancel window is {vec['cancel_window_ms']} ms, IDL says {window}")
+    windows = dict(vec.get("windows", {}))
+    if "cancel_window_ms" in vec:
+        windows["cancel"] = f"[at, at + {vec['cancel_window_ms']})"
+    declared = {i["name"]: i["timestamp_window"] for i in IDL["instructions"] if "timestamp_window" in i}
+    for name in sorted(set(windows) | set(declared)):
+        if name == "claim" and program == "vesting":
+            continue  # [at, inf): open-ended, nothing in the program to compare
+        if windows.get(name) != declared.get(name):
+            bad.append(f"{name}: timestamp window is {windows.get(name)}, IDL says {declared.get(name)}")
 
     if bad:
-        print("IDL drift:")
+        print(f"antumbra_{program} IDL drift:")
         for b in bad:
             print("  " + b)
-        sys.exit(1)
+        return False
     n = len(vec["instructions"]) + 1 + len(vec["events"])
-    print(f"IDL matches the program: {n} borsh vectors decoded exactly, "
+    print(f"antumbra_{program} IDL matches the program: {n} borsh vectors decoded exactly, "
           f"{len(vec['selectors'])} selectors and {len(vec['errors'])} codes agree")
+    return True
+
+
+def main():
+    args = sys.argv[1:]
+    if args and args[0] in PROGRAMS:
+        ok = check(args[0], args[1] if len(args) > 1 else None)
+    elif args:
+        ok = check("vesting", args[0])
+    else:
+        ok = all([check(p) for p in PROGRAMS])
+    sys.exit(0 if ok else 1)
 
 
 if __name__ == "__main__":

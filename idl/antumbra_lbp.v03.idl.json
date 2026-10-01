@@ -1,0 +1,609 @@
+{
+  "version": "0.3.0",
+  "name": "antumbra_lbp",
+  "lez": "v0.3.0 (db66590ab821a4e142c211017a3866d007f6fa77)",
+  "notes": [
+    "Hand-maintained in SPEL's IDL shape: SPEL has no LEZ v0.3 support. scripts/check-idl.py decodes borsh vectors emitted by the core crate with this file and fails on any drift.",
+    "The instruction is a borsh enum: one u8 discriminant, then the args in order.",
+    "Every account row selects one shard. shard=self is this program's shard; shard=asset is the native shard (all-zero id) for Asset::Native, the token program's shard for Asset::Token (the sale's or pool's collateral). A signer handle is a signing row with shard=self that the program never writes.",
+    "PDAs derive from the program's header account: AccountId::for_public_pda(header, seed). One seed is used as is; several are combined as SHA-256 of their concatenation. Const seeds are zero-padded to 32 bytes.",
+    "The Pool layout is the v0.2.4 one with fields appended at the end; account_id fields are the 32 raw bytes.",
+    "Refusals are guest panics whose message starts with E<code>:",
+    "Times are milliseconds since the epoch, the block timestamp's unit. Weights are 18-decimal fractions of 1e18."
+  ],
+  "instructions": [
+    {
+      "name": "create_pool",
+      "discriminant": 0,
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true,
+          "signer": false,
+          "init": true,
+          "shard": "self",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "pool_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": false,
+          "signer": true,
+          "init": false,
+          "shard": "self"
+        }
+      ],
+      "args": [
+        {
+          "name": "pool_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "collateral",
+          "type": {
+            "defined": "Asset"
+          }
+        },
+        {
+          "name": "reserve_token",
+          "type": "u128"
+        },
+        {
+          "name": "reserve_collateral",
+          "type": "u128"
+        },
+        {
+          "name": "w_start",
+          "type": "u128"
+        },
+        {
+          "name": "w_end",
+          "type": "u128"
+        },
+        {
+          "name": "t_start",
+          "type": "u64"
+        },
+        {
+          "name": "t_end",
+          "type": "u64"
+        },
+        {
+          "name": "fee_treasury",
+          "type": "account_id"
+        },
+        {
+          "name": "fee_rate",
+          "type": "u128"
+        }
+      ],
+      "effects": "writes the pool once (weight schedule, nonzero reserves and the 5% fee cap checked); the holding PDA [pool_id, \"holding\"] is recorded as its treasury; moves nothing"
+    },
+    {
+      "name": "execute_buy",
+      "discriminant": 1,
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "shard": "self",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "pool_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true,
+          "init": false,
+          "shard": "asset"
+        },
+        {
+          "name": "holding",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "shard": "asset",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "pool_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "pool_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "collateral",
+          "type": {
+            "defined": "Asset"
+          }
+        },
+        {
+          "name": "now",
+          "type": "u64"
+        },
+        {
+          "name": "collateral_in",
+          "type": "u128"
+        },
+        {
+          "name": "min_tokens_out",
+          "type": "u128"
+        }
+      ],
+      "timestamp_window": "[now, now + 120000)",
+      "effects": "chains a transfer of collateral_in from buyer to holding; apply refuses if paused or now < last_seen, prices with binfixed::weighted_buy at weight_at(now) and refuses below min_tokens_out"
+    },
+    {
+      "name": "withdraw",
+      "discriminant": 2,
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "shard": "self",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "pool_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holding",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "shard": "asset",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "pool_id"
+              },
+              {
+                "kind": "const",
+                "value": "holding"
+              }
+            ]
+          }
+        },
+        {
+          "name": "destination",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "shard": "asset"
+        },
+        {
+          "name": "fee_treasury",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "shard": "asset"
+        },
+        {
+          "name": "creator",
+          "writable": false,
+          "signer": true,
+          "init": false,
+          "shard": "self"
+        }
+      ],
+      "args": [
+        {
+          "name": "pool_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "collateral",
+          "type": {
+            "defined": "Asset"
+          }
+        },
+        {
+          "name": "now",
+          "type": "u64"
+        },
+        {
+          "name": "amount",
+          "type": "u128"
+        },
+        {
+          "name": "fee",
+          "type": "u128"
+        }
+      ],
+      "timestamp_window": "[now, inf)",
+      "effects": "apply refuses unless the signer is the creator, fee_treasury is the one fixed at creation, now >= t_end, amount == raised - withdrawn > 0 and fee == close_fee(fee_rate, amount); chains seeded transfers of amount - fee to destination and fee to fee_treasury"
+    },
+    {
+      "name": "set_paused",
+      "discriminant": 3,
+      "accounts": [
+        {
+          "name": "pool",
+          "writable": true,
+          "signer": false,
+          "init": false,
+          "shard": "self",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "arg",
+                "path": "pool_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": false,
+          "signer": true,
+          "init": false,
+          "shard": "self"
+        }
+      ],
+      "args": [
+        {
+          "name": "pool_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "paused",
+          "type": "u8"
+        }
+      ],
+      "effects": "apply refuses unless the signer is the creator; buying halts while paused != 0, the weight schedule does not"
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Pool",
+      "shard": "self",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "reserve_token",
+            "type": "u128"
+          },
+          {
+            "name": "reserve_collateral",
+            "type": "u128"
+          },
+          {
+            "name": "w_start",
+            "type": "u128"
+          },
+          {
+            "name": "w_end",
+            "type": "u128"
+          },
+          {
+            "name": "t_start",
+            "type": "u64"
+          },
+          {
+            "name": "t_end",
+            "type": "u64"
+          },
+          {
+            "name": "last_seen",
+            "type": "u64"
+          },
+          {
+            "name": "paused",
+            "type": "u8"
+          },
+          {
+            "name": "creator",
+            "type": "account_id"
+          },
+          {
+            "name": "treasury",
+            "type": "account_id"
+          },
+          {
+            "name": "fee_treasury",
+            "type": "account_id"
+          },
+          {
+            "name": "fee_rate",
+            "type": "u128"
+          },
+          {
+            "name": "raised",
+            "type": "u128"
+          },
+          {
+            "name": "withdrawn",
+            "type": "u128"
+          },
+          {
+            "name": "collateral",
+            "type": "u8"
+          },
+          {
+            "name": "collateral_definition",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "Asset",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Native",
+            "fields": []
+          },
+          {
+            "name": "Token",
+            "fields": [
+              {
+                "name": "definition_id",
+                "type": "account_id"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "name": "PoolCreated",
+      "selector": "fbb1db5ecf3de9ea",
+      "fields": [
+        {
+          "name": "pool_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "type": "account_id"
+        },
+        {
+          "name": "holding",
+          "type": "account_id"
+        },
+        {
+          "name": "collateral",
+          "type": {
+            "defined": "Asset"
+          }
+        },
+        {
+          "name": "reserve_token",
+          "type": "u128"
+        },
+        {
+          "name": "reserve_collateral",
+          "type": "u128"
+        },
+        {
+          "name": "w_start",
+          "type": "u128"
+        },
+        {
+          "name": "w_end",
+          "type": "u128"
+        },
+        {
+          "name": "t_start",
+          "type": "u64"
+        },
+        {
+          "name": "t_end",
+          "type": "u64"
+        },
+        {
+          "name": "fee_rate",
+          "type": "u128"
+        }
+      ]
+    },
+    {
+      "name": "BuyPaid",
+      "selector": "852e5ecaded263c6",
+      "fields": [
+        {
+          "name": "pool_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "buyer",
+          "type": "account_id"
+        },
+        {
+          "name": "now",
+          "type": "u64"
+        },
+        {
+          "name": "collateral_in",
+          "type": "u128"
+        },
+        {
+          "name": "min_tokens_out",
+          "type": "u128"
+        }
+      ]
+    },
+    {
+      "name": "Withdrawn",
+      "selector": "716cc94be64be8f5",
+      "fields": [
+        {
+          "name": "pool_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "to_creator",
+          "type": "u128"
+        },
+        {
+          "name": "fee",
+          "type": "u128"
+        },
+        {
+          "name": "destination",
+          "type": "account_id"
+        }
+      ]
+    },
+    {
+      "name": "PauseSet",
+      "selector": "5f825c9e791c9337",
+      "fields": [
+        {
+          "name": "pool_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "paused",
+          "type": "u8"
+        }
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6001,
+      "name": "BadPool"
+    },
+    {
+      "code": 6002,
+      "name": "NotAnchored"
+    },
+    {
+      "code": 6003,
+      "name": "PricingRefused"
+    },
+    {
+      "code": 6004,
+      "name": "Slippage"
+    },
+    {
+      "code": 6005,
+      "name": "Paused"
+    },
+    {
+      "code": 6006,
+      "name": "TimeWentBackwards"
+    },
+    {
+      "code": 6009,
+      "name": "TreasuryOverflow"
+    },
+    {
+      "code": 6010,
+      "name": "TreasuryMismatch"
+    },
+    {
+      "code": 6011,
+      "name": "NotCreator"
+    },
+    {
+      "code": 6012,
+      "name": "AlreadyExists"
+    },
+    {
+      "code": 6013,
+      "name": "Accounts"
+    },
+    {
+      "code": 6014,
+      "name": "NotSigned"
+    },
+    {
+      "code": 6015,
+      "name": "WrongAsset"
+    },
+    {
+      "code": 6016,
+      "name": "Amount"
+    },
+    {
+      "code": 6017,
+      "name": "NotEnded"
+    }
+  ]
+}
