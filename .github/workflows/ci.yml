@@ -81,7 +81,7 @@ jobs:
             ~/.cargo/git
             zkvm/target
             executor-tests/target
-          key: zkvm-${{ hashFiles('zkvm/**/Cargo.toml', 'executor-tests/Cargo.toml', 'src/**') }}
+          key: zkvm-${{ hashFiles('zkvm/**/Cargo.toml', 'executor-tests/Cargo.toml', 'programs/*/core/Cargo.toml', 'src/**') }}
 
       # The executor only — no proving. These are the counts that decide whether
       # an operation fits LEZ's public-execution budget, and they are
@@ -94,18 +94,24 @@ jobs:
       # The deployed binary itself, run through the sequencer's execution path:
       # every requirement test that accepts or refuses an instruction, then the
       # per-instruction cost table, which must match the committed one.
-      # The v0.3 program's plan and apply, on the host, without a zkVM.
+      # The v0.3 programs' plan and apply, on the host, without a zkVM.
       - name: The vesting core's own tests
         run: cargo test --release --manifest-path programs/vesting/Cargo.toml -p antumbra-vesting-core
 
-      # SPEL generated the v0.2.4 IDL; it has no v0.3 support, so the v0.3 IDL
-      # is hand-maintained and this is what notices when it stops being true.
-      - name: The hand-maintained v0.3 IDL decodes the program's own vectors
+      - name: The curve and LBP cores' own tests
+        run: |
+          cargo test --release --manifest-path programs/curve/Cargo.toml -p antumbra-curve-core
+          cargo test --release --manifest-path programs/lbp/Cargo.toml -p antumbra-lbp-core
+
+      # SPEL generated the v0.2.4 IDLs; it has no v0.3 support, so the v0.3
+      # IDLs are hand-maintained and this is what notices when they stop being
+      # true: vesting, curve and LBP.
+      - name: The hand-maintained v0.3 IDLs decode the programs' own vectors
         run: python3 scripts/check-idl.py
 
-      # The committed v0.3 binary through lee::V03State: signed transactions,
+      # The committed v0.3 binaries through lee::V03State: signed transactions,
       # timestamp windows, the real token program, the 10M gas cap.
-      - name: The committed vesting binary accepts and refuses what the RFP says
+      - name: The committed vesting, curve and LBP binaries accept and refuse what the RFPs say
         working-directory: executor-tests
         run: cargo test --release
 
@@ -124,14 +130,18 @@ jobs:
             sed -n '/^| op |/,/^$/p' /tmp/cycles.txt
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # The committed v0.3 binary is what a clean rebuild of the tree produces, in
+  # Each committed v0.3 binary is what a clean rebuild of the tree produces, in
   # RISC Zero's pinned Docker builder (r0.1.91.1, the tag LEZ v0.3.0 builds its
   # own programs with). The ImageID a v0.3 program header stores is computed
   # from these bytes, so a matching rebuild is the program a deployment names.
   # The v0.2.4 deploy-hash check this job used to run is history: that chain
   # was upgraded and the hash no longer resolves.
   reproduce:
-    name: A clean rebuild is the committed v0.3 vesting program
+    name: A clean rebuild is the committed v0.3 ${{ matrix.program }} program
+    strategy:
+      fail-fast: false
+      matrix:
+        program: [vesting, curve, lbp]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -151,16 +161,18 @@ jobs:
       - name: Rebuild in Docker
         env:
           RISC0_DOCKER_CONTAINER_TAG: r0.1.91.1
-        run: cargo risczero build --manifest-path programs/vesting/Cargo.toml
+        run: cargo risczero build --manifest-path programs/${{ matrix.program }}/Cargo.toml
 
       - name: The rebuild is the committed artifact, byte for byte
+        env:
+          P: ${{ matrix.program }}
         run: |
           set -e
-          built=$(sha256sum programs/vesting/target/riscv32im-risc0-zkvm-elf/docker/antumbra_vesting.bin | cut -d' ' -f1)
-          committed=$(sha256sum artifacts/programs/v0.3/antumbra_vesting.bin | cut -d' ' -f1)
+          built=$(sha256sum programs/$P/target/riscv32im-risc0-zkvm-elf/docker/antumbra_$P.bin | cut -d' ' -f1)
+          committed=$(sha256sum artifacts/programs/v0.3/antumbra_$P.bin | cut -d' ' -f1)
           echo "rebuilt    $built"; echo "committed  $committed"
           [ "$built" = "$committed" ]
-          echo "the v0.3 rebuild matches the committed artifact ($committed)" >> "$GITHUB_STEP_SUMMARY"
+          echo "the v0.3 antumbra_$P rebuild matches the committed artifact ($committed)" >> "$GITHUB_STEP_SUMMARY"
 
   # The Basecamp module, built the way the catalog builds modules: mkLogosModule
   # (app/flake.nix), `nix build .#lgx-portable`, on both platforms Basecamp
