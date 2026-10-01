@@ -145,14 +145,14 @@ if want 1; then
   H=$(jget "$(ids "$S")" holding)
   check "linear escrow funded exactly" "$(bal "$H")" 600
   step claim-overclaim refused -- "${P[@]}" --force claim --schedule-id "$S" --beneficiary "$BEN" --to "Public/$NDEST" --amount 601
-  step claim-by-creator refused -- --force claim --schedule-id "$S" --beneficiary "$CREATOR" --to "Public/$CREATOR" --amount 1
+  step claim-by-creator refused -- "${P[@]}" --force claim --schedule-id "$S" --beneficiary "$CREATOR" --to "Public/$CREATOR" --amount 1
   check "escrow untouched by refusals" "$(bal "$H")" 600
   step claim-linear applied -- "${P[@]}" claim --schedule-id "$S" --beneficiary "$BEN" --to "Public/$NDEST"
   s="$(show "$S")"; c=$(jget "$s" claimed)
   check "claimed equals floor(600*(t-start)/(end-start)) at the claim's time" "$c" \
     "$(python3 -c 'import json,sys;s=json.loads(sys.argv[1]);print(600*(s["last_seen"]-s["start"])//(s["end"]-s["start"]))' "$s")"
   check "destination received the claim" "$(bal "$NDEST")" "$c"
-  step create-duplicate refused -- --force create --schedule-id "$S" --beneficiary "$BEN" --creator "$CREATOR" \
+  step create-duplicate refused -- "${P[@]}" --force create --schedule-id "$S" --beneficiary "$BEN" --creator "$CREATOR" \
     --kind linear --start now --end now+30m --total 900 --refund-to "$REFUND"
   check "duplicate took no second funding" "$(bal "$H")" "$((600 - c))"
 fi
@@ -165,14 +165,14 @@ if want 2; then
   track "$S"
   H=$(jget "$(ids "$S")" holding)
   before=$(bal "$REFUND")
-  step cancel-wrong-refund refused -- --force cancel --schedule-id "$S" --authority "$CREATOR" --refund 1
+  step cancel-wrong-refund refused -- "${P[@]}" --force cancel --schedule-id "$S" --authority "$CREATOR" --refund 1
   step cancel-by-beneficiary refused -- "${P[@]}" --force cancel --schedule-id "$S" --authority "$BEN"
-  step cancel applied -- cancel --schedule-id "$S" --authority "$CREATOR"
+  step cancel applied -- "${P[@]}" cancel --schedule-id "$S" --authority "$CREATOR"
   s="$(show "$S")"
   vested=$(python3 -c 'import json,sys;s=json.loads(sys.argv[1]);print(600*(s["cancelled_at"]-s["start"])//(s["end"]-s["start"]))' "$s")
   check "refund is exactly the unvested part" "$(( $(bal "$REFUND") - before ))" "$((600 - vested))"
   check "vested part stays in escrow" "$(bal "$H")" "$vested"
-  step cancel-again refused -- --force cancel --schedule-id "$S" --authority "$CREATOR" --refund 0
+  step cancel-again refused -- "${P[@]}" --force cancel --schedule-id "$S" --authority "$CREATOR" --refund 0
   if [ "$vested" -gt 0 ]; then
     step claim-after-cancel applied -- "${P[@]}" claim --schedule-id "$S" --beneficiary "$BEN" --to "Public/$NDEST"
     check "escrow empty after the vested part is claimed" "$(bal "$H")" 0
@@ -209,7 +209,7 @@ if want 4; then
   step create-milestones applied -- "${P[@]}" create --schedule-id "$S" --beneficiary "$BEN" --creator "$CREATOR" \
     --kind milestones --total 1000 --tranches 4 --milestone-authority "$AUTH2" --refund-to "$REFUND"
   track "$S"
-  step signal-by-creator refused -- signal --schedule-id "$S" --authority "$CREATOR" --index 0
+  step signal-by-creator refused -- "${P[@]}" signal --schedule-id "$S" --authority "$CREATOR" --index 0
   step signal-0 applied -- "${P[@]}" signal --schedule-id "$S" --authority "$AUTH2" --index 0
   step signal-0-again refused -- "${P[@]}" signal --schedule-id "$S" --authority "$AUTH2" --index 0
   step signal-2 applied -- "${P[@]}" signal --schedule-id "$S" --authority "$AUTH2" --index 2
@@ -224,18 +224,19 @@ if want 5; then
   step create-transferable applied -- "${P[@]}" create --schedule-id "$S" --beneficiary "$BEN" --creator "$CREATOR" \
     --kind linear --start now-30m --end now-1m --total 300 --transferable --refund-to "$REFUND"
   track "$S"
-  step transfer-by-creator refused -- transfer --schedule-id "$S" --beneficiary "$CREATOR" --to "$CREATOR"
+  step transfer-by-creator refused -- "${P[@]}" transfer --schedule-id "$S" --beneficiary "$CREATOR" --to "$CREATOR"
   step transfer applied -- "${P[@]}" transfer --schedule-id "$S" --beneficiary "$BEN" --to "$SECOND"
   step claim-by-old-holder refused -- "${P[@]}" --force claim --schedule-id "$S" --beneficiary "$BEN" --to "Public/$NDEST" --amount 300
+  second_before=$(bal "$SECOND")
   step claim-by-new-holder applied -- "${P[@]}" claim --schedule-id "$S" --beneficiary "$SECOND" --to "Public/$SECOND"
-  check "new holder received the whole position" "$(bal "$SECOND")" 300
+  check "new holder received the whole position" "$(( $(bal "$SECOND") - second_before ))" 300
   S="$TAG-nc"
   step create-for-nc applied -- "${P[@]}" create --schedule-id "$S" --beneficiary "$BEN" --creator "$CREATOR" \
     --kind linear --start now --end now+30m --total 300 --refund-to "$REFUND"
   track "$S"
   step nc-by-beneficiary refused -- "${P[@]}" make-non-cancelable --schedule-id "$S" --creator "$BEN"
-  step make-non-cancelable applied -- make-non-cancelable --schedule-id "$S" --creator "$CREATOR"
-  step cancel-after-nc refused -- --force cancel --schedule-id "$S" --authority "$CREATOR"
+  step make-non-cancelable applied -- "${P[@]}" make-non-cancelable --schedule-id "$S" --creator "$CREATOR"
+  step cancel-after-nc refused -- "${P[@]}" --force cancel --schedule-id "$S" --authority "$CREATOR"
 fi
 
 echo "== 6. nominated cancel authority"
@@ -244,7 +245,7 @@ if want 6; then
   step create-with-authority applied -- "${P[@]}" create --schedule-id "$S" --beneficiary "$BEN" --creator "$CREATOR" \
     --kind linear --start now --end now+30m --total 600 --cancel-authority "$AUTH2" --refund-to "$REFUND"
   track "$S"
-  step cancel-by-creator-not-authority refused -- --force cancel --schedule-id "$S" --authority "$CREATOR"
+  step cancel-by-creator-not-authority refused -- "${P[@]}" --force cancel --schedule-id "$S" --authority "$CREATOR"
   step cancel-by-authority applied -- "${P[@]}" cancel --schedule-id "$S" --authority "$AUTH2"
 fi
 
@@ -260,7 +261,7 @@ if want 7; then
   track "$S0" "$B"; track "$S1" "$B"
   step batch-claim-0 applied -- "${P[@]}" claim --schedule-id "$S0" --batch-id "$B" --beneficiary "$BEN" --to "Public/$NDEST"
   c0=$(jget "$(show "$S0")" claimed)
-  step batch-cancel-1 applied -- cancel --schedule-id "$S1" --batch-id "$B" --authority "$CREATOR"
+  step batch-cancel-1 applied -- "${P[@]}" cancel --schedule-id "$S1" --batch-id "$B" --authority "$CREATOR"
   s1="$(show "$S1")"
   r1=$(python3 -c 'import json,sys;s=json.loads(sys.argv[1]);print(600-600*(s["cancelled_at"]-s["start"])//(s["end"]-s["start"]))' "$s1")
   check "batch holding lost only schedule 0's claim and schedule 1's refund" "$(bal "$BH")" "$((4800 - c0 - r1))"
@@ -272,7 +273,7 @@ if want 8; then
   step create-for-private applied -- "${P[@]}" create --schedule-id "$S" --beneficiary "$BEN" --creator "$CREATOR" \
     --kind linear --start now-30m --end now-1m --total 250 --refund-to "$REFUND"
   track "$S"
-  step claim-private-native applied -- claim --schedule-id "$S" --beneficiary "$BEN" --to "Private/$PNAT"
+  step claim-private-native applied -- "${P[@]}" claim --schedule-id "$S" --beneficiary "$BEN" --to "Private/$PNAT"
   check "private native claim recorded on the schedule" "$(jget "$(show "$S")" claimed)" 250
   check "the wallet decrypted the native claim into the shielded account" "$(privbal "$PNAT")" 250
   if [ -n "${DEF:-}" ]; then
@@ -280,7 +281,7 @@ if want 8; then
     step create-token-for-private applied -- "${P[@]}" create --schedule-id "$S" --beneficiary "$BEN" --creator "$SUPPLY" \
       --kind linear --start now-30m --end now-1m --total 5000 --refund-to "$REFUND" --token "$DEF"
     track "$S" "" "$TOKEN"
-    step claim-private-token applied -- claim --schedule-id "$S" --beneficiary "$BEN" --to "Private/$PTOK"
+    step claim-private-token applied -- "${P[@]}" claim --schedule-id "$S" --beneficiary "$BEN" --to "Private/$PTOK"
     check "private token claim recorded on the schedule" "$(jget "$(show "$S")" claimed)" 5000
     check "the wallet decrypted the token claim into the shielded account" "$(privtok "$PTOK")" 5000
   fi
