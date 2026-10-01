@@ -11,7 +11,51 @@ inferred from the program's own bookkeeping, and the **fee accrued but not yet
 swept**. When those two disagree with the decoded state, the decoded state is
 wrong, and a panel that only rendered one of them would never say so.
 
-`antumbra-lez.lgx` is the package. It carries one variant, `darwin-arm64`.
+`antumbra-lez.lgx` is the package, built with logos-module-builder
+(`mkLogosModule`, see [`flake.nix`](flake.nix)) for Basecamp 0.3.0. The committed
+file carries the `darwin-arm64` variant; CI builds `linux-amd64` too and merges
+both into one package (the `module` and `module-package` jobs).
+
+## In Basecamp 0.3.0, against a local v0.3 sequencer
+
+Until the v0.3 vesting program is deployed on the public testnet the panel
+says so, and reads nothing:
+
+![Not deployed yet](../docs/screens/basecamp-not-deployed.png)
+
+Where it reads is a setting, not a constant: the sequencer RPC (default
+`https://testnet.lez.logos.co`), the program id (empty until deployed), and the
+schedule and holding accounts to follow (`antumbra-vesting ids --schedule-id
+<id>` prints both). They are saved to
+`$LOGOS_USER_DIR/module_data/antumbra_lez/settings.ini`, so a throwaway
+`--user-dir` never touches another instance's settings. `ANTUMBRA_RPC`,
+`ANTUMBRA_PROGRAM`, `ANTUMBRA_SCHEDULE` and `ANTUMBRA_HOLDING` override them.
+
+![Settings pointed at a local sequencer](../docs/screens/basecamp-settings-local.png)
+
+Pointed at a local LEZ v0.3.0 sequencer (`sequencer_service` from tag
+`v0.3.0`, commit `db66590ab`, standalone) after `scripts/e2e-v03.sh` deployed
+the program and created a linear native schedule, the panel decodes the
+schedule's shard and the escrow's balance, and computes claimable against the
+chain's clock account. The numbers are the CLI's (`antumbra-vesting show`) for
+the same schedule at the same moment: 600 locked, 30 claimed, 570 escrowed.
+
+![A schedule read from a local v0.3 sequencer](../docs/screens/basecamp-schedule-local.png)
+
+**Typing does not reach the panel in Basecamp 0.3.0.** Clicks do, keys do
+not: Basecamp keeps keyboard activation on its own window, and a legacy `ui`
+widget module never receives the key events (measured with a focus and key
+event log inside the plugin; Basecamp's own search field types fine). So
+every settings field has a Paste button that reads the clipboard: copy a
+value, click Paste.
+
+To reproduce on a throwaway Basecamp instance, never your own:
+
+```bash
+nix build ./app#lgx-portable --accept-flake-config -o result
+scripts/install-local.sh /tmp/bc-antumbra result/*.lgx
+~/Applications/LogosBasecamp-0.3.0.app/Contents/MacOS/LogosBasecamp --user-dir /tmp/bc-antumbra
+```
 
 ## It loads, and here is the control that makes that mean something
 
@@ -42,9 +86,9 @@ nothing, and there is no visible error.
 
 The dylib **extracted from the packaged `.lgx`** is the one tested, not one
 left in a build directory: a package that ships a different binary from the one
-you verified has verified nothing. CI does this on every push — the `basecamp`
-job unpacks `antumbra-lez.lgx` on macOS, installs Qt 6.9.2, the version Basecamp
-bundles, and runs [`app/tests/ui_plugin_load_test.cpp`](tests/ui_plugin_load_test.cpp):
+you verified has verified nothing. CI does this on every push: the `module`
+job builds the package with `nix build ./app#lgx-portable`, unpacks it on
+macOS, installs Qt 6.9.2, the version Basecamp bundles, and runs [`app/tests/ui_plugin_load_test.cpp`](tests/ui_plugin_load_test.cpp):
 the binary binds every symbol, QPluginLoader accepts it and refuses a file that
 is not a plugin, the IID and metadata are what Basecamp compares against, and a
 widget comes back through the vtable and is taken back.
@@ -98,28 +142,19 @@ this binary", not "the host survives using it". Those need separate evidence.
 
 ## Build it
 
-Basecamp bundles Qt 6.9.2, so build against 6.9.2. Get it without disturbing the
-system Qt:
-
 ```bash
-python3 -m venv /tmp/aqt && /tmp/aqt/bin/pip install aqtinstall
-/tmp/aqt/bin/aqt install-qt mac desktop 6.9.2 clang_64 --outputdir /tmp/Qt
-
-cd app
-cmake -S . -B build -DCMAKE_PREFIX_PATH=/tmp/Qt/6.9.2/macos -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j4
+export PATH=/nix/var/nix/profiles/default/bin:$PATH
+nix build ./app#lgx-portable --accept-flake-config -o result   # from the repo root
 ```
 
-Official builds also reference frameworks as `@rpath/…`, which resolves against
-Basecamp's bundled Qt; Homebrew builds hardcode `/opt/homebrew/opt/qtbase/lib/…`
-and fail anywhere but this machine.
+The builder pins Qt 6.9.2, the version Basecamp 0.3.0 bundles, and the dylib
+references Qt as `@rpath/…`, which resolves against Basecamp's own frameworks.
+The QML is compiled in with zlib rather than zstd, since a zstd resource needs
+a QtCore built with zstd and not every Qt 6.9.2 is.
 
-Then package:
-
-```bash
-python3 scripts/package-lgx.py --out app/antumbra-lez.lgx
-python3 scripts/package-lgx.py --verify app/antumbra-lez.lgx
-```
+The plain CMake path (no `LOGOS_MODULE_BUILDER_ROOT`) still builds the same
+sources against any Qt 6.9.2 for QML iteration; it is not how the package is
+made.
 
 ## Three things that are not obvious and cost a build each
 
@@ -135,7 +170,6 @@ python3 scripts/package-lgx.py --verify app/antumbra-lez.lgx
    the host calls the wrong function through a pointer that cast fine. `name()`
    is deliberately a non-virtual accessor.
 
-And a fourth from the manifest: `lgx add` leaves `type` empty because it never
-reads `metadata.json`, and **a module with an empty `type` is invisible** in
-Basecamp. `package-lgx.py` folds it back in, which is why the manifest here
-reads `type: ui`.
+And a fourth from the manifest: a module with an empty `type` is invisible in
+Basecamp. The builder's bundler writes `type: ui` from `metadata.json` into the
+package manifest, and CI asserts it.

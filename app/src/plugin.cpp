@@ -24,6 +24,10 @@ QWidget* AntumbraPlugin::createWidget(LogosAPI* /*api*/) {
     view->engine()->rootContext()->setContextProperty(
         QStringLiteral("bridge"), m_bridge);
     view->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    // Without a focus policy the widget never takes keyboard focus inside
+    // Basecamp's dock: a click reaches the QML, but keys go to the host, so a
+    // text field cannot be typed into. Measured in Basecamp 0.3.0.
+    view->setFocusPolicy(Qt::StrongFocus);
     view->setSource(QUrl(QStringLiteral("qrc:/antumbra_lez/Main.qml")));
     return view;
 }

@@ -23,8 +23,12 @@ int main(int argc, char** argv) {
         std::printf("FAILED %s: %s\n", qPrintable(w), qPrintable(why));
         app.exit(1);
     });
+    QObject::connect(&b, &ChainBridge::notDeployed, [&](const QString& why) {
+        std::printf("NOT DEPLOYED: %s\n", qPrintable(why));
+        app.exit(3);
+    });
     std::printf("endpoint %s\n", qPrintable(b.endpoint()));
-    b.refresh();
+    QTimer::singleShot(0, &b, [&] { b.refresh(); });
     QTimer::singleShot(20000, &app, [&] { std::printf("timeout\n"); app.exit(2); });
     return app.exec();
 }

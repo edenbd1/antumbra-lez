@@ -54,6 +54,14 @@ Item {
     // Which program the panel is showing. Vesting by default: it is the one
     // deployed on the current testnet. The launchpad views read on request.
     property string only: "vesting"
+    // "" while reading or showing state; otherwise why there is nothing to read.
+    property string notDeployed: ""
+    property bool showSettings: false
+    property string rpcShown: bridge.endpoint()
+    property string programShown: bridge.program()
+    // The two vesting reads answer in either order; the escrow line is kept
+    // so the schedule's answer does not overwrite it.
+    property string schedEscrow: ""
     onOnlyChanged: root.only === "vesting" ? bridge.refresh() : bridge.refreshLaunchpad()
 
     Rectangle { anchors.fill: parent; color: root.bg }
@@ -99,6 +107,153 @@ Item {
                 text: "Refresh"
                 onClicked: root.only === "vesting" ? bridge.refresh() : bridge.refreshLaunchpad()
             }
+            Button {
+                text: "Settings"
+                checkable: true
+                checked: root.showSettings
+                onClicked: root.showSettings = !root.showSettings
+            }
+        }
+
+        Text {
+            Layout.fillWidth: true
+            text: "sequencer  " + root.rpcShown + (root.programShown ? "    program  " + root.programShown : "    program  (none)")
+            color: root.muted
+            font.pixelSize: 11
+            font.family: "Menlo, monospace"
+            elide: Text.ElideMiddle
+        }
+
+        // ---- settings: which sequencer, which program, which schedule ----
+        Rectangle {
+            id: settingsCard
+            visible: root.showSettings
+            Layout.fillWidth: true
+            implicitHeight: settingsCol.implicitHeight + 24
+            color: root.panel
+            border.color: root.line
+            radius: 8
+
+            ColumnLayout {
+                id: settingsCol
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 8
+                Text {
+                    text: "Settings"
+                    color: root.accent
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    color: root.muted
+                    font.pixelSize: 11
+                    text: "Read-only: these say where to read, nothing here can sign. "
+                          + "`antumbra-vesting ids --schedule-id <id>` prints a schedule's two accounts. "
+                          + "Copy a value, then Paste: Basecamp 0.3.0 does not pass typing to this panel."
+                          + (bridge.envOverrides().length
+                             ? "  Set in the environment, and winning over a saved value: " + bridge.envOverrides().join(", ")
+                             : "")
+                }
+                Repeater {
+                    id: fields
+                    model: [
+                        { k: "Sequencer RPC",    v: bridge.endpoint(), hint: bridge.defaultEndpoint() },
+                        { k: "Program id",       v: bridge.program(),  hint: "empty until the v0.3 program is deployed" },
+                        { k: "Schedule account", v: bridge.schedule(), hint: "base58 account id" },
+                        { k: "Holding account",  v: bridge.holding(),  hint: "base58 account id" },
+                    ]
+                    RowLayout {
+                        property alias value: field.text
+                        Layout.fillWidth: true
+                        Text {
+                            text: modelData.k
+                            color: root.muted
+                            font.pixelSize: 12
+                            Layout.preferredWidth: 130
+                        }
+                        TextField {
+                            id: field
+                            Layout.fillWidth: true
+                            text: modelData.v
+                            placeholderText: modelData.hint
+                            font.pixelSize: 12
+                            font.family: "Menlo, monospace"
+                            selectByMouse: true
+                        }
+                        Button {
+                            text: "Paste"
+                            onClicked: field.text = bridge.clipboardText()
+                        }
+                        Button {
+                            text: "Clear"
+                            onClicked: field.text = ""
+                        }
+                    }
+                }
+                RowLayout {
+                    spacing: 8
+                    Button {
+                        text: "Save and read"
+                        onClicked: {
+                            bridge.saveSettings(fields.itemAt(0).value, fields.itemAt(1).value,
+                                                fields.itemAt(2).value, fields.itemAt(3).value)
+                            root.rpcShown = bridge.endpoint()
+                            root.programShown = bridge.program()
+                            root.only = "vesting"
+                            bridge.refresh()
+                        }
+                    }
+                    Button {
+                        text: "Public testnet"
+                        onClicked: fields.itemAt(0).value = bridge.defaultEndpoint()
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        text: bridge.settingsFile()
+                        color: root.muted
+                        font.pixelSize: 10
+                        elide: Text.ElideLeft
+                        Layout.maximumWidth: 320
+                    }
+                }
+            }
+        }
+
+        // ---- not deployed yet: a state, not an error ----
+        Rectangle {
+            visible: root.notDeployed !== "" && root.only === "vesting"
+            Layout.fillWidth: true
+            implicitHeight: ndCol.implicitHeight + 28
+            color: "#1d1a10"
+            border.color: "#6b5a1e"
+            radius: 8
+            ColumnLayout {
+                id: ndCol
+                anchors.fill: parent
+                anchors.margins: 14
+                spacing: 6
+                Text {
+                    text: "Not deployed yet"
+                    color: "#e8c766"
+                    font.pixelSize: 15
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: root.notDeployed
+                    color: root.fg
+                    font.pixelSize: 12
+                }
+                Button {
+                    text: "Open settings"
+                    visible: !root.showSettings
+                    onClicked: root.showSettings = true
+                }
+            }
         }
 
         Rectangle { Layout.fillWidth: true; height: 1; color: root.line }
@@ -122,7 +277,7 @@ Item {
         // ---- vesting, RFP-017 ----
         Card {
             id: schedCard
-            visible: root.only === "all" || root.only === "vesting"
+            visible: (root.only === "all" || root.only === "vesting") && root.notDeployed === ""
             title: "Vesting position — RFP-017"
             subtitle: "claimable now is computed against the chain's own clock, as a claim would be"
         }
@@ -206,8 +361,10 @@ Item {
             ]
         }
         function onEscrowUpdated(which, balance) {
+            if (which === "schedule") root.schedEscrow = balance
             var card = which === "sale" ? saleCard : schedCard
-            var rows = card.rows.slice()
+            if (card.rows.length === 0) return
+            var rows = card.rows.filter(function (r) { return r.k !== "escrowed on chain" })
             rows.push({ k: "escrowed on chain", v: balance })
             card.rows = rows
         }
@@ -221,7 +378,13 @@ Item {
         }
         // Base units, not 18-decimal amounts: a vesting total is whatever the
         // token's own convention is, and the program never scales it.
+        function onNotDeployed(why) {
+            root.notDeployed = why
+            schedCard.rows = []
+            status.text = "not deployed"
+        }
         function onScheduleUpdated(s) {
+            root.notDeployed = ""
             schedCard.rows = [
                 { k: "schedule type",          v: s.kind },
                 { k: "asset",                  v: s.asset },
@@ -232,7 +395,7 @@ Item {
                 { k: "next unlock",            v: s.next },
                 { k: "cancelable",             v: s.cancelable },
                 { k: "computed at",            v: s.clock + "  (the LEZ clock account)" },
-            ]
+            ].concat(root.schedEscrow ? [{ k: "escrowed on chain", v: root.schedEscrow }] : [])
         }
         function onStatusChanged(t) { status.text = t }
         function onFailed(which, why) { status.text = which + ": " + why }

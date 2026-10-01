@@ -8,6 +8,12 @@
 #include <QNetworkReply>
 #include <QNetworkProxy>
 #include <QNetworkRequest>
+#include <QClipboard>
+#include <QDir>
+#include <QGuiApplication>
+#include <QFileInfo>
+#include <QSettings>
+#include <QStandardPaths>
 #include <QUrl>
 
 namespace {
@@ -26,12 +32,21 @@ const char* kClockAccount = "4BdcjoXkq786TMWcBGGHqcxeLYMZmn17rL4eM9ZyRWNU";
 
 // The vesting program's header account and the schedule the panel follows.
 // On v0.3 a program lives at whatever account it was deployed to, so these
-// come from the environment (or setVestingTarget) rather than being compiled
-// in. The testnet v0.3 deployment is pending funding; until it lands the panel
-// says so instead of showing a v0.2.4 address that no longer resolves.
-QString envOr(const char* name, const char* fallback) {
-    const QByteArray v = qgetenv(name);
-    return v.isEmpty() ? QString::fromLatin1(fallback) : QString::fromUtf8(v);
+// come from the environment or the module's settings rather than being
+// compiled in. The public testnet v0.3 deployment has not happened yet; until
+// it does the program id is empty and the panel says "not deployed yet"
+// instead of showing a v0.2.4 address that no longer resolves.
+const char* kDefaultRpc = "https://testnet.lez.logos.co";
+
+// Basecamp passes --user-dir to its modules as LOGOS_USER_DIR. Settings live
+// under that directory's module_data, next to every other module's state, so
+// a throwaway Basecamp instance never reads or writes the default one's.
+QString settingsPath() {
+    const QByteArray user = qgetenv("LOGOS_USER_DIR");
+    const QString base = user.isEmpty()
+        ? QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+        : QString::fromUtf8(user);
+    return QDir(base).filePath(QStringLiteral("module_data/antumbra_lez/settings.ini"));
 }
 
 // The launchpad programs (RFP-015/016) are still v0.2.4 programs, and that
@@ -169,44 +184,89 @@ unsigned __int128 vestedAt(quint8 kind, quint64 start, quint64 cliff, quint64 en
 } // namespace
 
 ChainBridge::ChainBridge(QObject* parent)
-    : QObject(parent),
-      m_rpc(envOr("ANTUMBRA_RPC", "https://testnet.lez.logos.co")),
-      m_program(envOr("ANTUMBRA_PROGRAM", "")),
-      m_schedule(envOr("ANTUMBRA_SCHEDULE", "")),
-      m_holding(envOr("ANTUMBRA_HOLDING", "")) {
+    : QObject(parent), m_settingsFile(settingsPath()) {
+    // Environment first (a scripted run pins what it reads), then what the
+    // user saved, then the defaults.
+    QSettings saved(m_settingsFile, QSettings::IniFormat);
+    auto pick = [&](const char* env, const char* key, const QString& fallback) {
+        const QByteArray v = qgetenv(env);
+        if (!v.isEmpty()) return QString::fromUtf8(v).trimmed();
+        return saved.value(QLatin1String(key), fallback).toString().trimmed();
+    };
+    m_rpc = pick("ANTUMBRA_RPC", "rpc", QString::fromLatin1(kDefaultRpc));
+    if (m_rpc.isEmpty()) m_rpc = QString::fromLatin1(kDefaultRpc);
+    m_program = pick("ANTUMBRA_PROGRAM", "program", QString());
+    m_schedule = pick("ANTUMBRA_SCHEDULE", "schedule", QString());
+    m_holding = pick("ANTUMBRA_HOLDING", "holding", QString());
+
     // Qt's macOS system-proxy lookup builds a QRegularExpression, PCRE2 tries to
     // JIT-compile it, and pthread_jit_write_protect_np traps: Basecamp runs under
     // the hardened runtime without com.apple.security.cs.allow-jit, so the first
     // HTTP request took the whole host process down with SIGTRAP. The module is
     // not the one deciding to JIT and cannot add the entitlement to someone
-    // else's binary, so it declines the lookup instead. Direct connection only —
+    // else's binary, so it declines the lookup instead. Direct connection only,
     // which is what talking to a sequencer over its public URL wants anyway.
     QNetworkProxyFactory::setUseSystemConfiguration(false);
     m_net.setProxy(QNetworkProxy::NoProxy);
 }
 
+QString ChainBridge::defaultEndpoint() const { return QString::fromLatin1(kDefaultRpc); }
+
+QStringList ChainBridge::envOverrides() const {
+    QStringList out;
+    for (const char* e : {"ANTUMBRA_RPC", "ANTUMBRA_PROGRAM", "ANTUMBRA_SCHEDULE", "ANTUMBRA_HOLDING"})
+        if (!qgetenv(e).isEmpty()) out << QString::fromLatin1(e);
+    return out;
+}
+
+QString ChainBridge::clipboardText() const {
+    const QClipboard* c = QGuiApplication::clipboard();
+    return c ? c->text().trimmed() : QString();
+}
+
 void ChainBridge::setEndpoint(const QString& url) {
-    if (!url.isEmpty()) m_rpc = url;
+    if (!url.trimmed().isEmpty()) m_rpc = url.trimmed();
 }
 
 void ChainBridge::setVestingTarget(const QString& program, const QString& schedule,
                                    const QString& holding) {
-    m_program = program;
-    m_schedule = schedule;
-    m_holding = holding;
+    m_program = program.trimmed();
+    m_schedule = schedule.trimmed();
+    m_holding = holding.trimmed();
+}
+
+void ChainBridge::saveSettings(const QString& rpc, const QString& program,
+                               const QString& schedule, const QString& holding) {
+    setEndpoint(rpc.trimmed().isEmpty() ? QString::fromLatin1(kDefaultRpc) : rpc);
+    setVestingTarget(program, schedule, holding);
+    QDir().mkpath(QFileInfo(m_settingsFile).absolutePath());
+    QSettings saved(m_settingsFile, QSettings::IniFormat);
+    saved.setValue(QStringLiteral("rpc"), m_rpc);
+    saved.setValue(QStringLiteral("program"), m_program);
+    saved.setValue(QStringLiteral("schedule"), m_schedule);
+    saved.setValue(QStringLiteral("holding"), m_holding);
+    saved.sync();
+    emit statusChanged(QStringLiteral("settings saved to %1").arg(m_settingsFile));
 }
 
 void ChainBridge::refresh() {
-    if (m_program.isEmpty() || m_schedule.isEmpty() || m_holding.isEmpty()) {
+    if (m_program.isEmpty()) {
+        emit notDeployed(QStringLiteral("The v0.3 vesting program is not deployed on %1 yet. "
+                                        "Once it is, put its program id in Settings.").arg(m_rpc));
+        return;
+    }
+    if (m_schedule.isEmpty() || m_holding.isEmpty()) {
         emit failed(QStringLiteral("schedule"),
-                    QStringLiteral("no v0.3 deployment configured: testnet v0.3 deployment is pending "
-                                   "funding (set ANTUMBRA_PROGRAM, ANTUMBRA_SCHEDULE, ANTUMBRA_HOLDING)"));
+                    QStringLiteral("set the schedule and holding accounts to follow in Settings "
+                                   "(`antumbra-vesting ids --schedule-id <id>` prints both)"));
         return;
     }
     emit statusChanged(QStringLiteral("reading %1…").arg(m_rpc));
-    // The clock first: the schedule is only meaningful against it, so its
-    // answer triggers the two vesting reads.
-    fetch(QStringLiteral("clock"), QString::fromLatin1(kClockAccount));
+    // The program first: an id that holds no account on this sequencer means
+    // the program is not deployed here, which is a state worth naming rather
+    // than a pile of "no account" errors. Then the clock, against which the
+    // schedule is computed, and its answer triggers the two vesting reads.
+    fetch(QStringLiteral("program"), m_program);
 }
 
 void ChainBridge::refreshLaunchpad() {
@@ -237,6 +297,20 @@ void ChainBridge::fetch(const QString& label, const QString& accountId) {
         }
         const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
         const QJsonValue result = root.value(QStringLiteral("result"));
+        if (label == QLatin1String("program")) {
+            // A v0.3 sequencer answers every id, with an empty shard map for
+            // an account nothing ever wrote: that is "no program here".
+            const QJsonObject shards = result.toObject().value(QStringLiteral("data")).toObject()
+                                           .value(QStringLiteral("shards")).toObject();
+            if (!result.isObject() || shards.isEmpty()) {
+                emit notDeployed(QStringLiteral("No program at %1 on %2: the v0.3 vesting program "
+                                                "is not deployed on this chain (yet).")
+                                     .arg(m_program, m_rpc));
+                return;
+            }
+            fetch(QStringLiteral("clock"), QString::fromLatin1(kClockAccount));
+            return;
+        }
         if (!result.isObject()) {
             // A null result is an uninitialised account, which is a real answer
             // and not an error — but it is not state either, so say which.
@@ -285,6 +359,10 @@ void ChainBridge::fetch(const QString& label, const QString& accountId) {
         const QByteArray data = label == QLatin1String("schedule")
                                     ? shardOf(acc, m_program)
                                     : QByteArray();
+        if (label == QLatin1String("schedule") && data.isEmpty()) {
+            emit failed(label, QStringLiteral("no schedule of this program at %1").arg(m_schedule));
+            return;
+        }
         Reader r{data};
         if (label == QLatin1String("sale")) {
             const QString vt = r.u128(), vc = r.u128(), sr = r.u128(),

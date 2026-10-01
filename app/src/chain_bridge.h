@@ -18,6 +18,7 @@
 #include <QNetworkAccessManager>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QVariantMap>
 
 class ChainBridge : public QObject {
@@ -32,13 +33,32 @@ public:
     // The launchpad programs' accounts (RFP-015/016), read on request only.
     Q_INVOKABLE void refreshLaunchpad();
 
-    // Point the panel at a different sequencer. Defaults to public testnet.
-    Q_INVOKABLE void setEndpoint(const QString& url);
+    // Where the panel reads from. The defaults are the public LEZ testnet and
+    // no program: the v0.3 vesting program is not deployed there yet, and the
+    // panel says so instead of inventing an address. Each value is taken, in
+    // order, from the environment (ANTUMBRA_RPC, ANTUMBRA_PROGRAM,
+    // ANTUMBRA_SCHEDULE, ANTUMBRA_HOLDING), the module's saved settings, then
+    // the default.
     Q_INVOKABLE QString endpoint() const { return m_rpc; }
-    // The v0.3 program header, schedule PDA and holding PDA to follow. Also
-    // read from ANTUMBRA_PROGRAM / ANTUMBRA_SCHEDULE / ANTUMBRA_HOLDING.
+    Q_INVOKABLE QString program() const { return m_program; }
+    Q_INVOKABLE QString schedule() const { return m_schedule; }
+    Q_INVOKABLE QString holding() const { return m_holding; }
+    Q_INVOKABLE QString settingsFile() const { return m_settingsFile; }
+    Q_INVOKABLE QString defaultEndpoint() const;
+    // Which values the environment pinned, so the panel can say a saved
+    // setting will not take effect.
+    Q_INVOKABLE QStringList envOverrides() const;
+
+    // The clipboard's text, trimmed. Basecamp 0.3.0 does not route key events
+    // to a legacy widget module, so a field is filled with a click on Paste.
+    Q_INVOKABLE QString clipboardText() const;
+
+    Q_INVOKABLE void setEndpoint(const QString& url);
     Q_INVOKABLE void setVestingTarget(const QString& program, const QString& schedule,
                                       const QString& holding);
+    // Set all four and write them to the settings file.
+    Q_INVOKABLE void saveSettings(const QString& rpc, const QString& program,
+                                  const QString& schedule, const QString& holding);
 
 signals:
     void saleUpdated(const QString& vt, const QString& vc,
@@ -54,6 +74,9 @@ signals:
     /// next unlock, cancelable, and the clock reading it was computed at.
     void scheduleUpdated(const QVariantMap& s);
     void failed(const QString& which, const QString& reason);
+    /// No v0.3 program to read: none configured, or the configured id holds
+    /// no account on this sequencer. Not an error, a state.
+    void notDeployed(const QString& reason);
     void statusChanged(const QString& text);
 
 private:
@@ -64,5 +87,6 @@ private:
     QString m_program;
     QString m_schedule;
     QString m_holding;
+    QString m_settingsFile;
     quint64 m_nowMs = 0;
 };
