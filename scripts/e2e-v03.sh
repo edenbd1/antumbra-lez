@@ -66,6 +66,36 @@ track() {
 }
 jget() { python3 -c 'import json,sys;print(json.loads(sys.argv[1])[sys.argv[2]])' "$1" "$2"; }
 show() { "$CLI" show --schedule-id "$1"; }
+# What the wallet decrypted for one of its shielded accounts: the shard of
+# program $2, as hex. Nothing on chain shows it; only the owner's keys do.
+priv() {
+  python3 - "$LEE_WALLET_HOME_DIR/storage.json" "$1" "$2" <<'PY'
+import json, sys
+store, acct, prog = sys.argv[1:]
+def find(o):
+    if isinstance(o, dict):
+        if "shards" in o:
+            yield o["shards"]
+        for v in o.values():
+            yield from find(v)
+    elif isinstance(o, list):
+        for v in o:
+            yield from find(v)
+for e in json.load(open(store))["key_chain"]["accounts"]:
+    p = e.get("Private")
+    if p and p["account_id"] == acct:
+        for shards in find(p):
+            if prog in shards:
+                v = shards[prog]
+                print(bytes(v).hex() if isinstance(v, list) else v)
+                sys.exit(0)
+print("")
+PY
+}
+privbal() { python3 -c 'import sys;h=sys.argv[1];print(int.from_bytes(bytes.fromhex(h),"little") if h else 0)' "$(priv "$1" $NATIVE)"; }
+privtok() { python3 -c '
+import sys;b=bytes.fromhex(sys.argv[1])
+print(int.from_bytes(b[33:49],"little") if len(b)>=49 and b[0]==0 else 0)' "$(priv "$1" $TOKEN)"; }
 
 fail=0
 check() { # label got want
@@ -231,7 +261,7 @@ if want 8; then
   track "$S"
   step claim-private-native applied -- claim --schedule-id "$S" --beneficiary "$BEN" --to "Private/$PNAT"
   check "private native claim recorded on the schedule" "$(jget "$(show "$S")" claimed)" 250
-  "$W" account get --account-id "Private/$PNAT" 2>&1 | head -3 | sed 's/^/  wallet: /'
+  check "the wallet decrypted the native claim into the shielded account" "$(privbal "$PNAT")" 250
   if [ -n "${DEF:-}" ]; then
     S="$TAG-ptok"
     step create-token-for-private applied -- "${P[@]}" create --schedule-id "$S" --beneficiary "$BEN" --creator "$SUPPLY" \
@@ -239,7 +269,7 @@ if want 8; then
     track "$S" "" "$TOKEN"
     step claim-private-token applied -- claim --schedule-id "$S" --beneficiary "$BEN" --to "Private/$PTOK"
     check "private token claim recorded on the schedule" "$(jget "$(show "$S")" claimed)" 5000
-    "$W" account get --account-id "Private/$PTOK" 2>&1 | head -3 | sed 's/^/  wallet: /'
+    check "the wallet decrypted the token claim into the shielded account" "$(privtok "$PTOK")" 5000
   fi
 fi
 
