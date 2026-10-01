@@ -252,7 +252,7 @@ fi
 echo "== 7. batch: one transfer funds N, each schedule moves only its share"
 if want 7; then
   B="$TAG-batch8"
-  step batch-8 applied -- "${P[@]}" --gas-limit 10000000 batch --batch-id "$B" --beneficiaries "$BEN,$SECOND" --repeat 4 \
+  step batch-8 applied -- "${P[@]}" --gas-limit 400000 batch --batch-id "$B" --beneficiaries "$BEN,$SECOND" --repeat 4 \
     --creator "$CREATOR" --kind linear --start now-10m --end now+20m --total 600 --refund-to "$REFUND"
   BH=$(jget "$(ids x "$B")" holding)
   check "batch holding funded with 8 x 600" "$(bal "$BH")" 4800
