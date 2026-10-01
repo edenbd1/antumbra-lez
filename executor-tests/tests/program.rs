@@ -1,734 +1,392 @@
-//! The committed antumbra_vesting binary, executed as the sequencer executes it.
-//! Each test names the RFP-017 requirement it is evidence for.
-//!
-//!     cargo test --release --manifest-path executor-tests/Cargo.toml
+//! What the committed v0.3 binary accepts and refuses, run through the LEE
+//! state machine. Each refusal is asserted by its code, and every refused
+//! transaction is checked to have moved nothing.
 
-use antumbra_executor_tests::*;
-use lee_core::program::ProgramId;
+use antumbra_executor_tests::{code, Chain, Key, VESTING};
+use antumbra_vesting_core::{
+    batch_schedule_id, event_selector, holding_account, rows, Asset, Instruction, Terms, CANCEL_WINDOW_MS,
+};
+use lee::AccountId;
 
-const T0: u64 = 1_800_000_000_000; // ms
+const T0: u64 = 1_700_000_000_000;
 const MIN: u64 = 60_000;
+const REFUND: AccountId = AccountId::new([0xAA; 32]);
 
-fn refused(r: Result<Run, String>, want: u32) {
-    match r {
-        Ok(_) => panic!("accepted; expected refusal {want}"),
-        Err(e) => assert_eq!(code(&e), Some(want), "wrong refusal: {e}"),
-    }
+struct World {
+    chain: Chain,
+    creator: Key,
+    ben: Key,
+    other: Key,
+    auth: Key,
+    refund: AccountId,
+    def: AccountId,
 }
 
-// ---------------------------------------------------------------- time (F1)
-
-#[test]
-fn f1_claim_reads_the_clock_and_pays_exactly_the_linear_amount() {
-    let mut w = World::new("linear");
-    w.with(w.linear(T0, T0 + 30 * MIN, 600), 600);
-    let r = w
-        .claim(T0 + 7 * MIN + 333, native(DEST, 0), BENEFICIARY)
-        .unwrap();
-    let want = 600u128 * u128::from(7 * MIN + 333) / u128::from(30 * MIN);
-    assert_eq!(r.post(&w.holding).balance, 600 - want);
-    assert_eq!(r.post(&native(DEST, 0)).balance, want);
-    let s = r.schedule(&w.schedule);
-    assert_eq!((s.claimed, s.last_seen), (want, T0 + 7 * MIN + 333));
-}
-
-#[test]
-fn f1_a_clock_the_caller_owns_is_refused() {
-    let mut w = World::new("fakeclock");
-    w.with(w.linear(T0, T0 + MIN, 10), 10);
-    // Right address, wrong owner: an account some other program wrote.
-    let mut fake = clock(T0 + 10 * MIN);
-    fake.account.program_owner = AUTH_TRANSFER;
-    let r = run(
-        &w.elf,
-        &w.pid,
-        &Ix::Claim { schedule_id: w.id },
-        vec![
-            w.schedule.clone(),
-            w.holding.clone(),
-            native(DEST, 0),
-            acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true),
-            fake,
-        ],
+fn world() -> World {
+    let creator = Key::new(1);
+    let ben = Key::new(2);
+    let other = Key::new(3);
+    let auth = Key::new(4);
+    let refund = REFUND;
+    let def = AccountId::new([0xDE; 32]);
+    let chain = Chain::new(
+        &[(creator.id, 1_000_000), (ben.id, 10), (other.id, 10), (auth.id, 10)],
+        &[(creator.id, def, 1_000_000)],
     );
-    refused(r, 7014);
+    World { chain, creator, ben, other, auth, refund, def }
 }
 
-#[test]
-fn f1_an_account_the_clock_program_owns_but_is_not_a_clock_is_refused() {
-    let mut w = World::new("otherclock");
-    w.with(w.linear(T0, T0 + MIN, 10), 10);
-    let mut other = clock(T0 + 10 * MIN);
-    other.account_id = lee_core::account::AccountId::new(*b"/LEZ/ClockProgramAccount/0000077");
-    let r = run(
-        &w.elf,
-        &w.pid,
-        &Ix::Claim { schedule_id: w.id },
-        vec![
-            w.schedule.clone(),
-            w.holding.clone(),
-            native(DEST, 0),
-            acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true),
-            other,
-        ],
-    );
-    refused(r, 7014);
-}
-
-fn clock_50(ms: u64) -> lee_core::account::AccountWithMetadata {
-    let mut c = clock(ms);
-    c.account_id = lee_core::account::AccountId::new(*b"/LEZ/ClockProgramAccount/0000050");
-    c
-}
-
-#[test]
-fn pr1_a_claim_accepts_the_50_block_clock_that_a_private_proof_can_match() {
-    // A privacy-preserving claim is proved against its public inputs as they
-    // were when proving began; the per-block clock changes before a proof of
-    // minutes lands, the 50-block clock does not.
-    let mut w = World::new("coarse");
-    w.with(w.linear(T0, T0 + 30 * MIN, 600), 600);
-    let r = run(
-        &w.elf,
-        &w.pid,
-        &Ix::Claim { schedule_id: w.id },
-        vec![
-            w.schedule.clone(),
-            w.holding.clone(),
-            native(DEST, 0),
-            acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true),
-            clock_50(T0 + 15 * MIN),
-        ],
-    )
-    .unwrap();
-    assert_eq!(r.post(&native(DEST, 0)).balance, 300);
-}
-
-#[test]
-fn f3_a_cancel_refuses_the_coarse_clock_so_it_cannot_be_backdated() {
-    let mut w = World::new("coarsecancel");
-    w.with(w.linear(T0, T0 + 30 * MIN, 600), 600);
-    let r = run(
-        &w.elf,
-        &w.pid,
-        &Ix::Cancel { schedule_id: w.id },
-        vec![
-            w.schedule.clone(),
-            w.holding.clone(),
-            native(REFUND, 0),
-            acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
-            clock_50(T0 + 15 * MIN),
-        ],
-    );
-    refused(r, 7014);
-}
-
-#[test]
-fn f1a_the_cliff_unlocks_its_lump_and_nothing_before_it() {
-    let mut w = World::new("cliff");
-    let mut s = w.linear(T0, T0 + 4 * 365 * MIN, 1_000_000);
-    s.kind = 0;
-    s.cliff = T0 + 365 * MIN;
-    w.with(s, 1_000_000);
-    refused(
-        w.claim(T0 + 365 * MIN - 1, native(DEST, 0), BENEFICIARY),
-        7003,
-    );
-    let r = w
-        .claim(T0 + 365 * MIN, native(DEST, 0), BENEFICIARY)
-        .unwrap();
-    assert_eq!(r.post(&native(DEST, 0)).balance, 250_000);
-}
-
-#[test]
-fn f1c_milestones_release_one_tranche_per_signal_and_u7_nothing_before() {
-    let mut w = World::new("ms");
-    let mut s = w.linear(0, 1, 3);
-    s.kind = 2;
-    s.tranches = 3;
-    w.with(s.clone(), 3);
-    refused(w.claim(T0, native(DEST, 0), BENEFICIARY), 7003);
-    s.signalled = 0b011;
-    w.with(s, 3);
-    let r = w.claim(T0, native(DEST, 0), BENEFICIARY).unwrap();
-    assert_eq!(r.post(&native(DEST, 0)).balance, 2);
-}
-
-// ---------------------------------------------------------------- claim (F2, R1, P1)
-
-#[test]
-fn f2_only_the_named_beneficiary_can_claim() {
-    let mut w = World::new("who");
-    w.with(w.linear(T0, T0 + MIN, 10), 10);
-    refused(w.claim(T0 + MIN, native(DEST, 0), STRANGER), 7004);
-}
-
-#[test]
-fn f2_the_claim_pays_the_destination_the_beneficiary_names() {
-    // The destination is not the signing key and need not be known to the
-    // creator; on chain it is a shielded account on the private path.
-    let mut w = World::new("dest");
-    w.with(w.linear(T0, T0 + MIN, 10), 10);
-    let r = w.claim(T0 + MIN, native(STRANGER, 5), BENEFICIARY).unwrap();
-    assert_eq!(r.post(&native(STRANGER, 5)).balance, 15);
-}
-
-#[test]
-fn r1_a_refused_claim_writes_nothing_and_a_retry_pays() {
-    let mut w = World::new("retry");
-    w.with(w.linear(T0, T0 + MIN, 10), 10);
-    assert!(w.claim(T0 - 1, native(DEST, 0), BENEFICIARY).is_err()); // nothing vested
-    let r = w.claim(T0 + MIN, native(DEST, 0), BENEFICIARY).unwrap();
-    assert_eq!(r.post(&native(DEST, 0)).balance, 10);
-    assert!(
-        r.calls().is_empty(),
-        "a native claim is one program, one transaction (P1)"
-    );
-}
-
-#[test]
-fn a_claim_that_reads_an_older_clock_than_the_schedule_has_seen_is_refused() {
-    let mut w = World::new("backwards");
-    let mut s = w.linear(T0, T0 + 10 * MIN, 10);
-    s.last_seen = T0 + 5 * MIN;
-    s.claimed = 5;
-    w.with(s, 5);
-    refused(w.claim(T0 + 4 * MIN, native(DEST, 0), BENEFICIARY), 7005);
-}
-
-// ---------------------------------------------------------------- cancel (F3, R2)
-
-#[test]
-fn f3_cancel_returns_the_unvested_part_to_the_fixed_refund_account() {
-    let mut w = World::new("cancel");
-    w.with(w.linear(T0, T0 + 30 * MIN, 600), 600);
-    let r = w.cancel(T0 + 10 * MIN, native(REFUND, 0), CREATOR).unwrap();
-    assert_eq!(r.post(&native(REFUND, 0)).balance, 400);
-    assert_eq!(r.post(&w.holding).balance, 200);
-    assert_eq!(r.schedule(&w.schedule).cancelled_at, T0 + 10 * MIN);
-}
-
-#[test]
-fn f3_the_vested_part_stays_claimable_after_cancellation_and_no_more() {
-    let mut w = World::new("aftercancel");
-    let mut s = w.linear(T0, T0 + 30 * MIN, 600);
-    s.cancelled_at = T0 + 10 * MIN;
-    w.with(s, 200);
-    let r = w
-        .claim(T0 + 29 * MIN, native(DEST, 0), BENEFICIARY)
-        .unwrap();
-    assert_eq!(r.post(&native(DEST, 0)).balance, 200);
-}
-
-#[test]
-fn f3_a_cancel_cannot_be_redirected_to_another_account() {
-    let mut w = World::new("redirect");
-    w.with(w.linear(T0, T0 + MIN, 10), 10);
-    refused(w.cancel(T0, native(STRANGER, 0), CREATOR), 7017);
-}
-
-#[test]
-fn f3_non_cancelable_refuses_cancel() {
-    let mut w = World::new("noncancel");
-    let mut s = w.linear(T0, T0 + MIN, 10);
-    s.cancelable = 0;
-    w.with(s, 10);
-    refused(w.cancel(T0, native(REFUND, 0), CREATOR), 7010);
-}
-
-#[test]
-fn f3_make_non_cancelable_is_one_way() {
-    let mut w = World::new("oneway");
-    w.with(w.linear(T0, T0 + MIN, 10), 10);
-    let creator = acc(CREATOR, AUTH_TRANSFER, 0, vec![], true);
-    let r = run(
-        &w.elf,
-        &w.pid,
-        &Ix::MakeNonCancelable { schedule_id: w.id },
-        vec![w.schedule.clone(), creator.clone()],
-    )
-    .unwrap();
-    let s = r.schedule(&w.schedule);
-    assert_eq!(s.cancelable, 0);
-    w.with(s, 10);
-    refused(
-        run(
-            &w.elf,
-            &w.pid,
-            &Ix::MakeNonCancelable { schedule_id: w.id },
-            vec![w.schedule.clone(), creator],
-        ),
-        7010,
-    );
-}
-
-#[test]
-fn soft_a_nominated_cancel_authority_replaces_the_creator() {
-    let mut w = World::new("cancelauth");
-    let mut s = w.linear(T0, T0 + MIN, 10);
-    s.cancel_authority = STRANGER;
-    w.with(s, 10);
-    refused(w.cancel(T0, native(REFUND, 0), CREATOR), 7015);
-    assert!(w.cancel(T0, native(REFUND, 0), STRANGER).is_ok());
-}
-
-// ---------------------------------------------------------------- transfer (F4)
-
-#[test]
-fn f4_only_the_holder_moves_a_transferable_position() {
-    let mut w = World::new("xfer");
-    w.with(w.linear(T0, T0 + MIN, 10), 10);
-    let ix = Ix::TransferBeneficiary {
-        schedule_id: w.id,
-        new_beneficiary: DEST,
-    };
-    refused(
-        run(
-            &w.elf,
-            &w.pid,
-            &ix,
-            vec![
-                w.schedule.clone(),
-                acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
-            ],
-        ),
-        7004,
-    );
-    let r = run(
-        &w.elf,
-        &w.pid,
-        &ix,
-        vec![
-            w.schedule.clone(),
-            acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true),
-        ],
-    )
-    .unwrap();
-    assert_eq!(r.schedule(&w.schedule).beneficiary, DEST);
-}
-
-#[test]
-fn f4_a_non_transferable_position_cannot_move() {
-    let mut w = World::new("noxfer");
-    let mut s = w.linear(T0, T0 + MIN, 10);
-    s.transferable = 0;
-    w.with(s, 10);
-    let ix = Ix::TransferBeneficiary {
-        schedule_id: w.id,
-        new_beneficiary: DEST,
-    };
-    refused(
-        run(
-            &w.elf,
-            &w.pid,
-            &ix,
-            vec![
-                w.schedule.clone(),
-                acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true),
-            ],
-        ),
-        7012,
-    );
-}
-
-// ---------------------------------------------------------------- milestones (R4, soft)
-
-#[test]
-fn r4_signalling_a_milestone_twice_is_refused() {
-    let mut w = World::new("twice");
-    let mut s = w.linear(0, 1, 2);
-    s.kind = 2;
-    s.tranches = 2;
-    s.signalled = 0b01;
-    w.with(s, 2);
-    let ix = Ix::SignalMilestone {
-        schedule_id: w.id,
-        index: 0,
-    };
-    refused(
-        run(
-            &w.elf,
-            &w.pid,
-            &ix,
-            vec![
-                w.schedule.clone(),
-                acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
-            ],
-        ),
-        7013,
-    );
-}
-
-#[test]
-fn soft_a_nominated_milestone_authority_replaces_the_creator() {
-    let mut w = World::new("msauth");
-    let mut s = w.linear(0, 1, 2);
-    s.kind = 2;
-    s.tranches = 2;
-    s.milestone_authority = STRANGER;
-    w.with(s, 2);
-    let ix = Ix::SignalMilestone {
-        schedule_id: w.id,
-        index: 0,
-    };
-    refused(
-        run(
-            &w.elf,
-            &w.pid,
-            &ix,
-            vec![
-                w.schedule.clone(),
-                acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
-            ],
-        ),
-        7015,
-    );
-    let r = run(
-        &w.elf,
-        &w.pid,
-        &ix,
-        vec![
-            w.schedule.clone(),
-            acc(STRANGER, AUTH_TRANSFER, 0, vec![], true),
-        ],
-    )
-    .unwrap();
-    assert_eq!(r.schedule(&w.schedule).signalled, 0b01);
-}
-
-#[test]
-fn a_cancelled_milestone_schedule_refuses_further_signals() {
-    let mut w = World::new("mscancel");
-    let mut s = w.linear(0, 1, 2);
-    s.kind = 2;
-    s.tranches = 2;
-    s.cancelled_at = T0;
-    w.with(s, 0);
-    let ix = Ix::SignalMilestone {
-        schedule_id: w.id,
-        index: 0,
-    };
-    refused(
-        run(
-            &w.elf,
-            &w.pid,
-            &ix,
-            vec![
-                w.schedule.clone(),
-                acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
-            ],
-        ),
-        7011,
-    );
-}
-
-// ---------------------------------------------------------------- tokens (F1)
-
-#[test]
-fn f1_a_token_claim_is_a_chained_transfer_under_our_pda_seed() {
-    let mut w = World::new("token");
-    let mut s = w.linear(T0, T0 + MIN, 100);
-    s.asset = 1;
-    s.token_definition = DEFINITION;
-    w.with(s, 100);
-    let dest = token_holding(DEST, DEFINITION, 0, false);
-    let r = w.claim(T0 + MIN, dest, BENEFICIARY).unwrap();
-    let calls = r.calls();
-    assert_eq!(calls.len(), 1);
-    assert_eq!(
-        calls[0].program_id, TOKEN,
-        "the pinned token program, not an owner field"
-    );
-    assert_eq!(
-        calls[0].pda_seeds.len(),
-        1,
-        "our holding's seed authorises it to the callee"
-    );
-    assert!(calls[0].pre_states[0].is_authorized);
-    // Neither balance is written by us: the token program moves them.
-    assert_eq!(r.post(&w.holding).data, w.holding.account.data);
-}
-
-#[test]
-fn f1_a_token_claim_into_a_holding_of_another_token_is_refused() {
-    let mut w = World::new("wrongtoken");
-    let mut s = w.linear(T0, T0 + MIN, 100);
-    s.asset = 1;
-    s.token_definition = DEFINITION;
-    w.with(s, 100);
-    refused(
-        w.claim(
-            T0 + MIN,
-            token_holding(DEST, [0x99; 32], 0, false),
-            BENEFICIARY,
-        ),
-        7016,
-    );
-    refused(w.claim(T0 + MIN, native(DEST, 0), BENEFICIARY), 7016);
-}
-
-// ---------------------------------------------------------------- creation
-
-#[test]
-fn creation_refuses_a_refund_account_equal_to_the_cancel_authority() {
-    let w = World::new("create");
-    let ix = Ix::CreateSchedule {
-        schedule_id: w.id,
-        kind: 1,
-        start: T0,
-        cliff: T0,
-        end: T0 + MIN,
-        total: 10,
-        beneficiary: BENEFICIARY,
-        cancelable: 1,
-        transferable: 0,
-        tranches: 0,
-        cancel_authority: Z,
-        milestone_authority: Z,
-        refund_to: CREATOR,
-    };
-    refused(
-        run(
-            &w.elf,
-            &w.pid,
-            &ix,
-            vec![
-                w.schedule.clone(),
-                w.holding.clone(),
-                acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
-            ],
-        ),
-        7017,
-    );
-}
-
-#[test]
-fn creation_writes_the_terms_and_defaults_the_authorities_to_the_creator() {
-    let w = World::new("create2");
-    let ix = Ix::CreateSchedule {
-        schedule_id: w.id,
-        kind: 1,
-        start: T0,
-        cliff: T0,
-        end: T0 + MIN,
-        total: 10,
-        beneficiary: BENEFICIARY,
-        cancelable: 1,
-        transferable: 0,
-        tranches: 0,
-        cancel_authority: Z,
-        milestone_authority: Z,
-        refund_to: REFUND,
-    };
-    let r = run(
-        &w.elf,
-        &w.pid,
-        &ix,
-        vec![
-            w.schedule.clone(),
-            w.holding.clone(),
-            acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
-        ],
-    )
-    .unwrap();
-    let s = r.schedule(&w.schedule);
-    assert_eq!(
-        (s.cancel_authority, s.milestone_authority, s.refund_to),
-        (CREATOR, CREATOR, REFUND)
-    );
-    assert_eq!(s.escrow, *w.holding.account_id.value());
-    let _: ProgramId = w.pid;
-}
-
-// ---------------------------------------------------------------- batch (F5)
-
-fn batch_world(n: u32) -> (World, Vec<lee_core::account::AccountWithMetadata>) {
-    let w = World::new("batch");
-    let schedules = (0..n)
-        .map(|i| {
-            let sid = batch_schedule_id(&w.id, i);
-            acc(
-                *pda(&w.pid, &[sid]).value(),
-                ProgramId::default(),
-                0,
-                vec![],
-                false,
-            )
-        })
-        .collect();
-    (w, schedules)
-}
-
-fn create_batch(
-    w: &World,
-    schedules: &[lee_core::account::AccountWithMetadata],
-    who: Vec<[u8; 32]>,
-) -> Result<Run, String> {
-    let ix = Ix::CreateScheduleBatch {
-        batch_id: w.id,
+fn linear(total: u128, refund: AccountId) -> Terms {
+    Terms {
         kind: 1,
         start: T0,
         cliff: T0,
         end: T0 + 30 * MIN,
-        total_each: 600,
-        beneficiaries: who,
-        cancelable: 1,
-        transferable: 0,
+        total,
         tranches: 0,
-        cancel_authority: Z,
-        milestone_authority: Z,
-        refund_to: REFUND,
-    };
-    let mut pre = vec![
-        w.holding.clone(),
-        acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
-    ];
-    pre.extend(schedules.iter().cloned());
-    run(&w.elf, &w.pid, &ix, pre)
-}
-
-#[test]
-fn f5_a_batch_creates_one_schedule_per_beneficiary_over_one_holding() {
-    let (w, schedules) = batch_world(3);
-    let who = vec![[0xB1; 32], [0xB2; 32], [0xB3; 32]];
-    let r = create_batch(&w, &schedules, who.clone()).unwrap();
-    for (i, s) in schedules.iter().enumerate() {
-        let st = r.schedule(s);
-        assert_eq!(st.beneficiary, who[i]);
-        assert_eq!(st.total, 600);
-        assert_eq!(
-            st.escrow,
-            *w.holding.account_id.value(),
-            "every schedule points at the shared holding"
-        );
+        cancelable: true,
+        transferable: true,
+        cancel_authority: AccountId::default(),
+        milestone_authority: AccountId::default(),
+        refund_to: refund,
     }
 }
 
-#[test]
-fn f5_a_batch_refuses_an_account_that_is_not_the_next_pda() {
-    let (w, mut schedules) = batch_world(2);
-    schedules.swap(0, 1);
-    refused(
-        create_batch(&w, &schedules, vec![[0xB1; 32], [0xB2; 32]]),
-        7018,
-    );
+fn create(w: &mut World, sid: [u8; 32], asset: Asset, terms: Terms) -> Result<(), String> {
+    let ix = Instruction::CreateSchedule { schedule_id: sid, beneficiary: w.ben.id, asset, terms };
+    let r = rows::create(&VESTING, &sid, &asset, w.creator.id);
+    let signer = Key::new(1);
+    w.chain.send(&ix, r, &[&signer])
+}
+
+fn claim(w: &mut World, sid: [u8; 32], asset: Asset, dest: AccountId, who: &Key, amount: u128, at: u64) -> Result<(), String> {
+    let ix = Instruction::Claim { schedule_id: sid, batch_id: None, asset, amount, at };
+    let r = rows::claim(&VESTING, &sid, None, &asset, dest, who.id);
+    w.chain.send(&ix, r, &[who])
+}
+
+fn cancel(w: &mut World, sid: [u8; 32], asset: Asset, who: &Key, at: u64, refund: u128) -> Result<(), String> {
+    let ix = Instruction::Cancel { schedule_id: sid, batch_id: None, asset, at, refund };
+    let r = rows::cancel(&VESTING, &sid, None, &asset, w.refund, who.id);
+    w.chain.send(&ix, r, &[who])
+}
+
+#[track_caller]
+fn refused(r: Result<(), String>, want: u32) {
+    let err = r.expect_err("expected a refusal");
+    assert_eq!(code(&err), Some(want), "wrong refusal: {err}");
 }
 
 #[test]
-fn f5_a_batch_refuses_a_count_mismatch() {
-    let (w, schedules) = batch_world(2);
-    refused(create_batch(&w, &schedules, vec![[0xB1; 32]]), 7018);
+fn a_linear_native_schedule_pays_exactly_what_has_vested() {
+    let mut w = world();
+    let sid = [1; 32];
+    create(&mut w, sid, Asset::Native, linear(600, REFUND)).unwrap();
+    let hold = holding_account(&VESTING, &sid);
+    assert_eq!(w.chain.native(hold), 600, "funded exactly at creation");
+    assert_eq!(w.chain.native(w.creator.id), 1_000_000 - 600);
+    assert_eq!(w.chain.events[0].event.selector, event_selector("ScheduleCreated"));
+
+    // 2 minutes into 30: floor(600 * 2 / 30) = 40.
+    w.chain.now = T0 + 2 * MIN;
+    let ben = Key::new(2);
+    let dest = AccountId::new([0xB0; 32]);
+    refused(claim(&mut w, sid, Asset::Native, dest, &ben, 41, T0 + 2 * MIN), 7003);
+    assert_eq!(w.chain.native(hold), 600, "the refused claim moved nothing");
+    claim(&mut w, sid, Asset::Native, dest, &ben, 40, T0 + 2 * MIN).unwrap();
+    assert_eq!((w.chain.native(dest), w.chain.native(hold)), (40, 560));
+    assert_eq!(w.chain.schedule(&sid).claimed, 40);
+    assert_eq!(w.chain.events[0].event.selector, event_selector("Claimed"));
+
+    // A time the chain has not reached is outside the window.
+    let e = claim(&mut w, sid, Asset::Native, dest, &ben, 1, T0 + 10 * MIN).unwrap_err();
+    assert!(e.contains("validity window"), "{e}");
+
+    // The beneficiary may claim into its own account: the signer row is a
+    // handle on this program's shard, the destination its native shard.
+    w.chain.now = T0 + 31 * MIN;
+    claim(&mut w, sid, Asset::Native, ben.id, &ben, 560, T0 + 30 * MIN).unwrap();
+    assert_eq!(w.chain.native(ben.id), 10 + 560);
+    assert_eq!(w.chain.native(hold), 0);
+    refused(claim(&mut w, sid, Asset::Native, dest, &ben, 1, T0 + 30 * MIN), 7003);
 }
 
 #[test]
-fn f5_a_batch_schedule_claims_and_cancels_only_its_own_share() {
-    let (mut w, schedules) = batch_world(2);
-    let r = create_batch(&w, &schedules, vec![BENEFICIARY, [0xB2; 32]]).unwrap();
-    let mut s0 = schedules[0].clone();
-    s0.account = r.post(&schedules[0]).clone();
-    // The runtime applies the PDA claim after the program runs; do it here.
-    s0.account.program_owner = w.pid;
-    w.holding.account.program_owner = w.pid;
-    w.holding.account.balance = 1200; // funded for both
-    let sid = batch_schedule_id(&w.id, 0);
-    let claim = run(
-        &w.elf,
-        &w.pid,
-        &Ix::ClaimBatch {
-            schedule_id: sid,
-            batch_id: w.id,
-        },
-        vec![
-            s0.clone(),
-            w.holding.clone(),
-            native(DEST, 0),
-            acc(BENEFICIARY, AUTH_TRANSFER, 0, vec![], true),
-            clock(T0 + 10 * MIN),
-        ],
-    )
-    .unwrap();
-    assert_eq!(claim.post(&native(DEST, 0)).balance, 200);
-    assert_eq!(claim.post(&w.holding).balance, 1000);
-    let cancel = run(
-        &w.elf,
-        &w.pid,
-        &Ix::CancelBatch {
-            schedule_id: sid,
-            batch_id: w.id,
-        },
-        vec![
-            s0,
-            w.holding.clone(),
-            native(REFUND, 0),
-            acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
-            clock(T0 + 10 * MIN),
-        ],
-    )
-    .unwrap();
-    assert_eq!(
-        cancel.post(&native(REFUND, 0)).balance,
-        400,
-        "only schedule 0's unvested part"
-    );
+fn only_the_beneficiary_claims() {
+    let mut w = world();
+    let sid = [2; 32];
+    create(&mut w, sid, Asset::Native, linear(600, REFUND)).unwrap();
+    w.chain.now = T0 + 31 * MIN;
+    let creator = Key::new(1);
+    refused(claim(&mut w, sid, Asset::Native, creator.id, &creator, 10, T0 + 30 * MIN), 7004);
+    assert_eq!(w.chain.native(holding_account(&VESTING, &sid)), 600);
 }
 
 #[test]
-fn r2_a_second_cancellation_is_refused() {
-    let mut w = World::new("cancel2");
-    let mut s = w.linear(T0, T0 + 30 * MIN, 600);
-    s.cancelled_at = T0 + 5 * MIN;
-    w.with(s, 500);
-    refused(w.cancel(T0 + 10 * MIN, native(REFUND, 0), CREATOR), 7011);
+fn nothing_vests_before_the_cliff_then_the_accrual_unlocks_at_once() {
+    let mut w = world();
+    let sid = [3; 32];
+    let mut t = linear(1_000, REFUND);
+    t.kind = 0;
+    t.cliff = T0 + 10 * MIN;
+    t.end = T0 + 40 * MIN;
+    create(&mut w, sid, Asset::Native, t).unwrap();
+    let ben = Key::new(2);
+    let dest = AccountId::new([0xB1; 32]);
+    w.chain.now = T0 + 10 * MIN;
+    refused(claim(&mut w, sid, Asset::Native, dest, &ben, 1, T0 + 10 * MIN - 1), 7003);
+    claim(&mut w, sid, Asset::Native, dest, &ben, 250, T0 + 10 * MIN).unwrap();
+    assert_eq!(w.chain.native(dest), 250);
 }
 
 #[test]
-fn r4_a_signal_past_the_last_milestone_is_refused() {
-    let mut w = World::new("msrange");
-    let mut s = w.linear(0, 1, 2);
-    s.kind = 2;
-    s.tranches = 2;
-    w.with(s, 2);
-    let ix = Ix::SignalMilestone {
-        schedule_id: w.id,
-        index: 2,
+fn a_duplicate_creation_is_refused_and_takes_no_second_funding() {
+    let mut w = world();
+    let sid = [4; 32];
+    create(&mut w, sid, Asset::Native, linear(600, REFUND)).unwrap();
+    refused(create(&mut w, sid, Asset::Native, linear(900, REFUND)), 7019);
+    assert_eq!(w.chain.native(holding_account(&VESTING, &sid)), 600);
+    assert_eq!(w.chain.schedule(&sid).total, 600);
+}
+
+#[test]
+fn a_creation_the_creator_cannot_fund_writes_nothing() {
+    let mut w = world();
+    let sid = [5; 32];
+    // The native transfer refuses the debit (the state machine reports the
+    // native program's failure as an execution-rule violation), and the whole
+    // transaction goes with it, the schedule write included.
+    let e = create(&mut w, sid, Asset::Native, linear(2_000_000, REFUND)).unwrap_err();
+    assert!(e.contains("execution rules"), "{e}");
+    assert!(!w.chain.has_schedule(&sid));
+    assert_eq!(w.chain.native(w.creator.id), 1_000_000);
+}
+
+#[test]
+fn cancellation_returns_the_unvested_part_and_leaves_the_vested_claimable() {
+    let mut w = world();
+    let sid = [6; 32];
+    create(&mut w, sid, Asset::Native, linear(600, REFUND)).unwrap();
+    let hold = holding_account(&VESTING, &sid);
+    let creator = Key::new(1);
+    let ben = Key::new(2);
+    let at = T0 + 7 * MIN; // 140 of 600 vested
+    w.chain.now = at + 1_000;
+    refused(cancel(&mut w, sid, Asset::Native, &creator, at, 461), 7020);
+    refused(cancel(&mut w, sid, Asset::Native, &creator, at, 459), 7020);
+    refused(cancel(&mut w, sid, Asset::Native, &ben, at, 460), 7015);
+    assert_eq!(w.chain.native(hold), 600);
+    cancel(&mut w, sid, Asset::Native, &creator, at, 460).unwrap();
+    assert_eq!(w.chain.native(w.refund), 460);
+    assert_eq!(w.chain.native(hold), 140);
+    assert_eq!(w.chain.schedule(&sid).cancelled_at, at);
+    refused(cancel(&mut w, sid, Asset::Native, &creator, at + 1, 0), 7011);
+
+    // Accrual is frozen: long after, the beneficiary gets exactly 140.
+    w.chain.now = T0 + 60 * MIN;
+    let dest = AccountId::new([0xB2; 32]);
+    refused(claim(&mut w, sid, Asset::Native, dest, &ben, 141, T0 + 60 * MIN), 7003);
+    claim(&mut w, sid, Asset::Native, dest, &ben, 140, T0 + 60 * MIN).unwrap();
+    assert_eq!(w.chain.native(hold), 0);
+}
+
+#[test]
+fn a_cancellation_cannot_be_back_dated_past_its_window() {
+    let mut w = world();
+    let sid = [7; 32];
+    create(&mut w, sid, Asset::Native, linear(600, REFUND)).unwrap();
+    let creator = Key::new(1);
+    let at = T0 + 5 * MIN;
+    w.chain.now = at + CANCEL_WINDOW_MS; // one millisecond too late
+    let e = cancel(&mut w, sid, Asset::Native, &creator, at, 500).unwrap_err();
+    assert!(e.contains("validity window"), "{e}");
+    w.chain.now = at + CANCEL_WINDOW_MS - 1;
+    cancel(&mut w, sid, Asset::Native, &creator, at, 500).unwrap();
+}
+
+#[test]
+fn a_cancellation_cannot_name_a_time_before_the_last_claim() {
+    let mut w = world();
+    let sid = [8; 32];
+    create(&mut w, sid, Asset::Native, linear(600, REFUND)).unwrap();
+    let ben = Key::new(2);
+    let creator = Key::new(1);
+    w.chain.now = T0 + 10 * MIN;
+    claim(&mut w, sid, Asset::Native, AccountId::new([0xB3; 32]), &ben, 200, T0 + 10 * MIN).unwrap();
+    refused(cancel(&mut w, sid, Asset::Native, &creator, T0 + 9 * MIN, 420), 7005);
+    cancel(&mut w, sid, Asset::Native, &creator, T0 + 10 * MIN, 400).unwrap();
+    assert_eq!(w.chain.native(holding_account(&VESTING, &sid)), 0);
+}
+
+#[test]
+fn non_cancelable_is_one_way_and_the_creators_alone() {
+    let mut w = world();
+    let sid = [9; 32];
+    create(&mut w, sid, Asset::Native, linear(600, REFUND)).unwrap();
+    let ben = Key::new(2);
+    let creator = Key::new(1);
+    let ix = Instruction::MakeNonCancelable { schedule_id: sid };
+    refused(w.chain.send(&ix, rows::handle(&VESTING, &sid, ben.id), &[&ben]), 7009);
+    w.chain.send(&ix, rows::handle(&VESTING, &sid, creator.id), &[&creator]).unwrap();
+    refused(w.chain.send(&ix, rows::handle(&VESTING, &sid, creator.id), &[&creator]), 7010);
+    w.chain.now = T0 + MIN;
+    refused(cancel(&mut w, sid, Asset::Native, &creator, T0 + MIN, 580), 7010);
+}
+
+#[test]
+fn a_nominated_cancel_authority_cancels_and_the_creator_cannot() {
+    let mut w = world();
+    let sid = [10; 32];
+    let mut t = linear(600, REFUND);
+    t.cancel_authority = w.auth.id;
+    create(&mut w, sid, Asset::Native, t).unwrap();
+    let creator = Key::new(1);
+    let auth = Key::new(4);
+    w.chain.now = T0 + 3 * MIN;
+    refused(cancel(&mut w, sid, Asset::Native, &creator, T0 + 3 * MIN, 540), 7015);
+    cancel(&mut w, sid, Asset::Native, &auth, T0 + 3 * MIN, 540).unwrap();
+    assert_eq!(w.chain.native(w.refund), 540);
+}
+
+#[test]
+fn a_token_schedule_escrows_claims_and_refunds_the_token() {
+    let mut w = world();
+    let sid = [11; 32];
+    let asset = Asset::Token { definition_id: w.def };
+    create(&mut w, sid, asset, linear(100_000, REFUND)).unwrap();
+    let hold = holding_account(&VESTING, &sid);
+    assert_eq!(w.chain.token(hold), 100_000);
+    assert_eq!(w.chain.token(w.creator.id), 900_000);
+    let ben = Key::new(2);
+    let dest = AccountId::new([0xB4; 32]); // no holding yet: the token program creates it
+    w.chain.now = T0 + 3 * MIN;
+    claim(&mut w, sid, asset, dest, &ben, 10_000, T0 + 3 * MIN).unwrap();
+    assert_eq!(w.chain.token(dest), 10_000);
+
+    // Naming the wrong asset is refused, whichever way round.
+    refused(claim(&mut w, sid, Asset::Native, dest, &ben, 1, T0 + 3 * MIN), 7016);
+    let other = Asset::Token { definition_id: AccountId::new([0xEE; 32]) };
+    refused(claim(&mut w, sid, other, dest, &ben, 1, T0 + 3 * MIN), 7016);
+
+    let creator = Key::new(1);
+    cancel(&mut w, sid, asset, &creator, T0 + 3 * MIN, 90_000).unwrap();
+    assert_eq!(w.chain.token(w.refund), 90_000);
+    assert_eq!(w.chain.token(hold), 0);
+}
+
+#[test]
+fn milestones_unlock_in_equal_tranches_signalled_once_by_their_authority() {
+    let mut w = world();
+    let sid = [12; 32];
+    let mut t = linear(1_000, REFUND);
+    t.kind = 2;
+    t.tranches = 4;
+    t.milestone_authority = w.auth.id;
+    create(&mut w, sid, Asset::Native, t).unwrap();
+    let creator = Key::new(1);
+    let auth = Key::new(4);
+    let ben = Key::new(2);
+    let sig = |i| Instruction::SignalMilestone { schedule_id: sid, index: i };
+    refused(w.chain.send(&sig(0), rows::handle(&VESTING, &sid, creator.id), &[&creator]), 7015);
+    w.chain.send(&sig(0), rows::handle(&VESTING, &sid, auth.id), &[&auth]).unwrap();
+    refused(w.chain.send(&sig(0), rows::handle(&VESTING, &sid, auth.id), &[&auth]), 7013);
+    refused(w.chain.send(&sig(4), rows::handle(&VESTING, &sid, auth.id), &[&auth]), 7013);
+    w.chain.send(&sig(2), rows::handle(&VESTING, &sid, auth.id), &[&auth]).unwrap();
+    let dest = AccountId::new([0xB5; 32]);
+    refused(claim(&mut w, sid, Asset::Native, dest, &ben, 501, T0), 7003);
+    claim(&mut w, sid, Asset::Native, dest, &ben, 500, T0).unwrap();
+    assert_eq!(w.chain.native(dest), 500);
+}
+
+#[test]
+fn a_position_moves_only_by_its_holder_and_only_if_transferable() {
+    let mut w = world();
+    let sid = [13; 32];
+    create(&mut w, sid, Asset::Native, linear(600, REFUND)).unwrap();
+    let creator = Key::new(1);
+    let ben = Key::new(2);
+    let other = Key::new(3);
+    let tr = |to| Instruction::TransferBeneficiary { schedule_id: sid, new_beneficiary: to };
+    refused(w.chain.send(&tr(creator.id), rows::handle(&VESTING, &sid, creator.id), &[&creator]), 7004);
+    w.chain.send(&tr(other.id), rows::handle(&VESTING, &sid, ben.id), &[&ben]).unwrap();
+    w.chain.now = T0 + 30 * MIN;
+    let dest = AccountId::new([0xB6; 32]);
+    refused(claim(&mut w, sid, Asset::Native, dest, &ben, 1, T0 + 30 * MIN), 7004);
+    claim(&mut w, sid, Asset::Native, dest, &other, 600, T0 + 30 * MIN).unwrap();
+
+    let fixed = [14; 32];
+    let mut t = linear(600, REFUND);
+    t.transferable = false;
+    create(&mut w, fixed, Asset::Native, t).unwrap();
+    let tr2 = Instruction::TransferBeneficiary { schedule_id: fixed, new_beneficiary: other.id };
+    refused(w.chain.send(&tr2, rows::handle(&VESTING, &fixed, ben.id), &[&ben]), 7012);
+}
+
+#[test]
+fn a_batch_is_funded_once_and_each_schedule_moves_only_its_share() {
+    let mut w = world();
+    let bid = [15; 32];
+    let n = 8u32;
+    let bens: Vec<Key> = (0..n).map(|i| Key::new(40 + i as u8)).collect();
+    let ix = Instruction::CreateScheduleBatch {
+        batch_id: bid,
+        beneficiaries: bens.iter().map(|k| k.id).collect(),
+        asset: Asset::Native,
+        terms: linear(600, REFUND),
     };
+    let creator = Key::new(1);
+    w.chain.send(&ix, rows::batch(&VESTING, &bid, n, &Asset::Native, creator.id), &[&creator]).unwrap();
+    let hold = holding_account(&VESTING, &bid);
+    assert_eq!(w.chain.native(hold), 600 * u128::from(n));
+
+    let s0 = batch_schedule_id(&bid, 0);
+    let s1 = batch_schedule_id(&bid, 1);
+    w.chain.now = T0 + 15 * MIN;
+    let claim0 = Instruction::Claim { schedule_id: s0, batch_id: Some(bid), asset: Asset::Native, amount: 300, at: T0 + 15 * MIN };
+    let dest = AccountId::new([0xB7; 32]);
+    // Schedule 0's beneficiary only.
     refused(
-        run(
-            &w.elf,
-            &w.pid,
-            &ix,
-            vec![
-                w.schedule.clone(),
-                acc(CREATOR, AUTH_TRANSFER, 0, vec![], true),
-            ],
-        ),
-        7013,
+        w.chain.send(&claim0, rows::claim(&VESTING, &s0, Some(&bid), &Asset::Native, dest, bens[1].id), &[&bens[1]]),
+        7004,
+    );
+    w.chain.send(&claim0, rows::claim(&VESTING, &s0, Some(&bid), &Asset::Native, dest, bens[0].id), &[&bens[0]]).unwrap();
+    let cancel1 = Instruction::Cancel { schedule_id: s1, batch_id: Some(bid), asset: Asset::Native, at: T0 + 15 * MIN, refund: 300 };
+    w.chain.send(&cancel1, rows::cancel(&VESTING, &s1, Some(&bid), &Asset::Native, w.refund, creator.id), &[&creator]).unwrap();
+    assert_eq!(w.chain.native(dest), 300);
+    assert_eq!(w.chain.native(w.refund), 300);
+    assert_eq!(w.chain.native(hold), 600 * u128::from(n) - 600);
+    assert_eq!(w.chain.schedule(&batch_schedule_id(&bid, 7)).claimed, 0);
+    // A batch schedule cannot be pointed at a different escrow.
+    let wrong = Instruction::Claim { schedule_id: s0, batch_id: None, asset: Asset::Native, amount: 1, at: T0 + 15 * MIN };
+    refused(
+        w.chain.send(&wrong, rows::claim(&VESTING, &s0, None, &Asset::Native, dest, bens[0].id), &[&bens[0]]),
+        7006,
     );
 }
 
-/// F5 asks for the maximum batch size. It is set by the public-execution cycle
-/// cap, not by transaction size: measured here by bisection on the deployed
-/// binary, 299 schedules fit in one creation and 300 exceed 2^25 cycles.
 #[test]
-fn f5_the_largest_batch_is_299_schedules_and_300_exceeds_the_cycle_cap() {
-    let who = |n: u32| -> Vec<[u8; 32]> {
-        (0..n)
-            .map(|i| {
-                let mut b = [0xB0; 32];
-                b[..4].copy_from_slice(&i.to_le_bytes());
-                b
-            })
-            .collect()
+fn a_batch_row_out_of_order_is_refused() {
+    let mut w = world();
+    let bid = [16; 32];
+    let creator = Key::new(1);
+    let ix = Instruction::CreateScheduleBatch {
+        batch_id: bid,
+        beneficiaries: vec![w.ben.id, w.other.id],
+        asset: Asset::Native,
+        terms: linear(600, REFUND),
     };
-    let (w, s) = batch_world(299);
-    let r = create_batch(&w, &s, who(299)).expect("299 schedules fit");
-    assert!(r.cycles < MAX_NUM_CYCLES_PUBLIC_EXECUTION);
-    let (w, s) = batch_world(300);
-    let e = create_batch(&w, &s, who(300))
-        .err()
-        .expect("300 schedules exceed the cap");
-    assert!(
-        e.contains("Session limit exceeded"),
-        "refused for another reason: {e}"
-    );
+    let mut r = rows::batch(&VESTING, &bid, 2, &Asset::Native, creator.id);
+    r.swap(2, 3);
+    refused(w.chain.send(&ix, r, &[&creator]), 7018);
+}
+
+#[test]
+fn an_unsigned_claim_is_refused() {
+    let mut w = world();
+    let sid = [17; 32];
+    create(&mut w, sid, Asset::Native, linear(600, REFUND)).unwrap();
+    w.chain.now = T0 + 30 * MIN;
+    let ix = Instruction::Claim { schedule_id: sid, batch_id: None, asset: Asset::Native, amount: 600, at: T0 + 30 * MIN };
+    let r = rows::claim(&VESTING, &sid, None, &Asset::Native, w.other.id, w.ben.id);
+    refused(w.chain.send(&ix, r, &[]), 7022);
 }

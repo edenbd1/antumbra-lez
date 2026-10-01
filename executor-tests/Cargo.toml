@@ -1,28 +1,28 @@
-# Runs the committed antumbra_vesting binary through the same execution path the
-# LEZ sequencer uses for a public transaction — same input order, same 32M cycle
-# session limit, same executor — and checks what it accepts, what it refuses, and
-# what state it writes. Also the per-instruction cycle table (RFP-017 P2).
+# Runs the committed v0.3 antumbra_vesting binary through `lee::V03State`, the
+# state machine the LEZ v0.3 sequencer applies public transactions with: the
+# same plan/apply orchestration, the same PDA authorisation, the same timestamp
+# validity windows, and a cycle budget of 10,000,000, the per-transaction
+# execution-gas cap (`fee_core::market::MAX_GAS_EXEC`). The builtin token
+# program is the v0.3.0 artifact itself.
 #
-# Its own workspace, like zkvm/: the host crate pulls in the RISC0 executor, which
-# the pricing library must not depend on.
+# Its own workspace: the host side pulls in the RISC0 executor, which the
+# pricing library must not depend on.
 [workspace]
 
 [package]
 name = "antumbra-executor-tests"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-lee_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", rev = "47eba256479f6f785acbd138834340703cd03401", features = ["host"] }
-risc0-zkvm = { version = "=3.0.5", features = ["client"] }
-risc0-binfmt = "3.0"
-serde = { version = "1", features = ["derive"] }
-borsh = { version = "1", features = ["derive"] }
-sha2 = "0.10"
-bytemuck = "1"
-anyhow = "1"
+antumbra-vesting-core = { path = "../programs/vesting/core" }
+lee        = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", rev = "db66590ab821a4e142c211017a3866d007f6fa77" }
+lee_core   = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", rev = "db66590ab821a4e142c211017a3866d007f6fa77", features = ["host"] }
+token_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", rev = "db66590ab821a4e142c211017a3866d007f6fa77" }
+programs   = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", rev = "db66590ab821a4e142c211017a3866d007f6fa77", features = ["artifacts"] }
+borsh = { version = "1.5", features = ["derive"] }
 
 [[bin]]
 name = "measure"

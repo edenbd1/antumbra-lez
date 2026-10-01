@@ -1,432 +1,163 @@
-//! Drive the committed `antumbra_vesting` binary the way the LEZ sequencer does.
+//! A one-node LEZ v0.3 chain in memory, for the committed vesting binary.
 //!
-//! `lee/state_machine/src/program/mod.rs` executes a public transaction's program
-//! by writing four inputs — program id, caller, pre-states, instruction words —
-//! into a RISC0 executor with a 32M-cycle session limit, and decoding the journal
-//! as a `ProgramOutput`. This does exactly that, against
-//! `artifacts/programs/antumbra_vesting.bin`, so an acceptance or a refusal here
-//! is the one the chain would give. It does not prove: proving costs minutes and
-//! establishes nothing extra about which inputs a program accepts.
+//! Transactions are signed `PublicTransaction`s and go through
+//! `ValidatedStateDiff::from_public_transaction_with_cycle_budget`, the call
+//! the sequencer's settlement makes, then `V03State::apply_state_diff`. Nothing
+//! is mocked between the message and the state: the plan and every apply run in
+//! the RISC0 executor, the chained native and token transfers run the real
+//! v0.3.0 programs, and the block timestamp is checked against the windows the
+//! plan sets.
 
-use borsh::{BorshDeserialize, BorshSerialize};
-use lee_core::account::{Account, AccountId, AccountWithMetadata, Data, Nonce};
-use lee_core::program::{ChainedCall, ProgramId, ProgramOutput};
-use risc0_zkvm::{default_executor, ExecutorEnv};
-use serde::Serialize;
-use sha2::{Digest, Sha256};
+use antumbra_vesting_core::{Instruction, VestingSchedule};
+use lee::{
+    public_transaction::{Message, WitnessSet},
+    Account, AccountId, PrivateKey, ProgramShardSelector, PublicKey, PublicTransaction, ShardData,
+    V03State, ValidatedStateDiff,
+};
+use lee_core::program::TransactionEvent;
+use token_core::{TokenDefinition, TokenHolding};
 
-pub const MAX_NUM_CYCLES_PUBLIC_EXECUTION: u64 = 1024 * 1024 * 32;
+/// `fee_core::market::MAX_GAS_EXEC`: the most execution gas one transaction
+/// may declare, and gas is cycles one for one.
+pub const GAS_CAP: u64 = 10_000_000;
 
-pub const AUTH_TRANSFER: ProgramId = [
-    583309054, 2344528779, 3806558405, 2890696795, 2257354672, 3978764116, 2273929063, 1518858078,
-];
-pub const TOKEN: ProgramId = [
-    1047643340, 4291649067, 2093396023, 4016657193, 3904308476, 481382041, 2987082047, 2603530278,
-];
-pub const CLOCK: ProgramId = [
-    96247601, 2082502477, 822865082, 1048693993, 3544189898, 772921104, 1694408900, 4234239033,
-];
-pub const CLOCK_ACCOUNT: [u8; 32] = *b"/LEZ/ClockProgramAccount/0000001";
-pub const Z: [u8; 32] = [0; 32];
+/// The header account the tests deploy the program at. On a real chain this is
+/// whatever account the deployer claims; the program derives every PDA from it.
+pub const VESTING: AccountId = AccountId::new(*b"antumbra/vesting/test-header/v03");
 
-/// The instruction enum `#[lez_program]` generates: one variant per
-/// `#[instruction]`, in declaration order, fields in argument order. risc0's
-/// serde writes the variant index first, so this order is the ABI.
-#[derive(Serialize, Clone)]
-pub enum Ix {
-    CreateSchedule {
-        schedule_id: [u8; 32],
-        kind: u8,
-        start: u64,
-        cliff: u64,
-        end: u64,
-        total: u128,
-        beneficiary: [u8; 32],
-        cancelable: u8,
-        transferable: u8,
-        tranches: u32,
-        cancel_authority: [u8; 32],
-        milestone_authority: [u8; 32],
-        refund_to: [u8; 32],
-    },
-    CreateTokenSchedule {
-        schedule_id: [u8; 32],
-        kind: u8,
-        start: u64,
-        cliff: u64,
-        end: u64,
-        total: u128,
-        beneficiary: [u8; 32],
-        cancelable: u8,
-        transferable: u8,
-        tranches: u32,
-        cancel_authority: [u8; 32],
-        milestone_authority: [u8; 32],
-    },
-    FundSchedule {
-        schedule_id: [u8; 32],
-        amount: u128,
-    },
-    FundTokenSchedule {
-        schedule_id: [u8; 32],
-        amount: u128,
-    },
-    Cancel {
-        schedule_id: [u8; 32],
-    },
-    MakeNonCancelable {
-        schedule_id: [u8; 32],
-    },
-    TransferBeneficiary {
-        schedule_id: [u8; 32],
-        new_beneficiary: [u8; 32],
-    },
-    SignalMilestone {
-        schedule_id: [u8; 32],
-        index: u32,
-    },
-    Claim {
-        schedule_id: [u8; 32],
-    },
-    CreateScheduleBatch {
-        batch_id: [u8; 32],
-        kind: u8,
-        start: u64,
-        cliff: u64,
-        end: u64,
-        total_each: u128,
-        beneficiaries: Vec<[u8; 32]>,
-        cancelable: u8,
-        transferable: u8,
-        tranches: u32,
-        cancel_authority: [u8; 32],
-        milestone_authority: [u8; 32],
-        refund_to: [u8; 32],
-    },
-    FundBatch {
-        batch_id: [u8; 32],
-        amount: u128,
-    },
-    ClaimBatch {
-        schedule_id: [u8; 32],
-        batch_id: [u8; 32],
-    },
-    CancelBatch {
-        schedule_id: [u8; 32],
-        batch_id: [u8; 32],
-    },
+pub const BIN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../artifacts/programs/v0.3/antumbra_vesting.bin");
+
+pub struct Key {
+    pub sk: PrivateKey,
+    pub id: AccountId,
 }
 
-impl Ix {
-    pub fn name(&self) -> &'static str {
-        match self {
-            Ix::CreateSchedule { .. } => "create_schedule",
-            Ix::CreateTokenSchedule { .. } => "create_token_schedule",
-            Ix::FundSchedule { .. } => "fund_schedule",
-            Ix::FundTokenSchedule { .. } => "fund_token_schedule",
-            Ix::Cancel { .. } => "cancel",
-            Ix::MakeNonCancelable { .. } => "make_non_cancelable",
-            Ix::TransferBeneficiary { .. } => "transfer_beneficiary",
-            Ix::SignalMilestone { .. } => "signal_milestone",
-            Ix::Claim { .. } => "claim",
-            Ix::CreateScheduleBatch { .. } => "create_schedule_batch",
-            Ix::FundBatch { .. } => "fund_batch",
-            Ix::ClaimBatch { .. } => "claim_batch",
-            Ix::CancelBatch { .. } => "cancel_batch",
+impl Key {
+    #[must_use]
+    pub fn new(seed: u8) -> Self {
+        let sk = PrivateKey::try_new([seed; 32]).expect("a valid secp256k1 scalar");
+        let id = AccountId::from(&PublicKey::new_from_private_key(&sk));
+        Self { sk, id }
+    }
+}
+
+pub struct Chain {
+    pub state: V03State,
+    pub block: u64,
+    /// The block timestamp, milliseconds.
+    pub now: u64,
+    /// Cycles the last transaction used, landed or not.
+    pub last_cycles: u64,
+    pub events: Vec<TransactionEvent>,
+}
+
+/// A token holding shard, as the token program writes it.
+#[must_use]
+pub fn holding_shard(definition_id: AccountId, balance: u128) -> ShardData {
+    ShardData::from(&TokenHolding::Fungible { definition_id, balance })
+}
+
+impl Chain {
+    /// `native`: accounts funded with native balance. `tokens`: (holder,
+    /// definition, balance). Every definition named is created too.
+    #[must_use]
+    pub fn new(native: &[(AccountId, u128)], tokens: &[(AccountId, AccountId, u128)]) -> Self {
+        let bin = std::fs::read(BIN).expect("build the guest first: artifacts/programs/v0.3/antumbra_vesting.bin");
+        let program = lee::program::Program::new(bin.into()).expect("a RISC0 program binary");
+        let token = programs::token_account_id();
+        let mut accounts: Vec<(AccountId, Account)> =
+            native.iter().map(|(id, b)| (*id, Account::funded(*b))).collect();
+        for (holder, def, bal) in tokens {
+            let acc = accounts.iter_mut().find(|(id, _)| id == holder);
+            let shard = holding_shard(*def, *bal);
+            match acc {
+                Some((_, a)) => a.data.set_shard(token, shard),
+                None => accounts.push((*holder, Account::default().with_shard(token, shard))),
+            }
+            if !accounts.iter().any(|(id, _)| id == def) {
+                let d = TokenDefinition::Fungible {
+                    name: "TEST".into(),
+                    total_supply: 1 << 100,
+                    metadata_id: None,
+                };
+                accounts.push((*def, Account::default().with_shard(token, ShardData::from(&d))));
+            }
+        }
+        let state = V03State::new()
+            .with_public_accounts(accounts)
+            .with_named_programs([(VESTING, program), (token, programs::token())]);
+        Self {
+            state,
+            block: 10,
+            now: 1_700_000_000_000,
+            last_cycles: 0,
+            events: vec![],
         }
     }
-}
 
-/// `VestingSchedule` as the program writes it, field for field.
-#[derive(BorshSerialize, BorshDeserialize, Clone, Debug, PartialEq)]
-pub struct Schedule {
-    pub kind: u8,
-    pub start: u64,
-    pub cliff: u64,
-    pub end: u64,
-    pub total: u128,
-    pub claimed: u128,
-    pub last_seen: u64,
-    pub beneficiary: [u8; 32],
-    pub escrow: [u8; 32],
-    pub creator: [u8; 32],
-    pub cancelable: u8,
-    pub transferable: u8,
-    pub cancelled_at: u64,
-    pub signalled: u64,
-    pub tranches: u32,
-    pub asset: u8,
-    pub token_definition: [u8; 32],
-    pub refund_to: [u8; 32],
-    pub cancel_authority: [u8; 32],
-    pub milestone_authority: [u8; 32],
-}
+    /// Send `ix` over `rows`, signed by `signers`, in a block at `self.now`.
+    /// `Err` carries the refusal as the state machine reports it.
+    pub fn send(&mut self, ix: &Instruction, rows: Vec<ProgramShardSelector>, signers: &[&Key]) -> Result<(), String> {
+        self.send_with_budget(ix, rows, signers, GAS_CAP)
+    }
 
-pub fn elf() -> Vec<u8> {
-    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../artifacts/programs/antumbra_vesting.bin");
-    std::fs::read(&p).unwrap_or_else(|e| panic!("cannot read {}: {e}", p.display()))
-}
-
-pub fn program_id(elf: &[u8]) -> ProgramId {
-    risc0_binfmt::ProgramBinary::decode(elf)
-        .expect("decode")
-        .compute_image_id()
-        .expect("image id")
-        .into()
-}
-
-/// SPEL's public PDA: one seed used as is, several combined by SHA-256, then
-/// `/LEE/v0.2/AccountId/PDA/` ‖ program id ‖ seed, hashed.
-pub fn pda(program: &ProgramId, seeds: &[[u8; 32]]) -> AccountId {
-    let combined: [u8; 32] = if seeds.len() == 1 {
-        seeds[0]
-    } else {
-        let mut h = Sha256::new();
-        for s in seeds {
-            h.update(s);
+    pub fn send_with_budget(
+        &mut self,
+        ix: &Instruction,
+        rows: Vec<ProgramShardSelector>,
+        signers: &[&Key],
+        budget: u64,
+    ) -> Result<(), String> {
+        let nonces = signers.iter().map(|k| self.state.get_account_by_id(k.id).nonce).collect();
+        let message = Message::try_new(VESTING, rows, nonces, ix).map_err(|e| e.to_string())?;
+        let keys: Vec<&PrivateKey> = signers.iter().map(|k| &k.sk).collect();
+        let tx = PublicTransaction::new(message.clone(), WitnessSet::for_message(&message, &keys));
+        let r = ValidatedStateDiff::from_public_transaction_with_cycle_budget(&tx, &self.state, self.block, self.now, budget);
+        self.block += 1;
+        match r {
+            Ok((diff, charge)) => {
+                self.last_cycles = charge.cycles;
+                self.events = self.state.apply_state_diff(diff);
+                Ok(())
+            }
+            Err(e) => Err(format!("{e}")),
         }
-        h.finalize().into()
-    };
-    let mut bytes = [0u8; 96];
-    bytes[0..32].copy_from_slice(b"/LEE/v0.2/AccountId/PDA/\x00\x00\x00\x00\x00\x00\x00\x00");
-    bytes[32..64].copy_from_slice(bytemuck::cast_slice(program));
-    bytes[64..96].copy_from_slice(&combined);
-    AccountId::new(Sha256::digest(bytes).into())
-}
+    }
 
-pub fn lit(s: &str) -> [u8; 32] {
-    let mut b = [0u8; 32];
-    b[..s.len()].copy_from_slice(s.as_bytes());
-    b
-}
+    #[must_use]
+    pub fn native(&self, id: AccountId) -> u128 {
+        self.state.get_account_by_id(id).data.native_balance().expect("canonical balance")
+    }
 
-pub fn acc(
-    id: [u8; 32],
-    owner: ProgramId,
-    balance: u128,
-    data: Vec<u8>,
-    signer: bool,
-) -> AccountWithMetadata {
-    AccountWithMetadata {
-        account: Account {
-            program_owner: owner,
-            balance,
-            data: Data::try_from(data).expect("data fits"),
-            nonce: Nonce(0),
-        },
-        is_authorized: signer,
-        account_id: AccountId::new(id),
+    #[must_use]
+    pub fn token(&self, id: AccountId) -> u128 {
+        let acc = self.state.get_account_by_id(id);
+        let shard = acc.data.shard(programs::token_account_id());
+        if shard.is_empty() {
+            return 0;
+        }
+        match TokenHolding::try_from(shard).expect("a token holding") {
+            TokenHolding::Fungible { balance, .. } => balance,
+            other => panic!("not fungible: {other:?}"),
+        }
+    }
+
+    #[must_use]
+    pub fn schedule(&self, schedule_id: &[u8; 32]) -> VestingSchedule {
+        let id = antumbra_vesting_core::schedule_account(&VESTING, schedule_id);
+        antumbra_vesting_core::load(self.state.get_account_by_id(id).data.shard(VESTING))
+    }
+
+    #[must_use]
+    pub fn has_schedule(&self, schedule_id: &[u8; 32]) -> bool {
+        let id = antumbra_vesting_core::schedule_account(&VESTING, schedule_id);
+        !self.state.get_account_by_id(id).data.shard(VESTING).is_empty()
     }
 }
 
-pub fn clock(ms: u64) -> AccountWithMetadata {
-    let mut d = 1u64.to_le_bytes().to_vec();
-    d.extend_from_slice(&ms.to_le_bytes());
-    acc(CLOCK_ACCOUNT, CLOCK, 0, d, false)
-}
-
-/// A fungible token holding: `TokenHolding::Fungible { definition, balance }`.
-pub fn token_holding(
-    id: [u8; 32],
-    definition: [u8; 32],
-    balance: u128,
-    signer: bool,
-) -> AccountWithMetadata {
-    let mut d = vec![0u8];
-    d.extend_from_slice(&definition);
-    d.extend_from_slice(&balance.to_le_bytes());
-    acc(id, TOKEN, 0, d, signer)
-}
-
-pub struct Run {
-    pub output: ProgramOutput,
-    pub cycles: u64,
-}
-
-impl Run {
-    /// The account the program wrote for `id`, by pairing post-states with the
-    /// pre-states they answer.
-    pub fn post(&self, id: &AccountWithMetadata) -> &Account {
-        let i = self
-            .output
-            .pre_states
-            .iter()
-            .position(|p| p.account_id == id.account_id)
-            .expect("account not in the output");
-        self.output.post_states[i].account()
-    }
-    pub fn schedule(&self, id: &AccountWithMetadata) -> Schedule {
-        let d: Vec<u8> = self.post(id).data.clone().into_inner();
-        Schedule::try_from_slice(&d).expect("schedule decodes")
-    }
-    pub fn calls(&self) -> &[ChainedCall] {
-        &self.output.chained_calls
-    }
-}
-
-/// Execute one instruction. `Err` carries the program's own message, which
-/// starts `Program error [<code>]`.
-pub fn run(
-    elf: &[u8],
-    pid: &ProgramId,
-    ix: &Ix,
-    pre: Vec<AccountWithMetadata>,
-) -> Result<Run, String> {
-    let data = risc0_zkvm::serde::to_vec(ix).map_err(|e| e.to_string())?;
-    let caller: Option<ProgramId> = None;
-    let mut b = ExecutorEnv::builder();
-    b.session_limit(Some(MAX_NUM_CYCLES_PUBLIC_EXECUTION));
-    b.write(pid).unwrap();
-    b.write(&caller).unwrap();
-    b.write(&pre).unwrap();
-    b.write(&data).unwrap();
-    let env = b.build().map_err(|e| e.to_string())?;
-    let info = default_executor()
-        .execute(env, elf)
-        .map_err(|e| format!("{e:#}"))?;
-    let cycles = info.segments.iter().map(|s| u64::from(s.cycles)).sum();
-    let output: ProgramOutput = info.journal.decode().map_err(|e| e.to_string())?;
-    Ok(Run { output, cycles })
-}
-
-/// The program's own error code, read from the guest's panic message. SPEL
-/// writes `Program error [<framework code>]: Program error <ours>: <message>`;
-/// the framework code is ours offset by 6000, so the second one is read.
+/// The refusal code a failed send carries, e.g. `Some(7004)`.
+#[must_use]
 pub fn code(err: &str) -> Option<u32> {
-    let tail = &err[err.find("]: Program error ")? + "]: Program error ".len()..];
-    tail.split(':').next()?.trim().parse().ok()
-}
-
-/// A world with one schedule in it, in the state a test needs.
-pub struct World {
-    pub elf: Vec<u8>,
-    pub pid: ProgramId,
-    pub id: [u8; 32],
-    pub schedule: AccountWithMetadata,
-    pub holding: AccountWithMetadata,
-}
-
-pub const CREATOR: [u8; 32] = [0xC0; 32];
-pub const BENEFICIARY: [u8; 32] = [0xBE; 32];
-pub const DEST: [u8; 32] = [0xDE; 32];
-pub const REFUND: [u8; 32] = [0xAF; 32];
-pub const STRANGER: [u8; 32] = [0x55; 32];
-pub const DEFINITION: [u8; 32] = [0xD0; 32];
-
-impl World {
-    pub fn new(schedule_id: &str) -> Self {
-        let elf = elf();
-        let pid = program_id(&elf);
-        let id = lit(schedule_id);
-        let s_id = pda(&pid, &[id]);
-        let h_id = pda(&pid, &[id, lit("holding")]);
-        World {
-            elf,
-            pid,
-            id,
-            schedule: acc(*s_id.value(), ProgramId::default(), 0, vec![], false),
-            holding: acc(*h_id.value(), ProgramId::default(), 0, vec![], false),
-        }
-    }
-
-    /// Put `state` on chain as if created, with `escrowed` in the holding.
-    pub fn with(&mut self, state: Schedule, escrowed: u128) {
-        self.schedule.account.program_owner = self.pid;
-        self.schedule.account.data = Data::try_from(borsh::to_vec(&state).unwrap()).unwrap();
-        if state.asset == 0 {
-            self.holding.account.program_owner = self.pid;
-            self.holding.account.balance = escrowed;
-        } else {
-            self.holding = token_holding(
-                *self.holding.account_id.value(),
-                state.token_definition,
-                escrowed,
-                false,
-            );
-        }
-    }
-
-    pub fn linear(&self, start: u64, end: u64, total: u128) -> Schedule {
-        Schedule {
-            kind: 1,
-            start,
-            cliff: start,
-            end,
-            total,
-            claimed: 0,
-            last_seen: 0,
-            beneficiary: BENEFICIARY,
-            escrow: *self.holding.account_id.value(),
-            creator: CREATOR,
-            cancelable: 1,
-            transferable: 1,
-            cancelled_at: 0,
-            signalled: 0,
-            tranches: 0,
-            asset: 0,
-            token_definition: Z,
-            refund_to: REFUND,
-            cancel_authority: CREATOR,
-            milestone_authority: CREATOR,
-        }
-    }
-
-    pub fn claim(
-        &self,
-        now: u64,
-        dest: AccountWithMetadata,
-        signer: [u8; 32],
-    ) -> Result<Run, String> {
-        run(
-            &self.elf,
-            &self.pid,
-            &Ix::Claim {
-                schedule_id: self.id,
-            },
-            vec![
-                self.schedule.clone(),
-                self.holding.clone(),
-                dest,
-                acc(signer, AUTH_TRANSFER, 0, vec![], true),
-                clock(now),
-            ],
-        )
-    }
-
-    pub fn cancel(
-        &self,
-        now: u64,
-        refund: AccountWithMetadata,
-        authority: [u8; 32],
-    ) -> Result<Run, String> {
-        run(
-            &self.elf,
-            &self.pid,
-            &Ix::Cancel {
-                schedule_id: self.id,
-            },
-            vec![
-                self.schedule.clone(),
-                self.holding.clone(),
-                refund,
-                acc(authority, AUTH_TRANSFER, 0, vec![], true),
-                clock(now),
-            ],
-        )
-    }
-}
-
-pub fn native(id: [u8; 32], balance: u128) -> AccountWithMetadata {
-    acc(id, AUTH_TRANSFER, balance, vec![], false)
-}
-
-/// Schedule `i` of a batch: SHA-256(batch_id ‖ i as 32 little-endian bytes).
-pub fn batch_schedule_id(batch_id: &[u8; 32], i: u32) -> [u8; 32] {
-    let mut idx = [0u8; 32];
-    idx[..4].copy_from_slice(&i.to_le_bytes());
-    let mut h = Sha256::new();
-    h.update(batch_id);
-    h.update(idx);
-    h.finalize().into()
+    let at = err.find(": E")? + 3;
+    err[at..at + 4].parse().ok().filter(|_| err.contains("Guest panicked"))
 }
