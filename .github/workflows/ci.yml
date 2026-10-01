@@ -94,6 +94,17 @@ jobs:
       # The deployed binary itself, run through the sequencer's execution path:
       # every requirement test that accepts or refuses an instruction, then the
       # per-instruction cost table, which must match the committed one.
+      # The v0.3 program's plan and apply, on the host, without a zkVM.
+      - name: The vesting core's own tests
+        run: cargo test --release --manifest-path programs/vesting/Cargo.toml -p antumbra-vesting-core
+
+      # SPEL generated the v0.2.4 IDL; it has no v0.3 support, so the v0.3 IDL
+      # is hand-maintained and this is what notices when it stops being true.
+      - name: The hand-maintained v0.3 IDL decodes the program's own vectors
+        run: python3 scripts/check-idl.py
+
+      # The committed v0.3 binary through lee::V03State: signed transactions,
+      # timestamp windows, the real token program, the 10M gas cap.
       - name: The committed vesting binary accepts and refuses what the RFP says
         working-directory: executor-tests
         run: cargo test --release
@@ -113,15 +124,14 @@ jobs:
             sed -n '/^| op |/,/^$/p' /tmp/cycles.txt
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # The deploy hash on chain is SHA256(len ‖ bytecode), so a rebuild that
-  # produces the same hash is the deployed program, byte for byte. This job
-  # rebuilds the vesting guest from the tree in RISC Zero's pinned Docker
-  # builder and compares against the transaction hash recorded when it was
-  # deployed — a value fixed outside this build, so the check cannot agree
-  # with itself. Before the guest lockfiles were committed a fresh clone
-  # resolved newer crates and did not build at all.
+  # The committed v0.3 binary is what a clean rebuild of the tree produces, in
+  # RISC Zero's pinned Docker builder (r0.1.91.1, the tag LEZ v0.3.0 builds its
+  # own programs with). The ImageID a v0.3 program header stores is computed
+  # from these bytes, so a matching rebuild is the program a deployment names.
+  # The v0.2.4 deploy-hash check this job used to run is history: that chain
+  # was upgraded and the hash no longer resolves.
   reproduce:
-    name: A clean rebuild is the deployed vesting program
+    name: A clean rebuild is the committed v0.3 vesting program
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -139,18 +149,18 @@ jobs:
           rzup install rust
 
       - name: Rebuild in Docker
+        env:
+          RISC0_DOCKER_CONTAINER_TAG: r0.1.91.1
         run: cargo risczero build --manifest-path programs/vesting/Cargo.toml
 
-      - name: Its deploy hash is the one on chain, and the committed artifact's
+      - name: The rebuild is the committed artifact, byte for byte
         run: |
           set -e
-          . evidence/vesting-deploy.env
-          h() { python3 -c "import hashlib,struct,sys; b=open(sys.argv[1],'rb').read(); print(hashlib.sha256(struct.pack('<I',len(b))+b).hexdigest())" "$1"; }
-          built=$(h programs/vesting/target/riscv32im-risc0-zkvm-elf/docker/antumbra_vesting.bin)
-          committed=$(h artifacts/programs/antumbra_vesting.bin)
-          echo "rebuilt    $built"; echo "committed  $committed"; echo "deploy tx  $DEPLOY_TX"
-          [ "$built" = "$DEPLOY_TX" ] && [ "$committed" = "$DEPLOY_TX" ]
-          echo "the rebuild is the program deployed at block $DEPLOY_BLOCK" >> "$GITHUB_STEP_SUMMARY"
+          built=$(sha256sum programs/vesting/target/riscv32im-risc0-zkvm-elf/docker/antumbra_vesting.bin | cut -d' ' -f1)
+          committed=$(sha256sum artifacts/programs/v0.3/antumbra_vesting.bin | cut -d' ' -f1)
+          echo "rebuilt    $built"; echo "committed  $committed"
+          [ "$built" = "$committed" ]
+          echo "the v0.3 rebuild matches the committed artifact ($committed)" >> "$GITHUB_STEP_SUMMARY"
 
   # The Basecamp module, as shipped. Not the build directory's copy: the dylib is
   # unpacked from the committed .lgx, and loaded with Qt 6.9.2 — the version
