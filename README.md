@@ -6,8 +6,10 @@
 > requirement tests in [`executor-tests/`](executor-tests/) (the committed binary
 > run through the v0.3 state machine), the client in [`cli/`](cli/), and a full
 > lifecycle against a local v0.3 sequencer in [`evidence/v03/`](evidence/v03/).
-> **Testnet v0.3 deployment: pending funding**; the runbook is
-> [`docs/deploy-v03.md`](docs/deploy-v03.md). The v0.2.4 deployment and
+> **Deployed on the public testnet v0.3** as `FCrja8g2ZKvxZwNZchdppKWQCDxPNUHxnEMidrmqrt6X`
+> and driven end to end there, private claims and the 450-schedule batch
+> included; every transaction is in [`DEPLOYMENTS.md`](DEPLOYMENTS.md) and
+> re-checked by `scripts/verify-onchain.sh` (66 checks, 0 failures). The v0.2.4 deployment and
 > [`evidence/VESTING.md`](evidence/VESTING.md) are historical: that chain was
 > upgraded to v0.3 and its hashes no longer resolve. The rest of this README
 > describes the shared pricing library behind RFP-015 and RFP-016 as well.
@@ -221,10 +223,10 @@ needs to see it.
 ## Deployed
 
 **LEZ v0.3.** `antumbra_vesting` has been ported to v0.3 and driven end to end on
-a local v0.3.0 sequencer ([`evidence/v03/`](evidence/v03/)). Testnet v0.3
-deployment: pending funding (LGO arrives only through a Bedrock deposit; see
-[`docs/deploy-v03.md`](docs/deploy-v03.md)). Once deployed,
-`./scripts/verify-onchain.sh` re-checks the run from its manifest.
+a local v0.3.0 sequencer, then deployed on the public testnet v0.3 and driven
+there in full ([`DEPLOYMENTS.md`](DEPLOYMENTS.md), [`evidence/v03/`](evidence/v03/)).
+`./scripts/verify-onchain.sh --manifest evidence/v03/testnet.tsv --rpc https://testnet.lez.logos.co`
+re-checks the run from its manifest.
 
 **Historical, LEZ v0.2.4.** The table below is the record of the v0.2.4
 deployments. That testnet has since been upgraded to v0.3, so these hashes no

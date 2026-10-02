@@ -1,8 +1,13 @@
 # Deploying antumbra_vesting on the public LEZ testnet v0.3
 
-Status: **pending funding.** Everything below has been run end to end against a
-local LEZ v0.3.0 sequencer (transcript in [`evidence/v03/`](../evidence/v03/));
-the public run needs LGO, which on v0.3 only arrives through Bedrock.
+Status: **deployed** on the public testnet v0.3 (header
+`FCrja8g2ZKvxZwNZchdppKWQCDxPNUHxnEMidrmqrt6X`, see [`DEPLOYMENTS.md`](../DEPLOYMENTS.md)).
+This runbook is how it was done. LGO reaches LEZ only through Bedrock: on v0.3
+there is no faucet, so it was mined on a Bedrock node (`PUT /pow/mining/start`)
+and bridged with a ChannelDeposit. On a chain with real fees every signer pays
+its own fee and a refused transaction is charged its whole declared gas, so the
+run funds its signer accounts (`FUND_EACH`) and keeps the wallet's `gas_limit`
+at 300000 (the heaviest instruction uses 89k).
 
 - LEZ: tag `v0.3.0`, commit `db66590ab821a4e142c211017a3866d007f6fa77`
 - RPC: `https://testnet.lez.logos.co` (it reports channel `0101…01` and the same
