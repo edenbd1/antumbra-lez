@@ -1,20 +1,31 @@
 # antumbra-lez
 
-> **Reviewing RFP-017 (vesting)?** The program now targets **LEZ v0.3**
-> (`v0.3.0`, `db66590a`): source in [`programs/vesting/`](programs/vesting/), the
-> port and what changed in [`docs/v03-port-plan.md`](docs/v03-port-plan.md), the
-> requirement tests in [`executor-tests/`](executor-tests/) (the committed binary
-> run through the v0.3 state machine), the client in [`cli/`](cli/), and a full
-> lifecycle against a local v0.3 sequencer in [`evidence/v03/`](evidence/v03/).
-> **Deployed on the public testnet v0.3** as `FCrja8g2ZKvxZwNZchdppKWQCDxPNUHxnEMidrmqrt6X`
-> and driven end to end there, private claims and the 450-schedule batch
-> included; every transaction is in [`DEPLOYMENTS.md`](DEPLOYMENTS.md) and
-> re-checked by `scripts/verify-onchain.sh` (66 checks, 0 failures). The v0.2.4 deployment and
-> [`evidence/VESTING.md`](evidence/VESTING.md) are historical: that chain was
-> upgraded to v0.3 and its hashes no longer resolve. The rest of this README
-> describes the shared pricing library behind RFP-015 and RFP-016 as well.
+## Antumbra Vesting (RFP-017): live on the LEZ testnet v0.3
+
+Privacy-preserving token vesting for the Logos Execution Zone, deployed and
+driven end to end on the public testnet v0.3.
+
+| | |
+|---|---|
+| Program (header account) | `FCrja8g2ZKvxZwNZchdppKWQCDxPNUHxnEMidrmqrt6X` |
+| ImageID | `72d5cdc05004a9502be72239829071982237638b49b8fe7d1b45fd7371a425f4`, read back from the header's loader record |
+| On chain | linear, cliff and milestone schedules, cancellation with refund, transferable and non-cancelable positions, nominated authorities, native and token escrow, private claims of native balance and of a token into shielded accounts, a batch of 450 schedules in one transaction (451 refused under the 10M gas cap) |
+| Every transaction | [`DEPLOYMENTS.md`](DEPLOYMENTS.md), manifest and transcript in [`evidence/v03/`](evidence/v03/) |
+| Re-check it yourself | `./scripts/verify-onchain.sh --manifest evidence/v03/testnet.tsv --rpc https://testnet.lez.logos.co` (66 checks) |
+| Reproducible build | CI rebuilds the guest from source in RISC Zero's pinned Docker builder and compares it with the committed binary |
+| Source | [`programs/vesting/`](programs/vesting/) (LEZ `v0.3.0`, `db66590a`), port notes in [`docs/v03-port-plan.md`](docs/v03-port-plan.md), requirement tests in [`executor-tests/`](executor-tests/), CLI in [`cli/`](cli/), Basecamp module in [`app/`](app/), runbook in [`docs/deploy-v03.md`](docs/deploy-v03.md) |
+
+The v0.2.4 deployment and [`evidence/VESTING.md`](evidence/VESTING.md) are
+historical: that chain was reset to v0.3 and its hashes no longer resolve.
 
 [![CI](https://github.com/edenbd1/antumbra-lez/actions/workflows/ci.yml/badge.svg)](https://github.com/edenbd1/antumbra-lez/actions/workflows/ci.yml)
+
+## The pricing library
+
+The repository also holds `antumbra`, the integer arithmetic the programs share:
+the vesting schedules, and the constant-product bonding curve and weighted pool
+written for [RFP-015](https://github.com/logos-co/rfp/blob/master/RFPs/RFP-015-bonding-curve-launchpad.md)
+and RFP-016. The rest of this README is about that library.
 
 Integer-only constant-product bonding curve math for the Logos Execution Zone,
 written for [Logos RFP-015](https://github.com/logos-co/rfp/blob/master/RFPs/RFP-015-bonding-curve-launchpad.md).
@@ -266,9 +277,10 @@ the reconciliation, and every transaction that drove them.
 
 ## Status
 
-This is the pricing core, not the program. The SPEL program, the private
-purchase path, the Basecamp mini-app and the CLI are the subject of the RFP-015
-proposal this repository accompanies.
+`antumbra_vesting` is the program of the RFP-017 proposal and runs on the
+public testnet v0.3 (see the top of this page). The bonding curve and weighted
+pool programs were built and driven on v0.2.4 and have not been ported to v0.3;
+their arithmetic lives on in the `antumbra` library above.
 
 ## Licence
 
