@@ -14,6 +14,7 @@ driven end to end on the public testnet v0.3.
 | Re-check it yourself | `./scripts/verify-onchain.sh --manifest evidence/v03/testnet.tsv --rpc https://testnet.lez.logos.co` (66 checks) |
 | Reproducible build | CI rebuilds the guest from source in RISC Zero's pinned Docker builder and compares it with the committed binary |
 | Source | [`programs/vesting/`](programs/vesting/) (LEZ `v0.3.0`, `db66590a`), port notes in [`docs/v03-port-plan.md`](docs/v03-port-plan.md), requirement tests in [`executor-tests/`](executor-tests/), CLI in [`cli/`](cli/), Basecamp module in [`app/`](app/), runbook in [`docs/deploy-v03.md`](docs/deploy-v03.md) |
+| Design decisions | [`docs/DECISIONS.md`](docs/DECISIONS.md): each major decision with its context, options, rationale and trade-offs, v0.2.4 ones kept and marked superseded |
 
 The v0.2.4 deployment and [`evidence/VESTING.md`](evidence/VESTING.md) are
 historical: that chain was reset to v0.3 and its hashes no longer resolve.

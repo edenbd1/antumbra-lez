@@ -5,7 +5,8 @@
 `antumbra_vesting` runs on the public LEZ testnet v0.3
 (`https://testnet.lez.logos.co`), ported from v0.2.4
 ([`docs/v03-port-plan.md`](docs/v03-port-plan.md)) and driven through its whole
-lifecycle there on 2026-10-02.
+lifecycle there on 2026-10-02. The design decisions behind it, and the v0.2.4 ones
+they replaced, are logged in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 | | v0.3 |
 |---|---|
