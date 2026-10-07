@@ -1,14 +1,19 @@
 {
   "name": "antumbra_lez",
   "display_name": "Antumbra Vesting",
-  "version": "0.3.0",
-  "type": "ui",
+  "version": "0.4.0",
+  "type": "ui_qml",
+  "interface": "universal",
   "category": "defi",
-  "description": "Antumbra Vesting on LEZ v0.3: read a vesting schedule and its escrow straight from a sequencer, and compute what is claimable now against the chain's own clock. Read-only: it holds no keys and signs nothing",
+  "description": "Look up a vesting schedule on the LEZ testnet by its id, its batch or its beneficiary, and see what has vested, what is claimable now against the chain's own clock, what the escrow holds and who can move it. Read-only: it holds no keys and signs nothing, and gives you the exact command to claim from your wallet.",
   "author": "edenbd1",
   "main": "antumbra_lez_plugin",
   "icon": "assets/icon.png",
+  "view": "qml/Main.qml",
   "dependencies": [],
+  "codegen": {
+    "rep": "src/antumbra_lez.rep"
+  },
   "nix": {
     "packages": {
       "build": [],

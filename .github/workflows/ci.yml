@@ -162,89 +162,61 @@ jobs:
           [ "$built" = "$committed" ]
           echo "the v0.3 rebuild matches the committed artifact ($committed)" >> "$GITHUB_STEP_SUMMARY"
 
-  # The Basecamp module, built the way the catalog builds modules: mkLogosModule
-  # (app/flake.nix), `nix build .#lgx-portable`, on both platforms Basecamp
-  # 0.3.0 ships for. The builder's Qt is 6.9.2, the version Basecamp bundles,
-  # and a ceiling, since Qt refuses a plugin built against a newer minor. On
-  # macOS the packaged dylib is then unpacked and driven through every step
-  # Basecamp's loader takes for a `ui` module, against an official Qt 6.9.2.
+  # The Basecamp app, built the way the catalog builds modules: mkLogosQmlModule
+  # (app/flake.nix, logos-module-builder 0.3.1, the builder Logos Forum uses),
+  # `nix build .#lgx-portable`, for every platform Basecamp 0.3.0 ships for,
+  # Windows as the catalog builds it (a mingw cross build from Linux).
   module:
-    name: Basecamp module (${{ matrix.os }})
+    name: Basecamp app (${{ matrix.target }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14]
+        include:
+          - { target: linux-amd64, os: ubuntu-24.04, attr: ".#lgx-portable" }
+          - { target: darwin-arm64, os: macos-14, attr: ".#lgx-portable" }
+          - { target: windows-x86_64, os: ubuntu-24.04, attr: ".#packages.x86_64-windows.lgx-portable" }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
-      - name: module.json and src/metadata.json mirror metadata.json
-        run: cmp app/metadata.json app/module.json && cmp app/metadata.json app/src/metadata.json
+      - name: module.json mirrors metadata.json
+        run: cmp app/metadata.json app/module.json
       - name: Build the portable package
-        run: nix build ./app#lgx-portable --accept-flake-config -L -o result
+        working-directory: app
+        run: nix build '${{ matrix.attr }}' --accept-flake-config -L -o result
       - name: Check the package
         run: |
           set -euo pipefail
-          cp result/*.lgx antumbra_lez.lgx
+          cp app/result/*.lgx antumbra_lez.lgx
           mkdir pkg && tar xzf antumbra_lez.lgx -C pkg
           python3 - <<'PYCHECK'
-          import json, os
+          import json, os, struct
           m = json.load(open("pkg/manifest.json"))
           meta = json.load(open("app/metadata.json"))
           variants = sorted(os.listdir("pkg/variants"))
           print("name", m["name"], "version", m["version"], "type", m["type"], "variants", variants)
           assert m["name"] == meta["name"] and m["version"] == meta["version"]
-          assert m["type"] == "ui", m["type"]
-          assert variants, "no variant"
+          assert m["type"] == "ui_qml" and m["view"] == "qml/Main.qml", (m["type"], m.get("view"))
+          assert variants == ["${{ matrix.target }}"], variants
+          # Basecamp's tile wants exactly a 256 x 256 PNG.
+          icon = open("pkg/assets/icon.png", "rb").read(24)
+          assert icon[:8] == b"\x89PNG\r\n\x1a\n" and struct.unpack(">II", icon[16:24]) == (256, 256)
           for v in variants:
               main = m["main"][v]
               assert os.path.exists(f"pkg/variants/{v}/{main}"), main
+              for f in ("qml/Main.qml", "qml/icons/logo.png"):
+                  assert os.path.exists(f"pkg/variants/{v}/{f}"), f
+          print("package ok")
           PYCHECK
-      - name: Qt 6.9.2, the version Basecamp bundles
-        if: runner.os == 'macOS'
-        run: |
-          set -euo pipefail
-          python3 -m venv /tmp/aqt
-          /tmp/aqt/bin/pip -q install aqtinstall
-          /tmp/aqt/bin/python -m aqt install-qt mac desktop 6.9.2 clang_64 -m qtremoteobjects \
-            --archives qtbase qtdeclarative qtshadertools --outputdir /tmp/Qt
-          test -d /tmp/Qt/6.9.2/macos/lib/QtQuickWidgets.framework
-          test -d /tmp/Qt/6.9.2/macos/lib/QtRemoteObjects.framework
-          # The plugin names libintl by @rpath; Basecamp bundles it, aqt's Qt does not.
-          nix build nixpkgs#gettext -o gettext
-      - name: Build the load harness
-        if: runner.os == 'macOS'
-        run: |
-          set -euo pipefail
-          QT=/tmp/Qt/6.9.2/macos
-          # -include arm_acle.h: Qt 6.9.2's qyieldcpu.h calls __yield() without
-          # declaring it, which the runner's newer Xcode clang makes an error.
-          # It changes how the harness compiles, not the module under test.
-          clang++ -std=c++17 -Wall -Wextra -include arm_acle.h -F$QT/lib \
-            -I$QT/lib/QtCore.framework/Headers -I$QT/lib/QtGui.framework/Headers \
-            -I$QT/lib/QtWidgets.framework/Headers \
-            -framework QtWidgets -framework QtGui -framework QtCore \
-            -Wl,-rpath,$QT/lib app/tests/ui_plugin_load_test.cpp -o ui_plugin_load_test
-      - name: The packaged darwin-arm64 dylib loads the way Basecamp loads a ui plugin
-        if: runner.os == 'macOS'
-        env:
-          QT_QPA_PLATFORM: offscreen
-          QT_PLUGIN_PATH: /tmp/Qt/6.9.2/macos/plugins
-        run: |
-          set -euo pipefail
-          DYLD_FALLBACK_LIBRARY_PATH="$(readlink -f gettext)/lib" \
-            ./ui_plugin_load_test pkg/variants/darwin-arm64/antumbra_lez_plugin.dylib antumbra_lez_plugin 2>&1 | tee load.out
-          grep -q "assertions, all of them ran" load.out \
-            || { echo "the harness did not report a complete run"; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
-          name: antumbra_lez-${{ runner.os }}-${{ runner.arch }}
+          name: antumbra_lez-${{ matrix.target }}
           path: antumbra_lez.lgx
 
-  # One .lgx carrying both variants, as the catalog publishes it.
+  # One .lgx carrying every variant, as the catalog publishes it.
   module-package:
-    name: Basecamp module, both platforms in one package
+    name: Basecamp app, every platform in one package
     needs: module
     runs-on: ubuntu-24.04
     steps:
@@ -252,18 +224,61 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: parts
-      - name: Merge macOS and Linux into one .lgx
+      - name: Merge macOS, Linux and Windows into one .lgx
         run: |
           set -euo pipefail
           nix build github:logos-co/logos-package --accept-flake-config -o lgxtool
           ./lgxtool/bin/lgx merge parts/*/antumbra_lez.lgx -o antumbra_lez.lgx -y
           ./lgxtool/bin/lgx verify antumbra_lez.lgx
           mkdir m && tar xzf antumbra_lez.lgx -C m && ls m/variants
-          test -d m/variants/linux-amd64 && test -d m/variants/darwin-arm64
+          test -d m/variants/linux-amd64 && test -d m/variants/darwin-arm64 && test -d m/variants/windows-x86_64
       - uses: actions/upload-artifact@v4
         with:
           name: antumbra_lez-all-platforms
           path: antumbra_lez.lgx
+
+  # The app's chain reader and its view, without Basecamp, against Qt 6.9.2
+  # (the version Basecamp 0.3.0 bundles). The reader decodes schedules saved
+  # from the public testnet and replays their transactions, which must give
+  # the verdicts the end-to-end manifest recorded. The view (the packaged
+  # Main.qml itself) is then loaded at a desktop, a narrow and a phone width,
+  # with the node unreachable, and any QML warning fails the run.
+  view:
+    name: Basecamp app, reader and view without Basecamp
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Qt 6.9.2
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/aqt
+          /tmp/aqt/bin/pip -q install aqtinstall
+          /tmp/aqt/bin/python -m aqt install-qt mac desktop 6.9.2 clang_64 \
+            --archives qtbase qtdeclarative qtsvg --outputdir /tmp/Qt
+      - name: Build the reader's tests and the view host
+        run: |
+          set -euo pipefail
+          # Qt 6.9.2's qyieldcpu.h calls __yield() without declaring it, which
+          # the runner's newer Xcode clang makes an error.
+          cmake -S app/tests -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/tmp/Qt/6.9.2/macos \
+            -DCMAKE_CXX_FLAGS="-include arm_acle.h"
+          cmake --build build -j
+      - name: The reader decodes and replays the testnet schedules
+        run: ./build/chain_test app/tests/fixtures
+      - name: The view loads at every width, without a warning
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_CONTROLS_STYLE: Basic
+        run: |
+          set -euo pipefail
+          for size in "1500 950" "700 900" "390 844"; do
+            ./build/qml_host app/src/qml/Main.qml $size "shot-${size// /x}.png" --offline
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: view-offline
+          path: shot-*.png
 
   # Model checking, not testing: each harness in src/vesting/proofs.rs is
   # checked by Kani for every input in its stated domain — every u64 timestamp,

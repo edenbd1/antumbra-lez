@@ -33,6 +33,6 @@ vested; there is still no cached "vested" field.
 2. `programs/vesting`: the v0.3 guest.
 3. `cli/`: a Rust CLI on the v0.3 `wallet` crate (create, claim public and private, cancel, milestone, transfer, batch, show).
 4. `executor-tests/`: the committed binary run through `lee::V03State`, the same state machine the sequencer uses, including the timestamp windows and the 10M gas cap; the batch ceiling measured there and on a local sequencer.
-5. `app/src/chain_bridge.cpp`: decode the `shards` map.
+5. The Basecamp app's chain reader: decode the `shards` map (first in the panel's ChainBridge, now in `app/src/vesting_chain.cpp`).
 6. A local v0.3 sequencer run of the whole lifecycle, transcript in `evidence/v03/`.
 7. `scripts/verify-onchain.sh` reads hashes from a manifest; `docs/deploy-v03.md` for the public testnet once LGO is funded.

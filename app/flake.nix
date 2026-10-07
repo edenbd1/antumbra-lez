@@ -1,5 +1,5 @@
 {
-  description = "Antumbra Vesting: the Basecamp panel that reads a LEZ v0.3 vesting schedule from a sequencer";
+  description = "Antumbra Vesting: a Basecamp app that reads LEZ v0.3 vesting schedules from the chain";
 
   nixConfig = {
     extra-substituters = [ "https://cache.nix.logos.co/public" ];
@@ -8,16 +8,15 @@
     ];
   };
 
-  # The builder revision the Basecamp 0.3.0 catalog modules are built with. Its
-  # Qt is 6.9.2, the version Basecamp 0.3.0 bundles; Qt refuses a plugin built
-  # against a newer minor than the host's, so this pin is a ceiling as well as
-  # a toolchain.
+  # The builder Logos Forum and the Basecamp 0.3.0 catalog modules are built
+  # with. Its Qt is the one Basecamp 0.3.0 bundles, and from 0.3 on it also
+  # cross-builds x86_64-windows.
   inputs = {
-    logos-module-builder.url = "github:logos-co/logos-module-builder/fb8d5513ed2e6ce34d998db59e425d0cbeb985e3";
+    logos-module-builder.url = "github:logos-co/logos-module-builder/0.3.1";
   };
 
   outputs = inputs@{ logos-module-builder, ... }:
-    logos-module-builder.lib.mkLogosModule {
+    logos-module-builder.lib.mkLogosQmlModule {
       src = ./.;
       configFile = ./metadata.json;
       flakeInputs = inputs;

@@ -21,6 +21,30 @@ historical: that chain was reset to v0.3 and its hashes no longer resolve.
 
 [![CI](https://github.com/edenbd1/antumbra-lez/actions/workflows/ci.yml/badge.svg)](https://github.com/edenbd1/antumbra-lez/actions/workflows/ci.yml)
 
+## Antumbra Vesting in Basecamp
+
+<img src="app/design/icon-256.png" width="64" alt="Antumbra Vesting">
+
+A Basecamp 0.3.0 app ([`app/`](app/), version 0.4.0) to look up a schedule on
+the public testnet by its id, its batch or an account, and see what the chain
+holds: what is claimable now against the chain's clock, the vesting curve, the
+escrow's real balance, the accounts, and every transaction on the schedule
+with the program's verdict. It signs nothing; it gives the exact
+`antumbra-vesting` command to claim from the beneficiary's wallet. It is
+built and laid out like Logos Forum: the schedules as its topics, a schedule
+as its thread, the claim command where its reply box is.
+
+![A schedule in Basecamp 0.3.0, read from the public testnet](docs/screens/basecamp-schedule.png)
+
+| Basecamp's narrowest window | Milestones | A batch |
+|---|---|---|
+| ![One pane](docs/screens/basecamp-narrow.png) | ![Milestones](docs/screens/basecamp-milestones.png) | ![A batch](docs/screens/basecamp-batch.png) |
+
+Searching by account finds the schedules that account has signed for plus the
+examples: the chain cannot list schedules by beneficiary, and the app says so.
+More in [`app/README.md`](app/README.md) and
+[D-35](docs/DECISIONS.md).
+
 ## The pricing library
 
 The repository also holds `antumbra`, the integer arithmetic the programs share:

@@ -1,0 +1,52 @@
+class AntumbraLez
+{
+    // ── Reading ───────────────────────────────────────────────────────────────
+    // Every read is asynchronous. The view passes a token of its own making;
+    // the answer arrives as `answered(token, json)` carrying the same token, so
+    // an answer to a question the view has moved on from is simply dropped.
+    // Each slot returns "" at once, or "error: …" when the request was refused.
+    //
+    // lookup: a schedule id (text of at most 32 bytes, or 64 hex digits), a
+    //   batch id, or a base58 account: the schedule's own account, or an
+    //   account whose schedules are wanted (as beneficiary, creator or
+    //   authority). json: {kind: "schedule"|"list"|"none"|"error", …}.
+    SLOT(QString lookup(QString token, QString query))
+    // A schedule by its account (base58), with the batch it belongs to when
+    // known (empty otherwise). json: {kind: "schedule", schedule: {…}}.
+    SLOT(QString openSchedule(QString token, QString scheduleAccount, QString batchId))
+    // The examples: real schedules on the public testnet, read now.
+    // json: {kind: "list", items: [{…}]}.
+    SLOT(QString examples(QString token))
+    // Transactions on a schedule's account, from the explorer's index, each
+    // with the program's verdict as replayed from the schedule's rules.
+    // json: {kind: "activity", events: [{…}], consistent, note, scheduleId, batchId}.
+    SLOT(QString activity(QString token, QString scheduleAccount))
+    // The chain's head and clock, read now, into statusJson. The view asks every 15 s.
+    SLOT(QString refreshStatus())
+
+    // ── Settings ──────────────────────────────────────────────────────────────
+    // Saved under the Basecamp user directory. An empty value restores the
+    // default. ANTUMBRA_RPC, ANTUMBRA_PROGRAM and ANTUMBRA_EXPLORER, when set,
+    // win over what is saved; `envOverrides` names them.
+    SLOT(QString saveSettings(QString rpc, QString program, QString explorer))
+
+    // ── Links ─────────────────────────────────────────────────────────────────
+    // Open an https link in the system browser, on the user's click. Basecamp's
+    // QML sandbox refuses Qt.openUrlExternally for remote URLs, so the view
+    // hands the URL here. Anything but an https URL with a host is refused.
+    // Returns "" or "error: …".
+    SLOT(QString openLink(QString url))
+
+    PROP(QString appVersion="" READONLY)
+    PROP(QString rpc="" READONLY)
+    PROP(QString program="" READONLY)
+    PROP(QString explorer="" READONLY)
+    // {rpc, program, explorer}
+    PROP(QString defaultsJson="{}" READONLY)
+    // Comma-separated names of the environment variables in force.
+    PROP(QString envOverrides="" READONLY)
+    // {state: "connecting"|"ok"|"error", block, clock, text, program: "found"|"missing"|""}
+    PROP(QString statusJson="{}" READONLY)
+
+    SIGNAL(answered(QString token, QString json))
+}

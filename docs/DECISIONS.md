@@ -54,8 +54,9 @@ Current program: LEZ `v0.3.0` (`db66590a`), header
 | D-30 | A refusal on chain is a reverted, charged transaction, checked from a manifest (v0.3) | 2026-10-01 | accepted |
 | D-31 | Fees: a named payer, `FUND_EACH`, and declared gas sized to the instruction | 2026-10-01 | accepted |
 | D-32 | Basecamp module built by hand with CMake against Basecamp's Qt (v0.2.4) | 2026-08-21 | superseded by D-33 |
-| D-33 | Basecamp module built with logos-module-builder | 2026-10-01 | accepted |
+| D-33 | Basecamp module built with logos-module-builder | 2026-10-01 | superseded by D-35 |
 | D-34 | Evidence from a replaced chain is declared pre-reset, not deleted | 2026-09-27 | accepted |
+| D-35 | The Basecamp app as a `ui_qml` module in Logos Forum's design | 2026-10-07 | accepted |
 
 ---
 
@@ -933,7 +934,7 @@ documented there).
 ## D-33: Basecamp module built with logos-module-builder
 
 - **Date:** 2026-10-01 (`9288299`, `9485472`)
-- **Status:** accepted
+- **Status:** superseded by D-35 (2026-10-07)
 
 **Context.** Basecamp 0.3.0 ships for darwin-arm64 and linux-amd64, and the
 catalog builds modules with `mkLogosModule`.
@@ -953,10 +954,14 @@ install.
 **Trade-offs.** The build depends on Nix. Basecamp 0.3.0 does not pass key events
 to a `ui` module, so fields fill from the clipboard.
 
-**Where.** [`app/flake.nix`](../app/flake.nix),
-[`app/src/chain_bridge.cpp`](../app/src/chain_bridge.cpp),
-[`app/README.md`](../app/README.md); CI jobs `module` and `module-package`;
-[`evidence/v03/basecamp-bridge-read.txt`](../evidence/v03/basecamp-bridge-read.txt).
+**Why it was replaced.** A legacy `ui` widget gets no key events in Basecamp
+0.3.0, so nothing could be typed, and the panel only followed one schedule
+named in its settings (D-35).
+
+**Where.** [`app/flake.nix`](../app/flake.nix) (now `mkLogosQmlModule`); the
+panel's ChainBridge was replaced by the reader in D-35;
+[`evidence/v03/basecamp-bridge-read.txt`](../evidence/v03/basecamp-bridge-read.txt)
+is its read from the time.
 
 ## D-34: Evidence from a replaced chain is declared pre-reset, not deleted
 
@@ -988,3 +993,72 @@ value is as a record, said plainly where they appear.
 [`scripts/check-chain-refs.py`](../scripts/check-chain-refs.py),
 [`.github/workflows/chain-refs.yml`](../.github/workflows/chain-refs.yml),
 the historical section of [`DEPLOYMENTS.md`](../DEPLOYMENTS.md).
+
+## D-35: The Basecamp app as a `ui_qml` module in Logos Forum's design
+
+- **Date:** 2026-10-07
+- **Status:** accepted
+
+**Context.** The v0.2 panel was a legacy `ui` widget: Basecamp 0.3.0 gives such
+a widget clicks but no key events, so nothing could be typed (fields filled
+from the clipboard), it followed one schedule named in its settings, and two
+of its three tabs read v0.2.4 programs that no longer exist. It looked like a
+debugging tool rather than an app a beneficiary would open.
+
+**Options considered.** Keep the widget and add more Paste buttons; port to a
+`ui_qml` module with a backend, the way Logos Forum (LP-0026) is built, and
+design it from scratch; port it and take the Forum's design as it is.
+
+**Chosen.** A `ui_qml` module built with `mkLogosQmlModule` and
+logos-module-builder 0.3.1: the QML view runs in Basecamp, the backend in its
+own process, and they talk over Qt Remote Objects through
+`app/src/antumbra_lez.rep`. Vesting only, defaulting to the public testnet and
+the deployed program, with the node, the program and the explorer as settings
+saved under the Basecamp user directory (`ANTUMBRA_RPC`, `ANTUMBRA_PROGRAM` and
+`ANTUMBRA_EXPLORER` win over them). One field takes a schedule id, a batch id
+or a base58 account. A schedule shows what is claimable now against the
+chain's clock account, the vesting curve with a marker for now, the escrow's
+real balance, every account with copy and explorer buttons, the exact CLI
+command that claims it, and its transactions with each one's verdict.
+
+The design is Logos Forum's, accent included: its palette and orange, its
+surfaces, type, radii, outlined main button, badges and status line, and its
+composition. The schedules list is laid out as the Forum's topics, a schedule
+as a thread whose sections carry the Forum's author line, and the claim
+command as its reply box, with the choice of a public or a shielded
+destination where the Forum picks who to post as. Two panes become one below
+720 px. Under the claimable amount the view says what unlocks next (the
+accrual rate, the cliff, or which milestone authority must signal), the
+status line says when the chain's clock trails the computer's (the chain's
+clock is its last block's time, and every amount follows it), and an open
+schedule shows when it was read and is read again every minute. The icon is
+the author's logo redrawn as vector paths (23 lines and 24 bands in a circle,
+60° edges, IoU 0.978 against the original bitmap), cream on orange on the
+Forum's tile, the mark filling 80% of it; a violet accent and an eclipse-ring
+mark were proposed first and set aside for this.
+
+**Rationale.** Typing works natively in a `ui_qml` view. A beneficiary does not
+know a PDA; they know the id they were given, or their own account. A user of
+both apps learns one set of controls and one way to read a screen.
+
+**Trade-offs.** Signing stays out: the app gives the command, the wallet signs,
+so the app is never a custody risk. The sequencer cannot list schedules by
+beneficiary and creating a schedule is not recorded under the beneficiary's
+account, so a search by account finds the schedules that account has signed
+for (claims, transfers, creations) plus the examples, and says so in the
+view. An account's transactions and a schedule's activity come from the
+explorer's server function, which is undocumented and trails the chain by up
+to two hours; the index does not mark refused transactions, so the app replays
+them against the schedule's rules and says whether the replay matches what the
+chain holds, instead of trusting either.
+
+**Where.** [`app/src/qml/Main.qml`](../app/src/qml/Main.qml),
+[`app/src/vesting_chain.cpp`](../app/src/vesting_chain.cpp),
+[`app/src/antumbra_lez_backend.cpp`](../app/src/antumbra_lez_backend.cpp),
+[`app/tests/chain_test.cpp`](../app/tests/chain_test.cpp) (decoding and replay
+against bytes saved from the testnet, with the manifest's verdicts),
+[`app/tests/qml_host.cpp`](../app/tests/qml_host.cpp),
+[`app/design/`](../app/design/) (the logo, how it was redrawn, and the
+variants considered),
+[`app/README.md`](../app/README.md); CI jobs `module`, `module-package` and
+`view`.
