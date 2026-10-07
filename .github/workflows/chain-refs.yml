@@ -72,6 +72,10 @@ jobs:
             cli/target
           key: cli-${{ runner.os }}-${{ hashFiles('cli/Cargo.lock', 'cli/Cargo.toml') }}
           restore-keys: cli-${{ runner.os }}-
+      # The libraries LEZ's own CI image installs (.github/docker/ci.Dockerfile
+      # at db66590a); the wallet's keycard support links PC/SC.
+      - name: System libraries
+        run: sudo apt-get update -q && sudo apt-get install -y -q libpcsclite-dev libclang-dev clang libssl-dev pkg-config cmake
       - name: Build the CLI
         run: cargo build --release --manifest-path cli/Cargo.toml
       - name: show testnet4-lin and show --batch-id testnet4-batch8, live

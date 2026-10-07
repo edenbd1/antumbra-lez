@@ -30,7 +30,8 @@ defaults to the deployed header. Only the commands that sign open a wallet.
 
 ```bash
 git clone https://github.com/edenbd1/antumbra-lez && cd antumbra-lez
-cargo build --release --manifest-path cli/Cargo.toml   # Rust 1.98.1, as LEZ v0.3.0
+# Rust 1.98.1, as LEZ v0.3.0; on Linux also libpcsclite-dev, libclang-dev, libssl-dev
+cargo build --release --manifest-path cli/Cargo.toml
 cli/target/release/antumbra-vesting show testnet4-lin
 cli/target/release/antumbra-vesting show --batch-id testnet4-batch8
 ```
