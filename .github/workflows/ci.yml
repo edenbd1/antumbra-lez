@@ -173,6 +173,39 @@ jobs:
           [ "$built" = "$committed" ]
           echo "the v0.3 rebuild matches the committed artifact ($committed)" >> "$GITHUB_STEP_SUMMARY"
 
+  # The CLI's read-only commands, run as a reviewer runs them: a fresh HOME, no
+  # wallet, only a sequencer URL. The sequencer here is a recording of the
+  # public testnet's answers (scripts/rpc-fixture.py), so an outage cannot turn
+  # this red; the scheduled chain-refs workflow runs the same script against the
+  # live testnet. The transcript must equal the committed one byte for byte.
+  cli:
+    name: The CLI reads schedules without a wallet
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain (LEZ v0.3.0 pins 1.98.1)
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup default 1.98.1
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            cli/target
+          key: cli-${{ runner.os }}-${{ hashFiles('cli/Cargo.lock', 'cli/Cargo.toml') }}
+          restore-keys: cli-${{ runner.os }}-
+      - name: Build the CLI
+        run: cargo build --release --manifest-path cli/Cargo.toml
+      - name: show, ids, image-id and now with no wallet, against the recorded testnet
+        run: |
+          set -euo pipefail
+          python3 scripts/rpc-fixture.py replay cli/tests/fixtures/rpc-testnet.json --port 3040 &
+          sleep 1
+          ./scripts/cli-readonly.sh --rpc http://127.0.0.1:3040 --expect cli/tests/fixtures/readonly.txt
+
   # The Basecamp app, built the way the catalog builds modules: mkLogosQmlModule
   # (app/flake.nix, logos-module-builder 0.3.1, the builder Logos Forum uses),
   # `nix build .#lgx-portable`, for every platform Basecamp 0.3.0 ships for,

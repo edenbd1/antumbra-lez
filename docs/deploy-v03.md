@@ -45,6 +45,15 @@ antumbra-vesting --elf artifacts/programs/v0.3/antumbra_vesting.bin image-id
 
 ## 1. Wallet
 
+Only the commands that sign (deploy, create, batch, claim, cancel,
+make-non-cancelable, transfer, signal) open the wallet. `show`, `ids`,
+`image-id` and `now` need none: they read the sequencer at `--rpc`
+(`ANTUMBRA_RPC`, default `https://testnet.lez.logos.co`) or compute locally,
+and `--program` (`ANTUMBRA_PROGRAM`) defaults to the deployed header. Against a
+local sequencer, set `ANTUMBRA_RPC=http://127.0.0.1:3040` and
+`ANTUMBRA_PROGRAM` to the header you deployed; `scripts/e2e-v03.sh` sets the
+first from its `RPC`.
+
 ```bash
 export LEE_WALLET_HOME_DIR=$HOME/.lee/antumbra-v03
 mkdir -p $LEE_WALLET_HOME_DIR

@@ -47,3 +47,32 @@ jobs:
           p=$(sed -n 's/^\([0-9][0-9]*\) more are declared pre-reset.*/\1/p' refs.out)
           n=$(( n + ${p:-0} ))
           [ "$n" -ge 52 ] || { echo "it resolved $n reference(s), live or declared pre-reset, fewer than the 52 this repository ships"; exit 1; }
+
+  # The CLI's read-only commands against the live testnet, once a day and on
+  # demand, never on a push: the push CI runs the same script against a
+  # recording, so an outage cannot fail a commit, and this run notices when the
+  # testnet stops holding what the recording says.
+  cli-live:
+    name: The CLI reads the live testnet without a wallet
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain (LEZ v0.3.0 pins 1.98.1)
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup default 1.98.1
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            cli/target
+          key: cli-${{ runner.os }}-${{ hashFiles('cli/Cargo.lock', 'cli/Cargo.toml') }}
+          restore-keys: cli-${{ runner.os }}-
+      - name: Build the CLI
+        run: cargo build --release --manifest-path cli/Cargo.toml
+      - name: show testnet4-lin and show --batch-id testnet4-batch8, live
+        run: ./scripts/cli-readonly.sh --rpc https://testnet.lez.logos.co

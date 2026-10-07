@@ -1,9 +1,13 @@
 //! `antumbra-vesting`: create, claim (public or private), cancel, transfer and
 //! inspect antumbra_vesting schedules on LEZ v0.3.
 //!
-//! Keys, the sequencer URL and the fee settings come from the v0.3 wallet home
-//! (`LEE_WALLET_HOME_DIR`). The program's header account comes from `--program`
-//! or `ANTUMBRA_PROGRAM`.
+//! The commands that only read (`show`, `ids`, `image-id`, `now`) need no
+//! wallet: they ask the sequencer at `--rpc` (`ANTUMBRA_RPC`, by default the
+//! public testnet) or compute locally. The commands that sign take the keys,
+//! the sequencer URL and the fee settings from the v0.3 wallet home
+//! (`LEE_WALLET_HOME_DIR`). The program's header account comes from
+//! `--program` or `ANTUMBRA_PROGRAM`, by default the one deployed on the
+//! public testnet v0.3.
 //!
 //! Every transaction prints one JSON line on stdout: the operation, its hash,
 //! the block it was included in, and a verdict read back from the chain.
@@ -23,14 +27,27 @@ use lee::{
     privacy_preserving_transaction::circuit::ProgramWithDependencies, program::Program, AccountId,
     ProgramShardSelector,
 };
+use sequencer_service_rpc::{RpcClient as _, SequencerClient, SequencerClientBuilder};
 use wallet::{program_facades::program_loader::ProgramLoader, AccountIdentity, AccountMention, WalletCore};
+
+/// The program deployed on the public testnet v0.3 (see DEPLOYMENTS.md).
+const DEPLOYED_PROGRAM: &str = "FCrja8g2ZKvxZwNZchdppKWQCDxPNUHxnEMidrmqrt6X";
+/// The public testnet v0.3 sequencer.
+const TESTNET_RPC: &str = "https://testnet.lez.logos.co";
+/// More members than any batch can hold under the 10M gas cap (450).
+const BATCH_SCAN_LIMIT: u32 = 4096;
 
 #[derive(Parser)]
 #[command(name = "antumbra-vesting", version, about = "antumbra_vesting on LEZ v0.3")]
 struct Cli {
-    /// The program's header account (base58).
-    #[arg(long, env = "ANTUMBRA_PROGRAM", global = true)]
-    program: Option<AccountId>,
+    /// The program's header account (base58). Default: the one deployed on
+    /// the public testnet v0.3.
+    #[arg(long, env = "ANTUMBRA_PROGRAM", global = true, default_value = DEPLOYED_PROGRAM)]
+    program: AccountId,
+    /// The sequencer the read-only commands ask. Commands that sign use the
+    /// wallet's own sequencer instead.
+    #[arg(long, env = "ANTUMBRA_RPC", global = true, default_value = TESTNET_RPC)]
+    rpc: String,
     /// The guest binary, needed to prove a private claim locally.
     #[arg(long, env = "ANTUMBRA_ELF", global = true, default_value = "artifacts/programs/v0.3/antumbra_vesting.bin")]
     elf: PathBuf,
@@ -99,21 +116,31 @@ enum Cmd {
         #[arg(long)]
         payer: AccountId,
     },
-    /// Print the chain clock (ms).
+    /// Print the chain clock (ms). Reads `--rpc`; needs no wallet.
     Now,
-    /// Print the ImageID of `--elf` as the 32 bytes a program header stores, in hex.
+    /// Print the ImageID of `--elf` as the 32 bytes a program header stores,
+    /// in hex. Computed locally; needs no wallet and no network.
     ImageId,
-    /// Print the schedule and holding PDAs of an id.
+    /// Print the schedule and holding PDAs of an id. Computed locally; needs
+    /// no wallet and no network.
     Ids {
         #[arg(long)]
         schedule_id: String,
         #[arg(long)]
         batch_id: Option<String>,
     },
-    /// Decode a schedule and what is claimable now.
+    /// Decode a schedule and what is claimable now, or with `--batch-id`
+    /// every schedule of a batch and their totals. Reads `--rpc`; needs no
+    /// wallet.
     Show {
+        /// The schedule id (same as `--schedule-id`).
+        #[arg(conflicts_with_all = ["schedule_id", "batch_id"])]
+        id: Option<String>,
+        #[arg(long, conflicts_with = "batch_id")]
+        schedule_id: Option<String>,
+        /// List the batch's schedules, numbered from 0, until one is missing.
         #[arg(long)]
-        schedule_id: String,
+        batch_id: Option<String>,
     },
     Create {
         #[arg(long)]
@@ -205,8 +232,10 @@ fn id32(s: &str) -> Result<[u8; 32]> {
 }
 
 struct Ctx {
-    wallet: WalletCore,
-    program: Option<AccountId>,
+    /// Only the commands that sign open the wallet.
+    wallet: Option<WalletCore>,
+    rpc: SequencerClient,
+    program: AccountId,
     elf: PathBuf,
     payer: Option<AccountId>,
     force: bool,
@@ -215,12 +244,25 @@ struct Ctx {
 
 impl Ctx {
     fn program(&self) -> Result<AccountId> {
-        self.program.ok_or_else(|| anyhow!("set --program or ANTUMBRA_PROGRAM to the header account"))
+        Ok(self.program)
+    }
+
+    fn wallet(&self) -> &WalletCore {
+        self.wallet.as_ref().expect("a signing command opens the wallet")
+    }
+
+    /// A public account, from the wallet's sequencer when the command signs
+    /// and from `--rpc` otherwise.
+    async fn account(&self, id: AccountId) -> Result<lee::Account> {
+        match &self.wallet {
+            Some(w) => w.get_account_public(id).await,
+            None => self.rpc.get_account(id).await.map_err(|e| anyhow!("reading {id} from the sequencer: {e}")),
+        }
     }
 
     async fn now(&self) -> Result<u64> {
         let clock = clock_core::CLOCK_01_PROGRAM_ACCOUNT_ID;
-        let acc = self.wallet.get_account_public(clock).await?;
+        let acc = self.account(clock).await?;
         let shard = acc.data.shard(clock_core::clock_account_id());
         Ok(clock_core::ClockAccountData::from_bytes(shard).timestamp)
     }
@@ -253,7 +295,7 @@ impl Ctx {
 
     async fn schedule_shard(&self, sid: &[u8; 32]) -> Result<Vec<u8>> {
         let program = self.program()?;
-        let acc = self.wallet.get_account_public(schedule_account(&program, sid)).await?;
+        let acc = self.account(schedule_account(&program, sid)).await?;
         Ok(acc.data.shard(program).to_vec())
     }
 
@@ -285,7 +327,7 @@ impl Ctx {
         let program = self.program()?;
         let before = self.schedule_shard(&watch).await?;
         let data = Program::serialize_instruction(ix.clone())?;
-        let sent = self.wallet.send_pub_tx_paid_by(mentions, data, program, self.payer).await;
+        let sent = self.wallet().send_pub_tx_paid_by(mentions, data, program, self.payer).await;
         self.report(op, sent.map_err(|e| anyhow!("{e:?}")), &watch, before).await
     }
 
@@ -300,7 +342,7 @@ impl Ctx {
         };
         // A transaction outside its validity window is held and never
         // included; three minutes is dozens of blocks.
-        let polled = tokio::time::timeout(Duration::from_secs(180), self.wallet.poll_transaction(hash)).await;
+        let polled = tokio::time::timeout(Duration::from_secs(180), self.wallet().poll_transaction(hash)).await;
         let block = match polled {
             Ok(Ok((_, block))) => Some(block),
             _ => None,
@@ -360,17 +402,90 @@ async fn terms(ctx: &Ctx, t: &TermsArgs) -> Result<(Terms, Asset)> {
     Ok((terms, asset))
 }
 
+fn schedule_json(s: &VestingSchedule, now: u64) -> serde_json::Value {
+    serde_json::json!({
+        "kind": s.kind, "start": s.start, "cliff": s.cliff, "end": s.end,
+        "total": s.total.to_string(), "claimed": s.claimed.to_string(),
+        "last_seen": s.last_seen, "beneficiary": s.beneficiary.to_string(),
+        "escrow": s.escrow.to_string(), "creator": s.creator.to_string(),
+        "cancelable": s.cancelable, "transferable": s.transferable,
+        "cancelled_at": s.cancelled_at, "signalled": s.signalled, "tranches": s.tranches,
+        "asset": s.asset, "token_definition": AccountId::new(s.token_definition).to_string(),
+        "refund_to": s.refund_to.to_string(), "cancel_authority": s.cancel_authority.to_string(),
+        "milestone_authority": s.milestone_authority.to_string(),
+        "clock": now, "vested": core::vested(s, now).to_string(),
+        "claimable": claimable(s, now).to_string(),
+    })
+}
+
+/// Every schedule of a batch: member `i` has id `batch_schedule_id(batch, i)`,
+/// the scan stops at the first id with no schedule. One line per member, then
+/// one line with the batch's totals.
+async fn show_batch(ctx: &Ctx, batch: &str, now: u64) -> Result<()> {
+    let p = ctx.program()?;
+    let bid = id32(batch)?;
+    let (mut n, mut total, mut claimed, mut owed) = (0u32, 0u128, 0u128, 0u128);
+    while n < BATCH_SCAN_LIMIT {
+        let sid = batch_schedule_id(&bid, n);
+        let bytes = ctx.schedule_shard(&sid).await?;
+        if bytes.is_empty() {
+            break;
+        }
+        let s: VestingSchedule = borsh::from_slice(&bytes)?;
+        let c = claimable(&s, now);
+        println!(
+            "{}",
+            serde_json::json!({
+                "index": n, "schedule_id": hex::encode(sid),
+                "schedule": schedule_account(&p, &sid).to_string(),
+                "beneficiary": s.beneficiary.to_string(),
+                "total": s.total.to_string(), "claimed": s.claimed.to_string(),
+                "vested": core::vested(&s, now).to_string(), "claimable": c.to_string(),
+                "cancelled_at": s.cancelled_at,
+            })
+        );
+        total += s.total;
+        claimed += s.claimed;
+        owed += c;
+        n += 1;
+    }
+    if n == 0 {
+        bail!("no schedule in batch {} (its schedule 0 is not on chain)", hex::encode(bid));
+    }
+    println!(
+        "{}",
+        serde_json::json!({
+            "batch_id": hex::encode(bid), "holding": holding_account(&p, &bid).to_string(),
+            "schedules": n, "total": total.to_string(), "claimed": claimed.to_string(),
+            "claimable": owed.to_string(), "clock": now,
+        })
+    );
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    let mut wallet = WalletCore::from_env().await?;
-    if let Some(g) = cli.gas_limit {
-        let mut cfg = wallet.config().clone();
-        cfg.gas_limit = g;
-        wallet.set_config(cfg);
-    }
+    let rpc = SequencerClientBuilder::default()
+        .build(&cli.rpc)
+        .with_context(|| format!("not a sequencer URL: {}", cli.rpc))?;
+    let signs = !matches!(cli.cmd, Cmd::Now | Cmd::ImageId | Cmd::Ids { .. } | Cmd::Show { .. });
+    let wallet = if signs {
+        let mut wallet = WalletCore::from_env()
+            .await
+            .context("this command signs, so it needs a v0.3 wallet home (LEE_WALLET_HOME_DIR); show, ids, image-id and now do not")?;
+        if let Some(g) = cli.gas_limit {
+            let mut cfg = wallet.config().clone();
+            cfg.gas_limit = g;
+            wallet.set_config(cfg);
+        }
+        Some(wallet)
+    } else {
+        None
+    };
     let ctx = Ctx {
         wallet,
+        rpc,
         program: cli.program,
         elf: cli.elf.clone(),
         payer: cli.payer,
@@ -388,11 +503,12 @@ async fn run(mut ctx: Ctx, cmd: Cmd) -> Result<()> {
             // The loader chunks the user ELF inside the program binary, not the binary itself.
             let user_elf = risc0_binfmt::ProgramBinary::decode(&bytecode).map_err(|e| anyhow!("{e}"))?.user_elf.len();
             let segments = user_elf.div_ceil(program_loader_core::MAX_SEGMENT_DATA_LEN);
-            let header = ctx.wallet.create_new_account_public(None).0;
+            let wallet = ctx.wallet.as_mut().expect("deploy opens the wallet");
+            let header = wallet.create_new_account_public(None).0;
             let segs: Vec<AccountId> =
-                std::iter::repeat_with(|| ctx.wallet.create_new_account_public(None).0).take(segments).collect();
-            ctx.wallet.store_persistent_data()?;
-            ProgramLoader(&ctx.wallet).deploy(header, &segs, bytecode, false, Some(payer)).await?;
+                std::iter::repeat_with(|| wallet.create_new_account_public(None).0).take(segments).collect();
+            wallet.store_persistent_data()?;
+            ProgramLoader(&*wallet).deploy(header, &segs, bytecode, false, Some(payer)).await?;
             println!("{}", serde_json::json!({"op": "deploy", "header": header.to_string(), "image_id": image_hex(&program), "segments": segs.len()}));
         }
         Cmd::Now => println!("{}", ctx.now().await?),
@@ -416,26 +532,17 @@ async fn run(mut ctx: Ctx, cmd: Cmd) -> Result<()> {
                 })
             );
         }
-        Cmd::Show { schedule_id } => {
+        Cmd::Show { id, schedule_id, batch_id } => {
+            let now = ctx.now().await?;
+            if let Some(batch) = batch_id {
+                return show_batch(&ctx, &batch, now).await;
+            }
+            let Some(schedule_id) = id.or(schedule_id) else {
+                bail!("show takes a schedule id, or --batch-id <id>");
+            };
             let sid = id32(&schedule_id)?;
             let s = ctx.schedule(&sid).await?;
-            let now = ctx.now().await?;
-            println!(
-                "{}",
-                serde_json::json!({
-                    "kind": s.kind, "start": s.start, "cliff": s.cliff, "end": s.end,
-                    "total": s.total.to_string(), "claimed": s.claimed.to_string(),
-                    "last_seen": s.last_seen, "beneficiary": s.beneficiary.to_string(),
-                    "escrow": s.escrow.to_string(), "creator": s.creator.to_string(),
-                    "cancelable": s.cancelable, "transferable": s.transferable,
-                    "cancelled_at": s.cancelled_at, "signalled": s.signalled, "tranches": s.tranches,
-                    "asset": s.asset, "token_definition": AccountId::new(s.token_definition).to_string(),
-                    "refund_to": s.refund_to.to_string(), "cancel_authority": s.cancel_authority.to_string(),
-                    "milestone_authority": s.milestone_authority.to_string(),
-                    "clock": now, "vested": core::vested(&s, now).to_string(),
-                    "claimable": claimable(&s, now).to_string(),
-                })
-            );
+            println!("{}", schedule_json(&s, now));
         }
         Cmd::Create { schedule_id, beneficiary, creator, terms: t } => {
             let p = ctx.program()?;
@@ -496,14 +603,14 @@ async fn run(mut ctx: Ctx, cmd: Cmd) -> Result<()> {
             let before = ctx.schedule_shard(&sid).await?;
             eprintln!("proving the private claim locally; this takes minutes");
             let sent = ctx
-                .wallet
+                .wallet()
                 .send_privacy_preserving_tx(m, Program::serialize_instruction(ix)?, &pwd)
                 .await
                 .map(|(h, _)| h)
                 .map_err(|e| anyhow!("{e:?}"));
             ctx.report("claim-private", sent, &sid, before).await?;
             // Pick up the new note so `wallet account get` shows the balance.
-            ctx.wallet.sync_to_latest_block().await?;
+            ctx.wallet.as_mut().expect("claim opens the wallet").sync_to_latest_block().await?;
         }
         Cmd::Cancel { schedule_id, batch_id, authority, at, refund } => {
             let p = ctx.program()?;

@@ -22,6 +22,9 @@ cd "$(dirname "$0")/.."
 : "${CREATOR:?base58 id of the funded creator key}"
 : "${PAYER:?base58 id of a funded key that pays fees for the others}"
 RPC="${RPC:-http://127.0.0.1:3040}"
+# The CLI's read-only commands (show, now) ask ANTUMBRA_RPC, not the wallet;
+# point them at the same sequencer the wallet writes to.
+export ANTUMBRA_RPC="$RPC"
 W="${WALLET:-wallet}"
 CLI="${CLI:-cli/target/release/antumbra-vesting}"
 OUT="${OUT:-evidence/v03/local-e2e.tsv}"

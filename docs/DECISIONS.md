@@ -57,6 +57,8 @@ Current program: LEZ `v0.3.0` (`db66590a`), header
 | D-33 | Basecamp module built with logos-module-builder | 2026-10-01 | superseded by D-35 |
 | D-34 | Evidence from a replaced chain is declared pre-reset, not deleted | 2026-09-27 | accepted |
 | D-35 | The Basecamp app as a `ui_qml` module in Logos Forum's design | 2026-10-07 | accepted |
+| D-36 | The CLI reads without a wallet; only signing opens one | 2026-10-08 | accepted |
+| D-38 | A cliff schedule put on chain by a LaunchAgent when the testnet resumes | 2026-10-08 | accepted |
 
 ---
 
@@ -1062,3 +1064,104 @@ against bytes saved from the testnet, with the manifest's verdicts),
 variants considered),
 [`app/README.md`](../app/README.md); CI jobs `module`, `module-package` and
 `view`.
+
+## D-36: The CLI reads without a wallet; only signing opens one
+
+- **Date:** 2026-10-08
+- **Status:** accepted
+
+**Context.** Every `antumbra-vesting` command opened the v0.3 wallet first, so
+`show`, `ids`, `image-id` and `now` failed with "Failed to load storage …
+Storage not found" on a machine without an initialised wallet home. A reviewer
+who wants to check a schedule has no wallet and no reason to make one: the
+schedule is public state, and the ids and the ImageID are computed from public
+inputs. A batch could only be read one member at a time, by deriving each id
+by hand as `scripts/e2e-v03.sh` does.
+
+**Options considered.** Keep one wallet for everything and document how to
+initialise an empty one; make the wallet optional and read through raw HTTP
+calls; make the wallet optional and read through the sequencer's own typed
+client, `sequencer_service_rpc`, the crate the wallet itself uses.
+
+**Chosen.** The typed client. The commands that only read build a
+`SequencerClient` for `--rpc` (`ANTUMBRA_RPC`, default
+`https://testnet.lez.logos.co`) and never touch the wallet; the commands that
+sign open the wallet as before and read through the wallet's own sequencer, so
+a write and the reads around it always ask the same node. `--program` defaults
+to the deployed header. `show` takes the id as a positional argument as well as
+`--schedule-id`, and `show --batch-id` lists a batch: member `i` has id
+`batch_schedule_id(batch, i)`, the core crate's derivation, and the scan stops
+at the first id with no schedule, printing one line per member and one line of
+totals. A signing command without a wallet fails with a message naming the
+four that need none. `scripts/e2e-v03.sh` sets `ANTUMBRA_RPC` to its own
+`RPC`, so a local run never reads the testnet.
+
+**Rationale.** The typed client decodes accounts with the same types the
+wallet uses, so the read path cannot drift from the write path. Defaulting the
+program and the node to the public deployment makes the reviewer's command
+`show testnet4-lin`, with nothing to configure.
+
+**Trade-offs.** A default program means a command run against a local
+sequencer without `ANTUMBRA_PROGRAM` reads the testnet header's PDAs, which
+hold nothing there, and says there is no schedule. The batch scan cannot tell
+a missing member from the end of the batch; batch members are created together
+in one transaction, so there is no gap to miss. The CLI is not built by the
+main workspace, so CI builds it in its own job; it is tested against a
+recording of the testnet's answers (`scripts/rpc-fixture.py`), byte for byte,
+so an outage cannot fail a push, and against the live testnet once a day in the
+chain-refs workflow, which notices when the recording stops being true.
+
+**Where.** [`cli/src/main.rs`](../cli/src/main.rs),
+[`scripts/cli-readonly.sh`](../scripts/cli-readonly.sh),
+[`scripts/rpc-fixture.py`](../scripts/rpc-fixture.py),
+[`cli/tests/fixtures/`](../cli/tests/fixtures/); CI job `cli`, chain-refs job
+`cli-live`.
+
+## D-38: A cliff schedule put on chain by a LaunchAgent when the testnet resumes
+
+- **Date:** 2026-10-08
+- **Status:** accepted
+
+**Context.** Every requirement-level schedule shape was driven on the public
+testnet v0.3 except cliff + linear, which is covered by the executor test
+`nothing_vests_before_the_cliff_then_the_accrual_unlocks_at_once`. The testnet
+then stalled at block 13,982, so no new transaction can be included, and its
+clock (the last block's time) stopped with it.
+
+**Options considered.** Wait and run the cliff section by hand when the chain
+moves; add a cliff section to `scripts/e2e-v03.sh` and re-drive the whole run;
+a small script, run on a timer, that drives only the cliff and records it in
+its own manifest.
+
+**Chosen.** `scripts/cliff-when-live.sh`, run every 30 minutes by a macOS
+LaunchAgent (`co.logos.rfp017-cliff`) on the machine that holds the funded
+wallet. It exits at once while the block height has not moved since its last
+run, and confirms an advancing chain with a second read a minute later. Then,
+with the deployed program and the funded wallet, it creates a cliff schedule of
+600 (start ten minutes back, cliff four minutes ahead, end twenty minutes
+ahead), sends a claim of one unit before the cliff, forced past the CLI's
+pre-check so the program's refusal is on chain, waits for the chain's clock to
+pass the cliff, and claims what has vested. The rows go to a manifest of their
+own, `cliff.tsv` next to `testnet.tsv` in [`evidence/v03/`](../evidence/v03/),
+in the format `e2e-v03.sh` writes, and `verify-onchain.sh` checks them. Each
+write declares a 300,000 gas limit and names the fee payer, which funds the
+beneficiary first (`FUND_EACH`). After a success the agent disables itself and
+posts a notification; it never commits or pushes. `DRY_RUN=1` does every read
+and prints every command without sending, and `FORCE_LIVE=1` skips the stall
+check so a dry run walks the whole path.
+
+**Rationale.** The chain decides when the evidence can exist, not a person
+watching it. Re-driving the whole run for one shape would spend fees on forty
+transactions already on chain. A separate manifest keeps
+`evidence/v03/testnet.tsv` and its 66 checks exactly as cited.
+
+**Trade-offs.** The claim after the cliff happens whenever the chain's clock
+passes it, so the amount is the lump plus whatever accrued until then, checked
+against ⌊total × elapsed ÷ duration⌋ at the time the claim names rather than
+fixed in advance. A run the chain interrupts resumes from a state file, and
+after three failed attempts the script stops spending fees until reset by hand.
+The evidence lands in the working tree uncommitted, so a person reviews it
+before it is published.
+
+**Where.** [`scripts/cliff-when-live.sh`](../scripts/cliff-when-live.sh),
+[`scripts/verify-onchain.sh`](../scripts/verify-onchain.sh).

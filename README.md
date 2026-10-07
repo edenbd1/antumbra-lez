@@ -9,7 +9,7 @@ driven end to end on the public testnet v0.3.
 |---|---|
 | Program (header account) | `FCrja8g2ZKvxZwNZchdppKWQCDxPNUHxnEMidrmqrt6X` |
 | ImageID | `72d5cdc05004a9502be72239829071982237638b49b8fe7d1b45fd7371a425f4`, read back from the header's loader record |
-| On chain | linear and milestone schedules (cliff covered by an executor test, on chain in M1), cancellation with refund, transferable and non-cancelable positions, nominated authorities, native and token escrow, private claims of native balance and of a token into shielded accounts, a batch of 450 schedules in one transaction (451 refused under the 10M gas cap) |
+| On chain | linear and milestone schedules (cliff covered by an executor test; [`scripts/cliff-when-live.sh`](scripts/cliff-when-live.sh) puts one on chain as soon as the testnet, stalled at block 13,982 since 7 October, moves again), cancellation with refund, transferable and non-cancelable positions, nominated authorities, native and token escrow, private claims of native balance and of a token into shielded accounts, a batch of 450 schedules in one transaction (451 refused under the 10M gas cap) |
 | Every transaction | [`DEPLOYMENTS.md`](DEPLOYMENTS.md), manifest and transcript in [`evidence/v03/`](evidence/v03/) |
 | Re-check it yourself | `./scripts/verify-onchain.sh --manifest evidence/v03/testnet.tsv --rpc https://testnet.lez.logos.co` (66 checks) |
 | Reproducible build | CI rebuilds the guest from source in RISC Zero's pinned Docker builder and compares it with the committed binary |
@@ -20,6 +20,38 @@ The v0.2.4 deployment and [`evidence/VESTING.md`](evidence/VESTING.md) are
 historical: that chain was reset to v0.3 and its hashes no longer resolve.
 
 [![CI](https://github.com/edenbd1/antumbra-lez/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/edenbd1/antumbra-lez/actions/workflows/ci.yml?query=branch%3Amain)
+
+### Read a schedule with nothing but cargo
+
+The CLI's read-only commands (`show`, `ids`, `image-id`, `now`) need no
+wallet, no keys and no LGO: they ask the sequencer at `--rpc` (by default the
+public testnet, or `ANTUMBRA_RPC`) or compute locally, and `--program`
+defaults to the deployed header. Only the commands that sign open a wallet.
+
+```bash
+git clone https://github.com/edenbd1/antumbra-lez && cd antumbra-lez
+cargo build --release --manifest-path cli/Cargo.toml   # Rust 1.98.1, as LEZ v0.3.0
+cli/target/release/antumbra-vesting show testnet4-lin
+cli/target/release/antumbra-vesting show --batch-id testnet4-batch8
+```
+
+`show testnet4-lin` prints the decoded schedule against the chain's clock, among
+its fields `"total":"600"`, `"claimed":"60"`, `"vested":"600"` and
+`"claimable":"540"`. `show --batch-id testnet4-batch8` derives each member's id
+as `sha256(batch ‖ i)`, prints one line per schedule until one is missing, then
+the batch's totals:
+
+```text
+{"beneficiary":"2xub3k7X…","cancelled_at":0,"claimable":"381","claimed":"219","index":0,…,"total":"600","vested":"600"}
+{"beneficiary":"Ffhdk2bb…","cancelled_at":1790916551492,"claimable":"240","claimed":"0","index":1,…,"total":"600","vested":"240"}
+… six more, 600 claimable each …
+{"batch_id":"746573746e6574342d626174636838…","claimable":"4221","claimed":"219","clock":1791352286660,"holding":"2PGcDdbvicrt4gewMf6BofQBbkEM3XZoRvx6Ve4aDsDW","schedules":8,"total":"4800"}
+```
+
+`scripts/cli-readonly.sh` runs these from an empty `HOME` and checks those
+numbers; CI runs it against a recording of the testnet's answers
+([`cli/tests/fixtures/`](cli/tests/fixtures/)) and the daily chain-refs
+workflow against the live testnet. Design note: [D-36](docs/DECISIONS.md).
 
 ## Antumbra Vesting in Basecamp
 
