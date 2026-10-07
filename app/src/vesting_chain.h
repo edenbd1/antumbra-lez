@@ -73,6 +73,20 @@ u128 vestedAt(const Schedule& s, quint64 now);
 // milliseconds, accounts as base58, plus derived state and status chips.
 QJsonObject scheduleJson(const Schedule& s, quint64 now);
 
+// ── What a public claim costs (RFP-017 U4) ──────────────────────────────────
+// LEZ v0.3 reserves gas_limit x base_fee_exec + data_bytes x base_fee_stor from
+// the payer when it takes a public transaction, and charges
+// min(cycles, gas_limit) x base_fee_exec + data_bytes x base_fee_stor
+// (lez/programs/fee/core/src/assess.rs:75 and :90 at db66590a). A private
+// transaction is exempt (lez/chain_state/src/classify.rs:53).
+constexpr quint64 kClaimGasLimit = 300000;      // what the CLI's runbook declares
+constexpr quint64 kClaimDataBytes = 700;        // claims on testnet measured 653 (native) and 685 (token) bytes
+constexpr quint64 kClaimCyclesNative = 49024;   // executor-tests/CYCLES.md, claim (native)
+constexpr quint64 kClaimCyclesToken = 87913;    // executor-tests/CYCLES.md, claim (token)
+constexpr quint64 kBaseFeeMin = 8;              // BASE_FEE_EXEC_MIN and _STOR_MIN, lez/programs/fee/core/src/market.rs:17 and :29
+// {gasLimit, dataBytes, cycles, baseFeeExec, baseFeeStor, reserve, estimate}, amounts as decimal strings.
+QJsonObject claimFee(quint64 baseFeeExec, quint64 baseFeeStor, bool token);
+
 // ── Transactions on a schedule, as the explorer's index lists them ──────────
 // Each Public transaction of `program` is decoded and replayed against the
 // schedule's rules, so a refused attempt is told apart from an applied one.
@@ -98,12 +112,18 @@ public:
     void openSchedule(const QByteArray& account, const QByteArray& batchId, Done done);
     void summaries(const QList<QPair<QString, QString>>& idsAndBatches, Done done);
     void activity(const QByteArray& account, Done done);
+    // What the pre-claim confirmation needs: the fee market (getFeeState) and
+    // the beneficiary's account (it signs, and by default pays).
+    // {kind: "claimContext", fee: claimFee(…) + {source: "node"|"minimum", height, error},
+    //  beneficiary: {read, error, nonce, balance, initialised, covers}}
+    void claimContext(const QByteArray& beneficiary, bool token, Done done);
 
     // Raw access, exposed for the tests.
     void getAccount(const QString& id, std::function<void(const QJsonObject& acc, const QString& err)> cb);
     void clock(std::function<void(quint64 block, quint64 ms, const QString& err)> cb);
 
 private:
+    void rpcCall(const QString& method, const QJsonArray& params, std::function<void(const QJsonValue&, const QString& err)> cb);
     void explorerTxs(const QString& account, std::function<void(const QJsonArray&, const QString& err)> cb,
                      bool rediscovered = false);
     void readSchedules(const QList<QByteArray>& accounts, std::function<void(const QList<QJsonObject>&, quint64 now, const QString& err)> cb);

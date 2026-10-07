@@ -198,7 +198,7 @@ Item {
         return out
     }
     readonly property string networkLabel: (rpcUrl === defaults.rpc ? "testnet" : rpcUrl.replace(/^https?:\/\//, "")) + " · " + shortKey(programId)
-    function closeDetail() { detail = null; detailState = "idle"; selectedAccount = ""; activity = null }
+    function closeDetail() { claimSheet.close(); detail = null; detailState = "idle"; selectedAccount = ""; activity = null }
 
     // ── Formatting ───────────────────────────────────────────────────────────
     // Amounts arrive as decimal strings (they can pass 2^53): grouped by hand.
@@ -239,14 +239,81 @@ Item {
     TextEdit { id: clip; visible: false; textFormat: TextEdit.PlainText }
     function copy(t) { clip.text = t; clip.selectAll(); clip.copy(); clip.deselect() }
 
-    // The command that claims this schedule, from the beneficiary's wallet.
+    // The command that claims this schedule, from the beneficiary's wallet,
+    // with the amount and destination confirmed in the pre-claim sheet.
     function claimCommand(s) {
         if (!s || !opened.scheduleId) return ""
         var c = "antumbra-vesting claim \\\n  --program " + programId + " \\\n  --schedule-id " + opened.scheduleId
         if (opened.batchId) c += " \\\n  --batch-id " + opened.batchId
-        c += " \\\n  --beneficiary " + s.beneficiary + " \\\n  --to " + (claimPrivate ? "Private/<your shielded account>" : "Public/" + s.beneficiary)
+        var dest = claimDest.trim()
+        c += " \\\n  --beneficiary " + s.beneficiary + " \\\n  --to "
+             + (claimPrivate ? "Private/" + (dest || "<your shielded account>") : "Public/" + (dest || s.beneficiary))
+        if (/^[0-9]+$/.test(claimAmount.trim())) c += " \\\n  --amount " + decTrim(claimAmount)
         return c
     }
+
+    // ── The pre-claim confirmation (RFP-017 U4, U5, Privacy 2) ──────────────
+    property string claimAmount: ""
+    property string claimDest: ""
+    property bool claimAck: false
+    property var claimCtx: null
+    property string claimCtxState: "idle"           // idle | loading | ready
+    function decTrim(d) { d = String(d).trim().replace(/^0+/, ""); return d === "" ? "0" : d }
+    // Decimal strings compared without floating point: amounts are u128.
+    function decCmp(a, b) { a = decTrim(a); b = decTrim(b); return a.length !== b.length ? (a.length < b.length ? -1 : 1) : (a < b ? -1 : a > b ? 1 : 0) }
+    function decSub(a, b) {   // a - b for decimal strings, a >= b
+        a = decTrim(a); b = decTrim(b); var out = "", borrow = 0
+        for (var i = 0; i < a.length; i++) {
+            var d = Number(a[a.length - 1 - i]) - (i < b.length ? Number(b[b.length - 1 - i]) : 0) - borrow
+            borrow = d < 0 ? 1 : 0; out = String(d < 0 ? d + 10 : d) + out
+        }
+        return decTrim(out)
+    }
+    function amountError(s) {
+        if (!s) return ""
+        var a = claimAmount.trim()
+        if (isZero(s.claimable)) return "Nothing to claim: " + nothingToClaim(s)
+        if (!/^[0-9]+$/.test(a)) return "Enter a whole number of " + s.unit + "."
+        if (decCmp(a, "0") === 0) return "Amount must be more than 0: the program refuses an empty claim (E7003)."
+        if (decCmp(a, s.claimable) > 0) return "More than is claimable: at most " + fmt(s.claimable) + " " + s.unit + " now. The program would refuse it (E7003)"
+                                                + (claimPrivate ? "." : ", and a refused public claim is still charged.")
+        return ""
+    }
+    function destError(s) {
+        var d = claimDest.trim()
+        if (d === "") return claimPrivate ? "" : "Name the public account that receives the claim."
+        if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(d)) return "Not an account id: a base58 id of 32 to 44 characters."
+        if (claimPrivate && s && d === s.beneficiary) return "This is the beneficiary's public account. A shielded destination is an account from wallet account new private."
+        return ""
+    }
+    function claimReady(s) { return !!s && claimCommand(s) !== "" && amountError(s) === "" && destError(s) === "" && (!claimPrivate || claimAck) }
+    function setClaimPath(priv) {
+        if (priv === claimPrivate) return
+        claimPrivate = priv; claimAck = false
+        claimDest = priv ? "" : (detail ? detail.beneficiary : "")
+    }
+    function prepareClaim() {
+        if (!detail) return
+        claimAmount = isZero(detail.claimable) ? "" : decTrim(detail.claimable)
+        claimDest = claimPrivate ? "" : detail.beneficiary
+        claimAck = false
+        claimCtx = null; claimCtxState = "loading"
+        var b = detail.beneficiary
+        ask(function (t) { return backend.claimContext(t, b, detail.asset) }, function (o) {
+            if (!detail || detail.beneficiary !== b) return
+            claimCtx = o.kind === "claimContext" ? o : null; claimCtxState = "ready"
+        })
+        claimSheet.open()
+    }
+    // For the headless view test (tests/qml_host.cpp).
+    readonly property bool sheetOpen: claimSheet.visible
+    readonly property Item sheetDisclosure: disclosureBox
+    readonly property Item sheetCommand: sheetCommandBox
+    readonly property Item sheetAmountError: amountErrorText
+    readonly property Item sheetFlickable: sheetFlick
+    readonly property Item detailFlickable: detailScroll.contentItem
+    function setClaimAmountForTest(v) { claimAmount = v }
+    function acknowledgeForTest() { claimAck = true }
 
     Connections {
         target: logos
@@ -656,30 +723,52 @@ Item {
               text: root.activity ? root.activity.note || "" : "" }
     }
     // How to claim, placed and styled as the Forum's reply box: a bordered
-    // area holding the command, then the choice of where to and the button.
+    // area saying what a claim would take, then the choice of where to and the
+    // button that opens the confirmation, which alone reveals the command.
     component ClaimComposer: ColumnLayout {
         property var s
         spacing: 8
         Rectangle {
-            Layout.fillWidth: true; implicitHeight: Math.max(64, cmd.implicitHeight + 20); radius: 6; color: root.bg; border.color: root.line
-            TextEdit { id: cmd; x: 10; y: 10; width: parent.width - 20; readOnly: true; selectByMouse: true; wrapMode: TextEdit.WrapAnywhere
-                       textFormat: TextEdit.PlainText; font.family: root.monoFamily; font.pixelSize: 12; selectionColor: root.accentStrong
-                       color: root.claimCommand(s) ? root.text : root.dim
-                       text: root.claimCommand(s) || (root.activityState === "loading" ? "Finding the schedule's id in its transactions…"
-                             : "The schedule's id is not in its transactions on the explorer, so the command cannot be written. Look it up by its id.") }
+            Layout.fillWidth: true; implicitHeight: Math.max(44, pre.implicitHeight + 20); radius: 6; color: root.bg; border.color: root.line
+            Text { id: pre; x: 10; y: 10; width: parent.width - 20; wrapMode: Text.WordWrap; textFormat: Text.PlainText; font.pixelSize: 13
+                   color: s && !root.isZero(s.claimable) && root.claimCommand(s) ? root.text : root.dim
+                   text: !s ? "" : !root.claimCommand(s)
+                         ? (root.activityState === "loading" ? "Finding the schedule's id in its transactions…"
+                            : "The schedule's id is not in its transactions on the explorer, so the command cannot be written. Look it up by its id.")
+                         : root.isZero(s.claimable) ? root.nothingToClaim(s)
+                         : "Claim up to " + root.fmt(s.claimable) + " " + s.unit + " into " + (root.claimPrivate ? "a shielded account" : "a public account")
+                           + ". The confirmation shows the amount, " + (root.claimPrivate ? "what the claim makes public" : "the fee and whether the payer covers it")
+                           + ", then the command." }
         }
         RowLayout { Layout.fillWidth: true; spacing: 8
             Dim { visible: !root.phone; text: "Claim into"; wrapMode: Text.NoWrap }
-            AppCombo { id: dest; model: root.phone ? ["Public", "Shielded"] : ["a public account", "a shielded account"]; implicitWidth: root.phone ? 116 : 170
-                       onActivated: function (i) { root.claimPrivate = i === 1 } }
+            AppCombo { model: root.phone ? ["Public", "Shielded"] : ["a public account", "a shielded account"]; implicitWidth: root.phone ? 116 : 170
+                       currentIndex: root.claimPrivate ? 1 : 0
+                       onActivated: function (i) { root.setClaimPath(i === 1) } }
             Item { Layout.fillWidth: true }
-            AccentButton { id: copyCmd; property bool copied: false; text: copied ? "Copied" : "Copy command"; enabled: root.claimCommand(s) !== ""
-                           onClicked: { root.copy(root.claimCommand(s).replace(/ \\\n {2}/g, " ")); copied = true; copyTimer.restart() }
-                           Timer { id: copyTimer; interval: 1500; onTriggered: copyCmd.copied = false } } }
+            AccentButton { objectName: "prepareClaim"; text: "Prepare claim"; enabled: s && root.claimCommand(s) !== "" && !root.isZero(s.claimable)
+                           onClicked: root.prepareClaim() } }
         Dim { Layout.fillWidth: true
-              text: (s && root.isZero(s.claimable) ? root.nothingToClaim(s) + " " : "")
-                    + (root.claimPrivate ? "Into a shielded account of your wallet: the schedule records the claim, the account and what it received stay private. Replace <your shielded account> with its id. " : "")
-                    + "This app only reads the chain and signs nothing. Run the command with the v0.3 wallet that holds the beneficiary's key." }
+              text: "This app only reads the chain and signs nothing. The command it prepares runs with the v0.3 wallet that holds the beneficiary's key." }
+    }
+    component AppCheck: CheckBox {
+        id: ck
+        HoverHandler { cursorShape: Qt.PointingHandCursor }
+        indicator: Rectangle {
+            x: ck.leftPadding; y: (ck.height - height) / 2
+            implicitWidth: 18; implicitHeight: 18; radius: 4
+            color: ck.checked ? root.accentStrong : root.bg; border.color: ck.checked ? root.accentStrong : root.line
+            Text { anchors.centerIn: parent; visible: ck.checked; text: "✓"; color: "white"; font.pixelSize: 12; font.bold: true }
+        }
+        contentItem: Text { leftPadding: ck.indicator.width + 8; text: ck.text; color: root.text; font.pixelSize: 13
+                            wrapMode: Text.WordWrap; verticalAlignment: Text.AlignVCenter; textFormat: Text.PlainText }
+    }
+    component Bullet: RowLayout {
+        property string label
+        property color dot: root.accent
+        Layout.fillWidth: true; spacing: 8
+        Rectangle { Layout.alignment: Qt.AlignTop; Layout.topMargin: 6; width: 5; height: 5; radius: 3; color: parent.dot }
+        Label2 { Layout.fillWidth: true; text: parent.label; font.pixelSize: 13 }
     }
 
     // ── Layout ───────────────────────────────────────────────────────────────
@@ -891,7 +980,7 @@ Item {
                         ColumnLayout {
                             width: detailScroll.availableWidth - 10   // room for the scroll bar
                             spacing: 14
-                            TitleRow { Layout.fillWidth: true; s: root.detail }
+                            TitleRow { objectName: "postTop"; Layout.fillWidth: true; s: root.detail }
                             RowLayout { Layout.fillWidth: true; spacing: 8
                                 Byline { Layout.fillWidth: true; s: root.detail }
                                 Dim { text: root.detail ? "read " + root.ago(root.detail.receivedAt) : ""; wrapMode: Text.NoWrap }
@@ -899,13 +988,13 @@ Item {
                                             ToolTip.visible: hovered; ToolTip.text: "Read this schedule again" } }
                             Claimable { Layout.fillWidth: true; s: root.detail }
                             Rule {}
-                            Post { label: root.detail && root.detail.kind === 2 ? "Milestones" : "Vesting curve"; meta: root.curveMeta(root.detail)
+                            Post { objectName: "postCurve"; label: root.detail && root.detail.kind === 2 ? "Milestones" : "Vesting curve"; meta: root.curveMeta(root.detail)
                                    CurveBlock { Layout.fillWidth: true; s: root.detail; claims: root.claimsOf(root.activity) } }
-                            Post { label: "Escrow"; meta: root.detail ? root.shortKey(root.detail.escrow) : ""
+                            Post { objectName: "postEscrow"; label: "Escrow"; meta: root.detail ? root.shortKey(root.detail.escrow) : ""
                                    EscrowBlock { Layout.fillWidth: true; s: root.detail } }
                             Post { label: "Accounts"
                                    AccountsBlock { Layout.fillWidth: true; s: root.detail } }
-                            Post { label: "Activity"; meta: "from the explorer's index, refused attempts marked"
+                            Post { objectName: "postActivity"; label: "Activity"; meta: "from the explorer's index, refused attempts marked"
                                    ActivityBlock { Layout.fillWidth: true } }
                             // On a narrow screen the claim is the last section rather than a box pinned below.
                             Post { visible: root.compact; label: "How to claim"
@@ -968,6 +1057,177 @@ Item {
         if (s.kind === 2) return "Nothing to claim until another milestone is signalled."
         if (chainNow < s.start || (s.kind === 0 && chainNow < s.cliff)) return "Nothing has vested yet."
         return "Nothing more to claim right now."
+    }
+
+    // ── Confirm the claim ────────────────────────────────────────────────────
+    // What the claim will do, before the command is shown: the claimable
+    // amount, the amount (checked against it), the destination, on the public
+    // path the fee and whether the payer covers it, on the private path the
+    // signer check and the privacy disclosure, which must be acknowledged
+    // before the command appears. Nothing here signs.
+    Dialog {
+        id: claimSheet
+        objectName: "claimSheet"
+        palette: root.palette
+        background: Rectangle { color: root.panel; radius: 8; border.color: root.line }
+        header: Text { text: "Confirm the claim"; color: root.text; font.pixelSize: 16; font.bold: true; padding: 16; bottomPadding: 4 }
+        modal: true; anchors.centerIn: parent
+        width: Math.min(640, root.width - 24)
+        height: Math.min(root.height - 24, sheetCol.implicitHeight + topPadding + bottomPadding + implicitHeaderHeight + implicitFooterHeight + 4)
+        footer: Item { implicitHeight: 12 }
+        readonly property var s: root.detail
+        readonly property var fee: root.claimCtx ? root.claimCtx.fee : null
+        readonly property var ben: root.claimCtx ? root.claimCtx.beneficiary : null
+        onOpened: sheetFlick.contentY = 0
+        Flickable {
+            id: sheetFlick
+            objectName: "sheetFlick"
+            anchors.fill: parent
+            contentHeight: sheetCol.implicitHeight
+            clip: true; boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: ScrollBar { policy: sheetFlick.contentHeight > sheetFlick.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded }
+            ColumnLayout {
+                id: sheetCol
+                width: sheetFlick.width - 12
+                spacing: 12
+                // What can be claimed, at the chain's clock.
+                ColumnLayout { Layout.fillWidth: true; spacing: 2
+                    RowLayout { spacing: 8
+                        Text { text: claimSheet.s ? root.fmt(claimSheet.s.claimable) : ""; color: root.accent; font.pixelSize: root.phone ? 30 : 36; font.bold: true; textFormat: Text.PlainText }
+                        Text { text: claimSheet.s ? claimSheet.s.unit + " claimable now" : ""; color: root.dim; font.pixelSize: 14; Layout.alignment: Qt.AlignBaseline } }
+                    Dim { Layout.fillWidth: true
+                          text: claimSheet.s ? root.titleOf(claimSheet.s) + " · by the chain's clock, " + root.utc(root.chainNow) + " · beneficiary " + root.shortKey(claimSheet.s.beneficiary) : "" }
+                }
+                Rule {}
+                // The amount.
+                ColumnLayout { Layout.fillWidth: true; spacing: 6
+                    Dim { text: "Amount to claim" }
+                    RowLayout { Layout.fillWidth: true; spacing: 8
+                        AppField { id: amountField; objectName: "amountField"; Layout.fillWidth: true
+                                   text: root.claimAmount; inputMethodHints: Qt.ImhDigitsOnly
+                                   onTextEdited: root.claimAmount = text }
+                        Dim { text: claimSheet.s ? claimSheet.s.unit : ""; wrapMode: Text.NoWrap }
+                        SmallButton { text: "All"; enabled: claimSheet.s && !root.isZero(claimSheet.s.claimable)
+                                      onClicked: root.claimAmount = root.decTrim(claimSheet.s.claimable) } }
+                    Text { id: amountErrorText; objectName: "amountError"; visible: root.amountError(claimSheet.s) !== ""; Layout.fillWidth: true
+                           text: root.amountError(claimSheet.s); color: root.bad; font.pixelSize: 13; wrapMode: Text.WordWrap; textFormat: Text.PlainText }
+                }
+                // Where to.
+                ColumnLayout { Layout.fillWidth: true; spacing: 6
+                    Dim { text: "Destination" }
+                    RowLayout { Layout.fillWidth: true; spacing: 8
+                        AppCombo { model: root.phone ? ["Public", "Shielded"] : ["A public account", "A shielded account"]; implicitWidth: root.phone ? 116 : 170
+                                   currentIndex: root.claimPrivate ? 1 : 0
+                                   onActivated: function (i) { root.setClaimPath(i === 1) } }
+                        AppField { Layout.fillWidth: true; Layout.minimumWidth: 0; text: root.claimDest; font.family: root.monoFamily; font.pixelSize: 12
+                                   placeholderText: root.claimPrivate ? "Your shielded account (wallet account new private)" : "The account that receives the claim"
+                                   onTextEdited: root.claimDest = text } }
+                    Text { visible: root.destError(claimSheet.s) !== ""; Layout.fillWidth: true; text: root.destError(claimSheet.s)
+                           color: root.bad; font.pixelSize: 13; wrapMode: Text.WordWrap; textFormat: Text.PlainText }
+                    Dim { Layout.fillWidth: true
+                          text: root.claimPrivate
+                                ? "A shielded account your wallet owns. The claim is proved on your computer, which takes minutes, and your wallet finds the credit when it syncs." + (root.claimDest.trim() === "" ? " Left empty, the command says <your shielded account> for you to replace." : "")
+                                : "The beneficiary's own account by default; any public account can receive it." }
+                }
+                Rule {}
+                // The fee and who pays it (public), or the signer check (private).
+                Post { label: "Fee"; meta: root.claimPrivate ? "privacy-preserving transaction" : "public transaction, gas limit 300,000"
+                    Busy { visible: !root.claimPrivate && root.claimCtxState === "loading"; label: "Reading the fee market and the beneficiary's account…"; Layout.fillWidth: true }
+                    ColumnLayout { visible: !root.claimPrivate && claimSheet.fee !== null; Layout.fillWidth: true; spacing: 6
+                        RowLayout { spacing: 8
+                            Text { text: claimSheet.fee ? "About " + root.fmt(claimSheet.fee.estimate) + " LGO" : ""; color: root.text; font.pixelSize: 15; font.bold: true; textFormat: Text.PlainText }
+                            Dim { text: claimSheet.fee ? "charged, reserving " + root.fmt(claimSheet.fee.reserve) + " LGO" : ""; wrapMode: Text.NoWrap } }
+                        Label2 { Layout.fillWidth: true; font.pixelSize: 13
+                                 text: claimSheet.fee ? "The payer must hold the reserve, 300,000 gas × base fee " + claimSheet.fee.baseFeeExec + " + about " + claimSheet.fee.dataBytes + " bytes × storage fee " + claimSheet.fee.baseFeeStor
+                                                        + ", when the claim is sent. It is charged what the claim uses, about " + root.fmt(String(claimSheet.fee.cycles)) + " gas for a " + (claimSheet.s && claimSheet.s.asset === "token" ? "token" : "native") + " claim, and a refused public claim is still included and charged." : "" }
+                        Dim { Layout.fillWidth: true
+                              color: claimSheet.fee && claimSheet.fee.source === "node" ? root.dim : root.warn
+                              text: !claimSheet.fee ? "" : claimSheet.fee.source === "node"
+                                    ? "Base fees read from the node now (getFeeState, block " + root.fmt(String(claimSheet.fee.height)) + "); they move with load from block to block."
+                                    : "The node did not quote its fee market (" + claimSheet.fee.error + "), so this is priced at the protocol's minimum base fee of 8 (LEZ v0.3, fee/core/src/market.rs). The real fee can only be higher." }
+                        RowLayout { Layout.fillWidth: true; spacing: 8; visible: claimSheet.ben !== null
+                            Chip { Layout.alignment: Qt.AlignTop; label: !claimSheet.ben || !claimSheet.ben.read ? "Not read" : claimSheet.ben.covers ? "Covers the fee" : "Insufficient balance"
+                                   tint: !claimSheet.ben || !claimSheet.ben.read ? root.warn : claimSheet.ben.covers ? root.ok : root.bad }
+                            Label2 { objectName: "payerCheck"; Layout.fillWidth: true; font.pixelSize: 13
+                                     color: claimSheet.ben && claimSheet.ben.read && !claimSheet.ben.covers ? root.bad : root.text
+                                     text: !claimSheet.ben ? "" : !claimSheet.ben.read
+                                           ? "The beneficiary's balance could not be read (" + claimSheet.ben.error + "). It signs the claim and pays its fee unless --payer names another account."
+                                           : claimSheet.ben.covers
+                                           ? "The beneficiary " + root.shortKey(claimSheet.s ? claimSheet.s.beneficiary : "") + " signs the claim and pays its fee unless --payer names another account. It holds " + root.fmt(claimSheet.ben.balance) + " LGO."
+                                           : "Insufficient balance for the fee: the beneficiary " + root.shortKey(claimSheet.s ? claimSheet.s.beneficiary : "") + " holds " + root.fmt(claimSheet.ben.balance) + " LGO and the reserve is " + root.fmt(claimSheet.fee.reserve)
+                                             + " LGO. Send it at least " + root.fmt(root.decSub(claimSheet.fee.reserve, claimSheet.ben.balance)) + " LGO from a funded account, or add --payer with an account of your wallet that holds the reserve; the sequencer refuses the claim otherwise." } }
+                    }
+                    ColumnLayout { visible: root.claimPrivate; Layout.fillWidth: true; spacing: 6
+                        Text { text: "None"; color: root.text; font.pixelSize: 15; font.bold: true; textFormat: Text.PlainText }
+                        Label2 { Layout.fillWidth: true; font.pixelSize: 13
+                                 text: "A private claim is a privacy-preserving transaction, and LEZ v0.3 charges no fee for those, so no payer is needed. The beneficiary still signs it, so its account must be initialised: known to the chain, with a nonce or a balance." }
+                        Busy { visible: root.claimCtxState === "loading"; label: "Reading the beneficiary's account…"; Layout.fillWidth: true }
+                        RowLayout { Layout.fillWidth: true; spacing: 8; visible: claimSheet.ben !== null
+                            Chip { Layout.alignment: Qt.AlignTop; label: !claimSheet.ben || !claimSheet.ben.read ? "Not read" : claimSheet.ben.initialised ? "Initialised" : "Not initialised"
+                                   tint: !claimSheet.ben || !claimSheet.ben.read ? root.warn : claimSheet.ben.initialised ? root.ok : root.bad }
+                            Label2 { objectName: "signerCheck"; Layout.fillWidth: true; font.pixelSize: 13
+                                     color: claimSheet.ben && claimSheet.ben.read && !claimSheet.ben.initialised ? root.bad : root.text
+                                     text: !claimSheet.ben ? "" : !claimSheet.ben.read
+                                           ? "The beneficiary's account could not be read (" + claimSheet.ben.error + "), so whether it can author the claim is not known."
+                                           : claimSheet.ben.initialised
+                                           ? "The beneficiary " + root.shortKey(claimSheet.s ? claimSheet.s.beneficiary : "") + " is initialised on chain (nonce " + claimSheet.ben.nonce + "), so it can author the privacy transaction."
+                                           : "Signing account not initialised: the beneficiary " + root.shortKey(claimSheet.s ? claimSheet.s.beneficiary : "") + " has no nonce and no balance on chain, so it cannot author the privacy transaction yet. Send it any amount from a funded account (wallet auth-transfer send), then claim." } }
+                    }
+                }
+                // What the private path makes public (RFP-017 U5, Privacy 2).
+                Rectangle {
+                    id: disclosureBox
+                    objectName: "disclosure"
+                    visible: root.claimPrivate
+                    Layout.fillWidth: true
+                    implicitHeight: discCol.implicitHeight + 24
+                    radius: 6; color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.07); border.color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.45)
+                    ColumnLayout {
+                        id: discCol
+                        x: 12; y: 12; width: parent.width - 24; spacing: 6
+                        Text { text: "Privacy disclosure"; color: root.accent; font.pixelSize: 14; font.bold: true; textFormat: Text.PlainText }
+                        Label2 { Layout.fillWidth: true; font.pixelSize: 13; font.bold: true; text: "Visible on chain to anyone:" }
+                        Bullet { label: "the claim amount: the schedule's claimed total and its escrow's balance change by it" }
+                        Bullet { label: "the beneficiary address, which signs the claim" }
+                        Bullet { label: "the vesting schedule address, and its escrow's" }
+                        Bullet { label: "the time the claim names, in its validity window" }
+                        Label2 { Layout.fillWidth: true; font.pixelSize: 13; font.bold: true; text: "Not traceable from the chain:" }
+                        Bullet { label: "the destination private account"; dot: root.ok }
+                        Bullet { label: "subsequent movements of the claimed tokens from it"; dot: root.ok }
+                        Dim { Layout.fillWidth: true; font.pixelSize: 11; text: "RFP-017, Usability 5 and Privacy 2." }
+                        AppCheck { id: ackBox; objectName: "ackDisclosure"; Layout.fillWidth: true
+                                   text: "I understand what this claim makes public"
+                                   checked: root.claimAck; onToggled: root.claimAck = checked }
+                    }
+                }
+                // The command, once everything above is in order.
+                ColumnLayout { Layout.fillWidth: true; spacing: 6
+                    Dim { text: "Command" }
+                    Rectangle {
+                        id: sheetCommandBox
+                        objectName: "sheetCommand"
+                        visible: root.claimReady(claimSheet.s)
+                        Layout.fillWidth: true; implicitHeight: sheetCmd.implicitHeight + 20; radius: 6; color: root.bg; border.color: root.line
+                        TextEdit { id: sheetCmd; x: 10; y: 10; width: parent.width - 20; readOnly: true; selectByMouse: true; wrapMode: TextEdit.WrapAnywhere
+                                   textFormat: TextEdit.PlainText; font.family: root.monoFamily; font.pixelSize: 12; selectionColor: root.accentStrong
+                                   color: root.text; text: root.claimCommand(claimSheet.s) }
+                    }
+                    Dim { visible: !root.claimReady(claimSheet.s); Layout.fillWidth: true; font.pixelSize: 13
+                          text: root.amountError(claimSheet.s) !== "" || root.destError(claimSheet.s) !== "" ? "The command appears once the amount and the destination are valid."
+                                : "The command appears once you have read the privacy disclosure and ticked the box." }
+                    Dim { Layout.fillWidth: true
+                          text: "Run it with the v0.3 wallet that holds the beneficiary's key. This app signs nothing; the wallet signs" + (root.claimPrivate ? " and proves" : "") + " the claim." }
+                }
+                RowLayout { Layout.fillWidth: true; spacing: 10
+                    Item { Layout.fillWidth: true }
+                    AppButton { text: "Cancel"; onClicked: claimSheet.close() }
+                    AccentButton { id: sheetCopy; objectName: "copyCommand"; property bool copied: false
+                                   text: copied ? "Copied" : "Copy command"; enabled: root.claimReady(claimSheet.s)
+                                   onClicked: { root.copy(root.claimCommand(claimSheet.s).replace(/ \\\n {2}/g, " ")); copied = true; sheetCopyTimer.restart() }
+                                   Timer { id: sheetCopyTimer; interval: 1500; onTriggered: sheetCopy.copied = false } }
+                }
+            }
+        }
     }
 
     // ── Settings ─────────────────────────────────────────────────────────────

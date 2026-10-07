@@ -531,8 +531,8 @@ Chain::Chain(QObject* parent) : QObject(parent), explorerPath_(QString::fromLati
     net_.setTransferTimeout(20000);
 }
 
-void Chain::getAccount(const QString& id, std::function<void(const QJsonObject&, const QString&)> cb) {
-    const QJsonObject body{{"jsonrpc", "2.0"}, {"id", 1}, {"method", "getAccount"}, {"params", QJsonArray{id}}};
+void Chain::rpcCall(const QString& method, const QJsonArray& params, std::function<void(const QJsonValue&, const QString&)> cb) {
+    const QJsonObject body{{"jsonrpc", "2.0"}, {"id", 1}, {"method", method}, {"params", params}};
     QNetworkRequest req{QUrl(rpc)};
     req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     QNetworkReply* reply = net_.post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
@@ -542,7 +542,62 @@ void Chain::getAccount(const QString& id, std::function<void(const QJsonObject&,
         const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
         if (root.contains("error")) { cb({}, root.value("error").toObject().value("message").toString("the node returned an error")); return; }
         if (!root.contains("result")) { cb({}, QStringLiteral("the node's answer is not JSON-RPC")); return; }
-        cb(root.value("result").toObject(), QString());
+        cb(root.value("result"), QString());
+    });
+}
+
+void Chain::getAccount(const QString& id, std::function<void(const QJsonObject&, const QString&)> cb) {
+    rpcCall(QStringLiteral("getAccount"), QJsonArray{id}, [cb](const QJsonValue& r, const QString& err) { cb(r.toObject(), err); });
+}
+
+QJsonObject claimFee(quint64 baseFeeExec, quint64 baseFeeStor, bool token) {
+    const quint64 cycles = token ? kClaimCyclesToken : kClaimCyclesNative;
+    const u128 stor = u128(kClaimDataBytes) * baseFeeStor;
+    return QJsonObject{
+        {"gasLimit", double(kClaimGasLimit)}, {"dataBytes", double(kClaimDataBytes)}, {"cycles", double(cycles)},
+        {"baseFeeExec", double(baseFeeExec)}, {"baseFeeStor", double(baseFeeStor)},
+        {"reserve", dec(u128(kClaimGasLimit) * baseFeeExec + stor)},
+        {"estimate", dec(u128(cycles) * baseFeeExec + stor)},
+    };
+}
+
+void Chain::claimContext(const QByteArray& beneficiary, bool token, Done done) {
+    auto out = std::make_shared<QJsonObject>(QJsonObject{{"kind", "claimContext"}});
+    auto ben = std::make_shared<QJsonObject>();
+    auto j = std::make_shared<Join>();
+    j->pending = 2;
+    j->then = [out, ben, done]() {
+        // The payer the CLI picks by default is the signer, the beneficiary.
+        if (ben->value("read").toBool()) {
+            const u128 reserve = parseDec(out->value("fee").toObject().value("reserve").toString());
+            (*ben)["covers"] = parseDec(ben->value("balance").toString()) >= reserve;
+        }
+        (*out)["beneficiary"] = *ben;
+        done(*out);
+    };
+    rpcCall(QStringLiteral("getFeeState"), QJsonArray{}, [out, j, token](const QJsonValue& r, const QString& err) {
+        const QJsonObject q = r.toObject();
+        const bool live = err.isEmpty() && q.contains("base_fee_exec") && q.contains("base_fee_stor");
+        QJsonObject fee = live ? claimFee(quint64(q.value("base_fee_exec").toDouble()), quint64(q.value("base_fee_stor").toDouble()), token)
+                               : claimFee(kBaseFeeMin, kBaseFeeMin, token);
+        fee["source"] = live ? "node" : "minimum";
+        if (live) fee["height"] = q.value("height").toDouble();
+        else fee["error"] = err.isEmpty() ? QStringLiteral("the node did not quote its fee market") : err;
+        (*out)["fee"] = fee;
+        j->done();
+    });
+    getAccount(base58(beneficiary), [ben, j](const QJsonObject& acc, const QString& err) {
+        if (!err.isEmpty()) { (*ben)["read"] = false; (*ben)["error"] = err; j->done(); return; }
+        const QByteArray n = shard(acc, QString::fromLatin1(kNativeShard));
+        u128 bal = 0;
+        if (!n.isEmpty()) { Reader r{n}; bal = r.u128v(); }
+        const double nonce = acc.value("nonce").toDouble();
+        (*ben)["read"] = true;
+        (*ben)["nonce"] = nonce;
+        (*ben)["balance"] = dec(bal);
+        // Known to the chain: it has signed before, or holds a balance shard.
+        (*ben)["initialised"] = nonce > 0 || !n.isEmpty();
+        j->done();
     });
 }
 

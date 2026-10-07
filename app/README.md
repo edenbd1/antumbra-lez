@@ -4,8 +4,10 @@ A Basecamp app that looks up vesting schedules of the `antumbra_vesting`
 program on the LEZ testnet v0.3 and shows what the chain holds: what has
 vested, what is claimable now against the chain's own clock, what the escrow
 actually holds, who can move it, and every transaction on the schedule with
-the program's verdict. It holds no keys and signs nothing: to claim, it gives
-the exact `antumbra-vesting` command for the beneficiary's wallet.
+the program's verdict. It holds no keys and signs nothing: to claim, it
+confirms what the claim will do (the amount, the fee, and on the private path
+what becomes public) and then gives the exact `antumbra-vesting` command for
+the beneficiary's wallet.
 
 ![A schedule in Basecamp 0.3.0, read from the public testnet](../docs/screens/basecamp-schedule.png)
 
@@ -36,10 +38,9 @@ the exact `antumbra-vesting` command for the beneficiary's wallet.
 - **What comes next**, under the claimable amount: the accrual rate and when
   the schedule is fully vested, the amount the cliff releases and when, or
   which milestone authority has to signal what.
-- **The claim command** sits where Logos Forum's reply box is, with "Copy
-  command" where "Reply" is, and a choice between a public destination and a
-  shielded one (`--to Private/<account>`: the schedule records the claim, the
-  destination and what it received stay private).
+- **Prepare claim** sits where Logos Forum's reply box is, with the choice
+  between a public destination and a shielded one. It opens the confirmation
+  below; the command is only shown there.
 - **The chain's clock** is its last block's time. The status line says when it
   trails the computer's clock by more than five minutes, which a quiet testnet
   does; every amount follows the chain's clock, not the computer's. An open
@@ -52,6 +53,56 @@ the exact `antumbra-vesting` command for the beneficiary's wallet.
   the dialog says when they do. The defaults are `https://testnet.lez.logos.co`,
   the deployed header `FCrja8g2ZKvxZwNZchdppKWQCDxPNUHxnEMidrmqrt6X` and
   `https://explorer.testnet.lez.logos.co`.
+
+## The confirmation before a claim (RFP-017 U4, U5, Privacy 2)
+
+"Prepare claim" opens a sheet that says what the claim will do before it shows
+the command:
+
+- **The claimable amount** at the chain's clock, and **the amount to claim**,
+  editable and checked: more than 0 and at most what is claimable, with a
+  named error otherwise (the program would refuse either with E7003, and a
+  refused public claim is still charged). The command's `--amount` follows it.
+- **The destination**: a public account (the beneficiary's own by default) or
+  a shielded account of the beneficiary's wallet.
+- **On the public path, the fee.** LEZ v0.3 reserves `gas_limit × base_fee_exec
+  + data_bytes × base_fee_stor` from the payer when it takes a public
+  transaction and charges what the transaction used
+  (`lez/programs/fee/core/src/assess.rs`, lines 75 and 90, at `db66590a`). The
+  sheet reads both base fees from the node's `getFeeState`, prices the reserve
+  at the 300,000 gas limit the CLI is run with and about 700 bytes (public
+  claims on the testnet are 653 and 685 bytes), and the expected charge at
+  the claim's measured gas ([`executor-tests/CYCLES.md`](../executor-tests/CYCLES.md)).
+  If the node does not quote its fee market, it prices at the protocol's
+  minimum base fee of 8 (`lez/programs/fee/core/src/market.rs`, lines 17 and
+  29) and says the real fee can only be higher. It then reads the
+  beneficiary's balance, since the beneficiary signs and pays unless `--payer`
+  names another account, and says whether it covers the reserve; if not, it
+  shows "Insufficient balance for the fee" with how much is missing.
+- **On the private path, no fee**: a privacy-preserving transaction is exempt
+  on v0.3 (`lez/chain_state/src/classify.rs`, line 53). The beneficiary still
+  signs it, so the sheet checks on chain that its account is initialised (a
+  nonce or a balance) and shows "Signing account not initialised" if not.
+- **On the private path, the privacy disclosure**, in the RFP's terms: visible
+  on chain to anyone are the claim amount (the schedule's claimed total and
+  its escrow's balance change by it), the beneficiary address (it signs), the
+  vesting schedule address and its escrow's, and the time the claim names;
+  not traceable are the destination private account and subsequent movements
+  of the claimed tokens. The command appears only once the box under it is
+  ticked, and the box is cleared every time the sheet opens or the path
+  changes.
+
+The app still signs nothing: the sheet ends with the command and a Copy
+button, for the v0.3 wallet that holds the beneficiary's key. These renders
+are `app/tests/qml_host.cpp` against the public testnet, not Basecamp:
+
+![The confirmation, public path](../docs/screens/view-preclaim-public.png)
+![The confirmation, private path, with the disclosure](../docs/screens/view-preclaim-private.png)
+![The private path at phone width](../docs/screens/view-phone-preclaim-private.png)
+
+The Basecamp screenshots on this page were taken with 0.4.0, whose reply box
+showed the command directly; 0.4.1 has the "Prepare claim" button there
+instead ([the schedule as 0.4.1 renders it](../docs/screens/view-schedule.png)).
 
 **What a search by account cannot find.** The sequencer has no way to list the
 schedules of a beneficiary, and creating a schedule is not recorded under the
@@ -136,7 +187,10 @@ cmake -S app/tests -B app/build-tests -DCMAKE_PREFIX_PATH=<Qt 6.9>
 cmake --build app/build-tests
 app/build-tests/chain_test app/tests/fixtures          # offline: 89 checks
 app/build-tests/chain_test app/tests/fixtures --live   # also asks the public testnet
-QT_QPA_PLATFORM=offscreen app/build-tests/qml_host app/src/qml/Main.qml 1500 950 shot.png testnet4-lin
+export QT_QPA_PLATFORM=offscreen QT_QUICK_CONTROLS_STYLE=Basic
+app/build-tests/qml_host app/src/qml/Main.qml 1500 950 shot.png --offline              # view + sheet, 22 checks
+app/build-tests/qml_host app/src/qml/Main.qml 1500 950 shot.png testnet4-lin --sheet   # the same on the testnet
+app/build-tests/qml_host app/src/qml/Main.qml 1500 950 - testnet4-lin --walkthrough /tmp/frames
 ```
 
 [`app/tests/chain_test.cpp`](tests/chain_test.cpp) checks the addresses against the
@@ -147,7 +201,19 @@ verdicts must be the ones the run's manifest recorded, step for step, and the
 replay must end where the chain is. [`app/tests/qml_host.cpp`](tests/qml_host.cpp)
 runs the real `Main.qml` against the real reader with a stand-in for what
 Basecamp gives a view; CI loads it at three widths with the node unreachable
-and fails on any QML warning.
+and fails on any QML warning. At each width it then opens the confirmation on
+testnet4-lin as saved in the fixtures and checks it: the public path shows the
+command for the claimable amount and no disclosure; an amount of 0, one over
+the claimable amount and one that is not a number each show a named error and
+hide the command; the private path shows the disclosure and hides the command
+until it is acknowledged, then shows it below the disclosure, with a
+`Private/` destination. With the node unreachable it also shows the fee
+priced at the minimum base fee and the beneficiary as not read. It saves
+`<out>-sheet-public.png` and `<out>-sheet-private.png`. `--sheet` runs the same
+checks on the schedule a query opened, against the live node.
+`--walkthrough DIR` saves numbered frames (15 per second of film) of a tour
+of a schedule and of both paths of the sheet, for the demo film:
+`ffmpeg -framerate 15 -i DIR/f%05d.png -pix_fmt yuv420p tour.mp4`.
 
 Verified in Basecamp 0.3.0 on macOS with a throwaway user directory, against
 the public testnet: the examples load, typing an id and pressing Return opens
@@ -157,3 +223,5 @@ refuses a bad URL and saves a good one to the profile's `module_data`, and
 Basecamp's narrowest window gives one pane. Copy (the view's clipboard) and
 Explorer (the backend's https-only opener) were exercised in Basecamp while
 the view was built; the final run leaves the clipboard and the browser alone.
+That Basecamp run was 0.4.0; the confirmation sheet of 0.4.1 has been checked
+in the Qt host above, at three widths, offline and against the testnet.

@@ -152,6 +152,14 @@ QString AntumbraLezBackend::activity(QString token, QString scheduleAccount) {
     return QString();
 }
 
+QString AntumbraLezBackend::claimContext(QString token, QString beneficiary, QString asset) {
+    if (const QString e = ready(); !e.isEmpty()) return e;
+    const QByteArray acc = av::unbase58(beneficiary.trimmed());
+    if (acc.isEmpty()) return QStringLiteral("error: not an account id");
+    chain_.claimContext(acc, asset == QLatin1String("token"), [this, token](const QJsonObject& o) { reply(token, o); });
+    return QString();
+}
+
 QString AntumbraLezBackend::refreshStatus() {
     if (chain_.program.size() != 32) {
         setStatusJson(QStringLiteral("{\"state\":\"error\",\"text\":\"The program id in Settings is not a base58 account id.\"}"));

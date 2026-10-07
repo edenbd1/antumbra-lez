@@ -58,6 +58,7 @@ Current program: LEZ `v0.3.0` (`db66590a`), header
 | D-34 | Evidence from a replaced chain is declared pre-reset, not deleted | 2026-09-27 | accepted |
 | D-35 | The Basecamp app as a `ui_qml` module in Logos Forum's design | 2026-10-07 | accepted |
 | D-36 | The CLI reads without a wallet; only signing opens one | 2026-10-08 | accepted |
+| D-37 | A pre-claim confirmation in the app, with the fee read from the node and the RFP's disclosure, still without signing | 2026-10-08 | accepted |
 | D-38 | A cliff schedule put on chain by a LaunchAgent when the testnet resumes | 2026-10-08 | accepted |
 
 ---
@@ -1116,6 +1117,62 @@ chain-refs workflow, which notices when the recording stops being true.
 [`scripts/rpc-fixture.py`](../scripts/rpc-fixture.py),
 [`cli/tests/fixtures/`](../cli/tests/fixtures/); CI job `cli`, chain-refs job
 `cli-live`.
+
+## D-37: A pre-claim confirmation in the app, with the fee read from the node and the RFP's disclosure, still without signing
+
+- **Date:** 2026-10-08
+- **Status:** accepted
+
+**Context.** RFP-017 U4 asks the mini-app for a pre-claim summary with the
+claimable amount and the estimated fee, and a clear error when the balance is
+insufficient. U5 and Privacy 2 ask for a disclosure before each private claim
+of what is visible on chain (claim amount, beneficiary address, vesting
+schedule address) and what is not traceable (the destination private account
+and later movements). App 0.4.0 showed the claim command directly, with no
+amount, fee or disclosure.
+
+**Options considered.** Sign in the app; keep the command and add notes
+beside it; open a confirmation sheet that alone reveals the command. For the
+fee: a constant; the wallet's own `max_fee` sizing (`(gas_limit + 100,000) ×
+64`); the node's fee market.
+
+**Chosen.** "Prepare claim" opens a sheet with the claimable amount at the
+chain's clock and an editable amount, checked to be more than 0 and at most the
+claimable amount. It names the destination path. On the public path it shows
+the reserve the payer must hold, `300,000 × base_fee_exec + 700 ×
+base_fee_stor`, and the expected charge at the claim's measured gas. Both base
+fees come from the node's `getFeeState`, with the protocol minimum of 8 as a
+declared fallback. It also says whether the beneficiary's balance covers the
+reserve. On the private path it shows no fee (privacy-preserving transactions
+are exempt on v0.3), checks on chain that the beneficiary is initialised, and
+shows the disclosure in the RFP's terms. The command and its Copy button appear
+only once the amount and destination are valid and, on the private path, the
+disclosure is acknowledged. The acknowledgement is cleared each time the sheet
+opens or the path changes.
+
+**Rationale.** The sheet gives every number U4 asks for before anything leaves
+the app, from the chain rather than from the computer. Hiding the command until
+the disclosure is ticked makes "before each claim" structural rather than a
+note a user can skip. Reading `getFeeState` makes the estimate follow load; the
+reserve is what the sequencer checks against the payer's balance, so that is
+the comparison shown.
+
+**Trade-offs.** The app still signs nothing, so it cannot see the wallet's keys
+or its shielded accounts. It checks only what the chain shows: the
+beneficiary's balance and whether its account is known (a nonce or a balance).
+That is a practical test: the v0.3.0 wallet has no `auth-transfer init`, the
+end-to-end run initialised each beneficiary by sending it LGO, and the exact
+rule the privacy circuit applies to a public signer was not traced. A `--payer`
+other than the beneficiary is described but not checked. The 700-byte size is
+an allowance from measured claims (653 and 685 bytes), not computed per
+transaction. The disclosure is a checkbox in a view, so a user can still type a
+command by hand; the guarantee is about what the app shows.
+
+**Where.** [`app/src/qml/Main.qml`](../app/src/qml/Main.qml) (`Confirm the
+claim`), [`app/src/vesting_chain.cpp`](../app/src/vesting_chain.cpp)
+(`claimContext`, `claimFee`), [`app/src/antumbra_lez.rep`](../app/src/antumbra_lez.rep),
+[`app/tests/qml_host.cpp`](../app/tests/qml_host.cpp) (22 sheet checks per
+width in CI's `view` job), [`app/README.md`](../app/README.md).
 
 ## D-38: A cliff schedule put on chain by a LaunchAgent when the testnet resumes
 

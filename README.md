@@ -57,20 +57,39 @@ workflow against the live testnet. Design note: [D-36](docs/DECISIONS.md).
 
 <img src="app/design/icon-256.png" width="64" alt="Antumbra Vesting">
 
-A Basecamp 0.3.0 app ([`app/`](app/), version 0.4.0) to look up a schedule on
+A Basecamp 0.3.0 app ([`app/`](app/), version 0.4.1) to look up a schedule on
 the public testnet by its id, its batch or an account, and see what the chain
 holds: what is claimable now against the chain's clock, the vesting curve, the
 escrow's real balance, the accounts, and every transaction on the schedule
-with the program's verdict. It signs nothing; it gives the exact
-`antumbra-vesting` command to claim from the beneficiary's wallet. It is
+with the program's verdict. It signs nothing. "Prepare claim" opens a
+confirmation (RFP-017 U4): the claimable amount, the amount to claim, checked
+against it, the destination, and on the public path the fee read from the
+node's fee market and whether the beneficiary's balance covers it. On the
+private path it checks that the signing account is initialised and shows the
+privacy disclosure (U5, Privacy 2), which must be acknowledged before the
+exact `antumbra-vesting` command for the beneficiary's wallet appears. It is
 built and laid out like Logos Forum: the schedules as its topics, a schedule
-as its thread, the claim command where its reply box is.
+as its thread, the claim where its reply box is.
 
 ![A schedule in Basecamp 0.3.0, read from the public testnet](docs/screens/basecamp-schedule.png)
 
 | Basecamp's narrowest window | Milestones | A batch |
 |---|---|---|
 | ![One pane](docs/screens/basecamp-narrow.png) | ![Milestones](docs/screens/basecamp-milestones.png) | ![A batch](docs/screens/basecamp-batch.png) |
+
+The Basecamp screenshots above are 0.4.0, whose reply box showed the command
+directly. The 0.4.1 confirmation, rendered by the test host
+([`app/tests/qml_host.cpp`](app/tests/qml_host.cpp)) against the testnet:
+
+| Public path: amount and fee | Private path: the disclosure before the command |
+|---|---|
+| ![Public path](docs/screens/view-preclaim-public.png) | ![Private path](docs/screens/view-preclaim-private.png) |
+
+M3 status: the confirmation and disclosure screens (U4, U5, Privacy 2) are in
+the app since 0.4.1 and checked by the headless view test on both paths at
+three widths, a command never shown on the private path before the disclosure
+is acknowledged. The app still signs nothing, so the claim action itself, the
+creator view and listing from index PDAs remain M3 work.
 
 Searching by account finds the schedules that account has signed for plus the
 examples: the chain cannot list schedules by beneficiary, and the app says so.

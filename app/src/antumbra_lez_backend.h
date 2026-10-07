@@ -21,6 +21,7 @@ public:
     QString openSchedule(QString token, QString scheduleAccount, QString batchId) override;
     QString examples(QString token) override;
     QString activity(QString token, QString scheduleAccount) override;
+    QString claimContext(QString token, QString beneficiary, QString asset) override;
     QString refreshStatus() override;
     QString saveSettings(QString rpc, QString program, QString explorer) override;
     QString openLink(QString url) override;

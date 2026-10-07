@@ -21,6 +21,13 @@ class AntumbraLez
     // with the program's verdict as replayed from the schedule's rules.
     // json: {kind: "activity", events: [{…}], consistent, note, scheduleId, batchId}.
     SLOT(QString activity(QString token, QString scheduleAccount))
+    // What the pre-claim confirmation shows (RFP-017 U4): the fee market from
+    // the node's getFeeState (or the protocol's minimum base fee when the node
+    // does not answer) priced for a claim, and the beneficiary's account: its
+    // nonce, its native balance, whether that covers the fee reserve, and
+    // whether the chain knows it. asset is "native" or "token".
+    // json: {kind: "claimContext", fee: {…}, beneficiary: {…}}.
+    SLOT(QString claimContext(QString token, QString beneficiary, QString asset))
     // The chain's head and clock, read now, into statusJson. The view asks every 15 s.
     SLOT(QString refreshStatus())
 
