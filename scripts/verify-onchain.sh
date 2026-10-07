@@ -38,7 +38,7 @@ done
 
 if [ ! -f "$MANIFEST" ]; then
   echo "No manifest at $MANIFEST."
-  echo "Testnet v0.3 deployment: pending funding. The v0.2.4 evidence is historical;"
+  echo "The testnet v0.3 run is evidence/v03/testnet.tsv. The v0.2.4 evidence is historical;"
   echo "its checker is scripts/verify-onchain-v024.sh. See docs/deploy-v03.md."
   exit 3
 fi

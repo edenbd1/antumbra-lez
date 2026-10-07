@@ -9,7 +9,7 @@ driven end to end on the public testnet v0.3.
 |---|---|
 | Program (header account) | `FCrja8g2ZKvxZwNZchdppKWQCDxPNUHxnEMidrmqrt6X` |
 | ImageID | `72d5cdc05004a9502be72239829071982237638b49b8fe7d1b45fd7371a425f4`, read back from the header's loader record |
-| On chain | linear, cliff and milestone schedules, cancellation with refund, transferable and non-cancelable positions, nominated authorities, native and token escrow, private claims of native balance and of a token into shielded accounts, a batch of 450 schedules in one transaction (451 refused under the 10M gas cap) |
+| On chain | linear and milestone schedules (cliff covered by an executor test, on chain in M1), cancellation with refund, transferable and non-cancelable positions, nominated authorities, native and token escrow, private claims of native balance and of a token into shielded accounts, a batch of 450 schedules in one transaction (451 refused under the 10M gas cap) |
 | Every transaction | [`DEPLOYMENTS.md`](DEPLOYMENTS.md), manifest and transcript in [`evidence/v03/`](evidence/v03/) |
 | Re-check it yourself | `./scripts/verify-onchain.sh --manifest evidence/v03/testnet.tsv --rpc https://testnet.lez.logos.co` (66 checks) |
 | Reproducible build | CI rebuilds the guest from source in RISC Zero's pinned Docker builder and compares it with the committed binary |
@@ -19,7 +19,7 @@ driven end to end on the public testnet v0.3.
 The v0.2.4 deployment and [`evidence/VESTING.md`](evidence/VESTING.md) are
 historical: that chain was reset to v0.3 and its hashes no longer resolve.
 
-[![CI](https://github.com/edenbd1/antumbra-lez/actions/workflows/ci.yml/badge.svg)](https://github.com/edenbd1/antumbra-lez/actions/workflows/ci.yml)
+[![CI](https://github.com/edenbd1/antumbra-lez/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/edenbd1/antumbra-lez/actions/workflows/ci.yml?query=branch%3Amain)
 
 ## Antumbra Vesting in Basecamp
 
@@ -59,8 +59,8 @@ written for [Logos RFP-015](https://github.com/logos-co/rfp/blob/master/RFPs/RFP
 cargo test --release
 ```
 
-51 tests green. The pricing library has no dependencies at all — the
-executor harness is a separate workspace — and `#![forbid(unsafe_code)]`
+51 tests green. The pricing library has no dependencies at all (the
+executor harness is a separate workspace), and `#![forbid(unsafe_code)]`
 throughout.
 
 ## What this found
@@ -114,7 +114,7 @@ arbitrary-precision integers. A differential test whose reference shares the
 implementation's assumptions proves only that the implementation agrees with
 itself.
 
-4,000 vectors, deliberately biased towards the hard cases — huge products, small
+4,000 vectors, deliberately biased towards the hard cases: huge products, small
 divisors, and divisors sitting right at the 128-bit boundary. **Half of them are
 cases where the exact quotient does not fit in 128 bits**, and the implementation
 must refuse those by name rather than return a truncated number.
@@ -129,7 +129,7 @@ if rem >= d { rem -= d; quo |= 1; }
 ```
 
 `rem << 1` overflows whenever `rem` carries its top bit, which happens for any
-large divisor — and Rust drops the bit **silently** in release builds. It
+large divisor, and Rust drops the bit **silently** in release builds. It
 mispriced roughly half the vectors. The fix reads the top bit before the shift;
 the comment in `src/lib.rs` records it, because the bug is more instructive than
 the fix.
@@ -144,7 +144,7 @@ reserve in production.
   and never mints tokens out of rounding.
 - **Near exhaustion.** The whole sale reserve must be quotable; a request beyond
   it is refused by name before any arithmetic runs.
-- **Creation.** `Vt > D` is enforced rather than trusted — a curve created below
+- **Creation.** `Vt > D` is enforced rather than trusted: a curve created below
   it prices its last token at infinity.
 - **Slippage.** Refused before any state moves, asserted by comparing the whole
   struct before and after.
@@ -168,14 +168,14 @@ series. Two things in it are worth more than the code:
 
 **The reduction direction decides the precision.** Reducing into `[1, 2)` gives
 `-ln x = k*ln2 - ln m`, a subtraction of two numbers both near 0.693 whenever x
-is near 1. At x = 0.99974 the difference is 0.00025 — three significant digits
+is near 1. At x = 0.99974 the difference is 0.00025, three significant digits
 destroyed by cancellation, then multiplied by an exponent of up to 99. The first
 version did that and measured a worst error of **7e-12**. Reducing into
 `[1/2, 1)` instead makes it `k*ln2 + (-ln m)`, both terms non-negative. An
 addition cannot cancel.
 
 **The series length is a cycle budget, so it is a named constant.** `z = 1/3`
-exactly at x = 1/2 — the worst case, reached by every halving. Twelve terms
+exactly at x = 1/2, the worst case, reached by every halving. Twelve terms
 leaves a 1e-13 tail; twenty-four puts it below 1e-19, at twelve more 256-bit
 multiplications per call.
 
@@ -197,7 +197,7 @@ bonding curve follows.
 Also asserted: `pow` is monotone in the exponent, so no weight in the schedule
 pays better than the weights either side of it; a bigger buy never gets a better
 rate; and `weight_at` returns the correct weight **with no poke at all**, checked
-at every tick of a thousand-second schedule — which is the RFP's own wording,
+at every tick of a thousand-second schedule, which is the RFP's own wording,
 "regardless of how recently the last poke occurred".
 
 ## Vesting
@@ -207,7 +207,7 @@ three schedule shapes, the cancellation split, and milestone signalling. None of
 it needs an account model to be settled, so none of it waits for one.
 
 Two properties are worth more than the code. **Claims over a fully elapsed
-schedule sum to the total exactly** — rounding each step down would normally
+schedule sum to the total exactly**: rounding each step down would normally
 strand dust, so the final step returns the total directly rather than dividing
 again; the two agree mathematically, but routing the end through the general
 branch would make exactness depend on a division being exact, which it is not.
@@ -239,13 +239,13 @@ Not just that the tests pass.
 ## Fees
 
 `src/fees.rs` implements both collection models, because the two RFPs differ for
-a reason that decides the code. A bonding curve is demand-bounded — under 1.4%
-ever graduate — so its fee is per swap or it earns nothing. An LBP is
+a reason that decides the code. A bonding curve is demand-bounded (under 1.4%
+ever graduate), so its fee is per swap or it earns nothing. An LBP is
 time-bounded, so every sale reaches its end and an at-close fee is always
 collectible.
 
 Every fee rounds **up**, against the party paying: the trader on a swap, the
-creator at close. And the ordering on a buy is asserted rather than commented —
+creator at close. And the ordering on a buy is asserted rather than commented:
 the fee comes off *before* pricing, so the curve prices `c_in - fee`. Taking it
 after would credit the curve with collateral the treasury removes, inflating the
 reserve by the fee on every trade; the test constructs both and asserts the
@@ -253,7 +253,7 @@ correct one ends with less.
 
 Both proposals ship at a zero rate with a governance switch, so the cap is
 compiled in: 1% per swap, 5% at close. A rate above it is **refused by name, not
-clamped** — silently clamping a misconfiguration hides it from the person who
+clamped**: silently clamping a misconfiguration hides it from the person who
 needs to see it.
 
 ## Deployed
@@ -320,6 +320,6 @@ MIT OR Apache-2.0, at your option:
 cycles**, flat across trade sizes, against LEZ's 32M public-execution cap.
 A vesting claim is **8,808** and a milestone signal is **30**. The fractional
 power went from **314,248** cycles to **27,181** by moving to a binary working
-scale — 11.6x faster and 6.6x more accurate at the same time, with the
+scale, 11.6x faster and 6.6x more accurate at the same time, with the
 first attempt at that rewrite recorded alongside it because it was wrong in a
 way worth keeping.

@@ -17,7 +17,7 @@ below changes a hash cited against it.
 | Token `Transfer { amount }`, program by ImageID | Token program by account id, `Transfer { amount_to_transfer, descriptor: { definition_id, kind } }` | Holdings are the token shard of any account; the token program itself checks the definition |
 | Session cap 2^25 cycles | Declared execution gas, at most 10,000,000 per transaction | The batch ceiling is re-measured; the "299 schedules" figure is v0.2.4 only |
 | Private claim proved against a 50-block clock, error 7005 on drift | Public effects of a private transaction are deferred and applied at settlement | The claim window is just `[t, ∞)`; no coarse clock, no drift refusal |
-| No fees | Public transactions name an LGO fee payer and are charged even when they fail; private ones are exempt | The CLI always names a payer and pre-checks locally before sending |
+| No fees | Public transactions name an LGO fee payer and are charged even when they fail; private ones are exempt | The CLI always names a payer and checks a claim's amount and a cancel's refund against the schedule before sending |
 | SPEL generates IDL and CLI | SPEL has no v0.3 support | Guest written against `lee_core` directly; IDL hand-maintained in SPEL's JSON shape, with a drift check against the core crate |
 | Events: none | `Plan::event`, public transactions only | Each instruction emits one event; a private claim emits nothing, by design |
 

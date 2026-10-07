@@ -14,7 +14,7 @@ they replaced, are logged in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 | ImageID | `72d5cdc05004a9502be72239829071982237638b49b8fe7d1b45fd7371a425f4`, read back from the header's `program_loader` record |
 | Source | `programs/vesting/`, LEZ `v0.3.0` (`db66590a`) |
 | Artifact | `artifacts/programs/v0.3/antumbra_vesting.bin`, RISC Zero Docker builder `r0.1.91.1`; CI rebuilds it from source and compares |
-| Deploy | [`ca945d54…432fd03d`](https://explorer.testnet.lez.logos.co/transaction/ca945d54612af5d18bbd0f6dc7c7a4c034aaf6c06511509984a06db0432fd03d), [`137e09c3…3f15a9f1`](https://explorer.testnet.lez.logos.co/transaction/137e09c348b8a0de6b89bf9a1372eb12d67efbade49944b0aab35ebc3f15a9f1), [`2aa46df7…1b9f6b9b`](https://explorer.testnet.lez.logos.co/transaction/2aa46df7c47ed958c400b15984947e4f1d24609884db0af1246382771b9f6b9b), blocks 741 to 749 |
+| Deploy | [`ca945d54…432fd03d`](https://explorer.testnet.lez.logos.co/transaction/ca945d54612af5d18bbd0f6dc7c7a4c034aaf6c06511509984a06db0432fd03d), [`137e09c3…3f15a9f1`](https://explorer.testnet.lez.logos.co/transaction/137e09c348b8a0de6b89bf9a1372eb12d67efbade49944b0aab35ebc3f15a9f1), [`2aa46df7…1b9f6b9b`](https://explorer.testnet.lez.logos.co/transaction/2aa46df7c47ed958c400b15984947e4f1d24609884db0af1246382771b9f6b9b), blocks 743, 747 and 749 |
 | Testnet run | 27 applied, 14 refused on chain as required, 20 state checks; manifest [`evidence/v03/testnet.tsv`](evidence/v03/testnet.tsv), transcript [`evidence/v03/testnet-transcript.txt`](evidence/v03/testnet-transcript.txt) |
 | Re-checked | `./scripts/verify-onchain.sh --manifest evidence/v03/testnet.tsv --rpc https://testnet.lez.logos.co`: 66 checks pass, 0 fail ([output](evidence/v03/testnet-verify.txt)) |
 
@@ -27,7 +27,7 @@ included, and had recorded another one block early.
 
 | Step | Transaction | Block |
 |---|---|---|
-| deploy (segments and header) | [`ca945d54…432fd03d`](https://explorer.testnet.lez.logos.co/transaction/ca945d54612af5d18bbd0f6dc7c7a4c034aaf6c06511509984a06db0432fd03d) | 741-749 |
+| deploy (segments and header) | [`ca945d54…432fd03d`](https://explorer.testnet.lez.logos.co/transaction/ca945d54612af5d18bbd0f6dc7c7a4c034aaf6c06511509984a06db0432fd03d) | 743, 747, 749 |
 | create a linear native schedule, funded in the same transaction | [`b18bdbfb…bedfa7b8`](https://explorer.testnet.lez.logos.co/transaction/b18bdbfbd8f9e9e5a2dc1aa0458a1a3b4193aaa3e4784951b9fa1083bedfa7b8) | 2091 |
 | claim one unit more than vested: refused | [`8aca5fca…e99cef30`](https://explorer.testnet.lez.logos.co/transaction/8aca5fca741f1100fae512b20ea7625f6bc2abf57aff5a045050f75be99cef30) | 2093 |
 | claim exactly what has vested | [`8c0695f0…23c7fa25`](https://explorer.testnet.lez.logos.co/transaction/8c0695f04d1b768aeea137726f21da226da3ad61db72dea65dde0fb423c7fa25) | 2097 |
