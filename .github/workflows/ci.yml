@@ -70,8 +70,14 @@ jobs:
           curl -L https://risczero.com/install | bash
           echo "$HOME/.risc0/bin" >> "$GITHUB_PATH"
 
+      # rzup asks api.github.com for release metadata; anonymous calls from a
+      # shared runner IP hit the rate limit, so authenticate and retry.
       - name: Guest toolchain
-        run: rzup install
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          for i in 1 2 3; do rzup install && exit 0; sleep $((i * 20)); done
+          exit 1
 
       - name: Cache
         uses: actions/cache@v4
@@ -144,9 +150,14 @@ jobs:
       # The build itself runs in the pinned Docker image; cargo-risczero still
       # refuses to start without a host guest toolchain installed.
       - name: cargo-risczero 3.0.5
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          rzup install cargo-risczero 3.0.5
-          rzup install rust
+          for i in 1 2 3; do
+            rzup install cargo-risczero 3.0.5 && rzup install rust && exit 0
+            sleep $((i * 20))
+          done
+          exit 1
 
       - name: Rebuild in Docker
         env:
