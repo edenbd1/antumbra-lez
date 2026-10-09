@@ -21,7 +21,7 @@ use antumbra_vesting_core::{
     self as core, batch_schedule_id, claimable, holding_account, schedule_account, unvested, Asset, Instruction,
     Terms, VestingSchedule,
 };
-use anyhow::{anyhow, bail, Context as _, Result};
+use anyhow::{anyhow, bail, ensure, Context as _, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use lee::{
     privacy_preserving_transaction::circuit::ProgramWithDependencies, program::Program, AccountId,
@@ -115,6 +115,14 @@ enum Cmd {
     Deploy {
         #[arg(long)]
         payer: AccountId,
+        /// Deploy into this header account, already in the wallet, instead of
+        /// a fresh one. After a testnet reset this keeps the program id, and so
+        /// every schedule and escrow PDA derived from it. Needs `--segment`.
+        #[arg(long, requires = "segment")]
+        header: Option<AccountId>,
+        /// A segment account already in the wallet, in order; with `--header`.
+        #[arg(long, requires = "header")]
+        segment: Vec<AccountId>,
     },
     /// Print the chain clock (ms). Reads `--rpc`; needs no wallet.
     Now,
@@ -497,17 +505,26 @@ async fn main() -> Result<()> {
 
 async fn run(mut ctx: Ctx, cmd: Cmd) -> Result<()> {
     match cmd {
-        Cmd::Deploy { payer } => {
+        Cmd::Deploy { payer, header, segment } => {
             let bytecode = std::fs::read(&ctx.elf).with_context(|| format!("reading {}", ctx.elf.display()))?;
             let program = Program::new(bytecode.clone().into())?;
             // The loader chunks the user ELF inside the program binary, not the binary itself.
             let user_elf = risc0_binfmt::ProgramBinary::decode(&bytecode).map_err(|e| anyhow!("{e}"))?.user_elf.len();
             let segments = user_elf.div_ceil(program_loader_core::MAX_SEGMENT_DATA_LEN);
             let wallet = ctx.wallet.as_mut().expect("deploy opens the wallet");
-            let header = wallet.create_new_account_public(None).0;
-            let segs: Vec<AccountId> =
-                std::iter::repeat_with(|| wallet.create_new_account_public(None).0).take(segments).collect();
-            wallet.store_persistent_data()?;
+            let (header, segs) = match header {
+                Some(h) => {
+                    ensure!(segment.len() == segments, "this binary needs {segments} segment accounts, got {}", segment.len());
+                    (h, segment)
+                }
+                None => {
+                    let h = wallet.create_new_account_public(None).0;
+                    let s: Vec<AccountId> =
+                        std::iter::repeat_with(|| wallet.create_new_account_public(None).0).take(segments).collect();
+                    wallet.store_persistent_data()?;
+                    (h, s)
+                }
+            };
             ProgramLoader(&*wallet).deploy(header, &segs, bytecode, false, Some(payer)).await?;
             println!("{}", serde_json::json!({"op": "deploy", "header": header.to_string(), "image_id": image_hex(&program), "segments": segs.len()}));
         }

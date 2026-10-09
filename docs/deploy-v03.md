@@ -164,6 +164,26 @@ SUPPRESS_VERBOSE_PRINTS=1 RPC=http://127.0.0.1:3040 DEPLOY=1 BATCH_MAX=450 TAG=l
 ./scripts/verify-onchain.sh --manifest evidence/v03/local-e2e.tsv --rpc http://127.0.0.1:3040
 ```
 
+## After a testnet reset: the same program id
+
+A reset wipes the chain, not the wallet. The header and its four segment
+accounts are ordinary wallet accounts, so the same binary can be loaded into
+them again, and the program keeps its id. Every schedule and escrow is a PDA of
+that id and of the schedule id, so a run with the same `TAG` lands on the same
+addresses too, and the app's and the CLI's defaults stay right. Only the
+transaction hashes and block numbers change.
+
+```bash
+antumbra-vesting --elf artifacts/programs/v0.3/antumbra_vesting.bin deploy --payer $PAYER \
+  --header FCrja8g2ZKvxZwNZchdppKWQCDxPNUHxnEMidrmqrt6X \
+  --segment EbhRz9FXS5gsFLnXCBzPqxyCE15PuMvr5rn7SjD2YJCj --segment 6AR9ZpG3kL6friFypobcUhtjCfgVPTu7gKDBkcSzmVcK \
+  --segment 72mdgSS4Zcwqimx13VCBNrfyt8cw4JNM5d7okfVpWE8j --segment CZie3aDuwS2fejqfrrgZfYgwTAqX2DjruUkNw7DoMtef
+```
+
+The segments are given in link order, head first, as the header's chain reads
+them. Rehearsed on a fresh local v0.3 sequencer on 2026-10-09: header
+`FCrja8g2…`, ImageID `72d5cdc0…`, read back from the loader record.
+
 ## Upgrades
 
 `wallet program-loader update --header $ANTUMBRA_PROGRAM --elf <new.bin> --segments … --payer $PAYER`
