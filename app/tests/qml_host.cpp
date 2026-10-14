@@ -66,7 +66,7 @@ public:
         chain_.rpc = rpc_; chain_.explorer = explorer_; chain_.program = av::unbase58(program_);
         status_ = "{\"state\":\"connecting\"}";
     }
-    QString appVersion() const { return QStringLiteral("0.4.1"); }
+    QString appVersion() const { return QStringLiteral("0.4.2"); }
 
     Q_INVOKABLE QString lookup(QString t, QString q) { chain_.lookup(q, [=](const QJsonObject& o) { send(t, o); }); return {}; }
     Q_INVOKABLE QString openSchedule(QString t, QString a, QString b) {

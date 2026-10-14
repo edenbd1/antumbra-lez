@@ -1,7 +1,7 @@
 {
   "name": "antumbra_lez",
   "display_name": "Antumbra Vesting",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "type": "ui_qml",
   "interface": "universal",
   "category": "defi",

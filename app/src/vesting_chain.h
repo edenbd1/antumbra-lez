@@ -135,7 +135,7 @@ private:
     QString explorerPath_;  // the explorer's server function, found once
 };
 
-// The examples the app offers: schedules the end-to-end run of 2 Oct 2026
+// The examples the app offers: schedules the end-to-end run of 14 Oct 2026
 // created on the public testnet (evidence/v03/testnet.tsv), with a word on
 // what each one shows.
 struct Example { const char* id; const char* batch; const char* note; };

@@ -892,7 +892,7 @@ Item {
                         clip: true; spacing: 4
                         model: root.result ? root.result.items : root.examples
                         header: Dim { width: ListView.view.width; bottomPadding: 6
-                                      text: root.result ? root.result.subtitle : "Examples on the public testnet, from the end-to-end run of 2 Oct 2026. Every number is read from the chain now." }
+                                      text: root.result ? root.result.subtitle : "Examples on the public testnet, from the end-to-end run of 14 Oct 2026. Every number is read from the chain now." }
                         delegate: ScheduleRow { width: ListView.view.width; item: modelData }
                         footer: Dim { width: ListView.view.width; topPadding: 8; visible: root.result && root.result.note ? true : false
                                       text: root.result && root.result.note ? root.result.note : "" }
@@ -927,9 +927,9 @@ Item {
                                  text: "Antumbra reads vesting schedules straight from the LEZ testnet: how much has vested, what can be claimed now, who controls it, and what the escrow holds. It holds no keys and signs nothing." }
                         Repeater {
                             model: [
-                                ["A schedule id", "The text or 64 hex digits it was created with, like testnet4-lin."],
+                                ["A schedule id", "The text or 64 hex digits it was created with, like testnet7-lin."],
                                 ["An account", "A schedule's own account, or a beneficiary's. For a beneficiary it finds the schedules that account has claimed from or been transferred, plus the examples: the chain cannot list schedules by beneficiary."],
-                                ["A batch id", "Every schedule of a batch, like testnet4-batch8, with what each one can claim."]
+                                ["A batch id", "Every schedule of a batch, like testnet7-batch8, with what each one can claim."]
                             ]
                             delegate: RowLayout {
                                 Layout.fillWidth: true; spacing: 10
@@ -943,8 +943,8 @@ Item {
                         Flow {
                             Layout.fillWidth: true; spacing: 8
                             Repeater {
-                                model: [ { q: "testnet4-lin", l: "testnet4-lin" }, { q: "testnet4-mil", l: "testnet4-mil" }, { q: "testnet4-batch8", l: "testnet4-batch8" },
-                                         { q: "2xub3k7XNpfsPk44Gt52dZtadG4zXrqqdPKKgjFZuKfn", l: "a beneficiary, 2xub…uKfn" } ]
+                                model: [ { q: "testnet7-lin", l: "testnet7-lin" }, { q: "testnet7-mil", l: "testnet7-mil" }, { q: "testnet7-batch8", l: "testnet7-batch8" },
+                                         { q: "FAo5e4a1LFPzksErSJUX6Jtg6BV7iqm4snD8c9deXpSV", l: "a beneficiary, FAo5…XpSV" } ]
                                 delegate: AppButton { text: modelData.l; font.pixelSize: 13
                                                       onClicked: { lookupField.text = modelData.q; root.lookup(modelData.q) } }
                             }

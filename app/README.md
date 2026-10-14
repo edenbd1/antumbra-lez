@@ -18,14 +18,15 @@ the beneficiary's wallet.
   batch, numbered from 0), or a base58 account: the schedule's own account, or
   an account whose schedules are wanted. Typing works: this is a `ui_qml`
   module, not the legacy widget the v0.2 panel was.
-- **Examples** are the schedules the end-to-end run of 2 Oct 2026 created on
-  the public testnet (`testnet4-*`): linear, milestones, a token escrow,
-  cancelled, transferred, non-cancelable, claimed privately, and a batch of
-  eight. The testnet's reset of 12 Oct erased them, so the built-in examples
-  now read empty until the package is rebuilt; the app tests keep them as
-  recorded fixtures. Any schedule of the current run
-  ([`evidence/v03/testnet.tsv`](../evidence/v03/testnet.tsv)) can be typed in
-  the field, `testnet7-lin` or `testnet7-batch8` for example, and is read live.
+- **Examples** are the schedules the end-to-end run of 14 Oct 2026 created on
+  the public testnet after its reset to v0.3.1 (`testnet7-*`,
+  [`evidence/v03/testnet.tsv`](../evidence/v03/testnet.tsv)): linear,
+  cancelled, non-cancelable, milestones, cancelled by a nominated authority,
+  transferred, claimed privately, and a batch of eight. All are past their end,
+  so what they show no longer changes. There is no token example: v0.3.1 has no
+  builtin token program, so no token schedule exists on that chain. The
+  schedules of the run of 2 Oct 2026 (`testnet4-*`, erased by the reset of 12
+  Oct) stay in the app tests as recorded fixtures, token escrow included.
 - **A schedule** shows the claimable amount, status chips, a claimed /
   claimable / locked bar, the vesting curve (or one bar per milestone) with
   the start, the cliff, the end, each claim, a cancellation and a marker for
@@ -193,8 +194,8 @@ app/build-tests/chain_test app/tests/fixtures          # offline: 89 checks
 app/build-tests/chain_test app/tests/fixtures --live   # also asks the public testnet
 export QT_QPA_PLATFORM=offscreen QT_QUICK_CONTROLS_STYLE=Basic
 app/build-tests/qml_host app/src/qml/Main.qml 1500 950 shot.png --offline              # view + sheet, 22 checks
-app/build-tests/qml_host app/src/qml/Main.qml 1500 950 shot.png testnet4-lin --sheet   # the same on the testnet
-app/build-tests/qml_host app/src/qml/Main.qml 1500 950 - testnet4-lin --walkthrough /tmp/frames
+app/build-tests/qml_host app/src/qml/Main.qml 1500 950 shot.png testnet7-lin --sheet   # the same on the testnet
+app/build-tests/qml_host app/src/qml/Main.qml 1500 950 - testnet7-lin --walkthrough /tmp/frames
 ```
 
 [`app/tests/chain_test.cpp`](tests/chain_test.cpp) checks the addresses against the
@@ -221,7 +222,7 @@ of a schedule and of both paths of the sheet, for the demo film:
 
 Verified in Basecamp 0.3.0 on macOS with a throwaway user directory, against
 the public testnet: the examples load, typing an id and pressing Return opens
-it (testnet4-lin, testnet4-mil), a batch id lists its eight schedules, a
+it (testnet4-lin, testnet4-mil, before the reset), a batch id lists its eight schedules, a
 beneficiary's account lists the schedules it has a role in, Settings opens,
 refuses a bad URL and saves a good one to the profile's `module_data`, and
 Basecamp's narrowest window gives one pane. Copy (the view's clipboard) and

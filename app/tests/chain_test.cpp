@@ -117,35 +117,36 @@ int main(int argc, char** argv) {
         return failures ? 1 : 0;
     }
 
-    // Live: the same questions to the public testnet.
+    // Live: the same questions to the public testnet, on the schedules of the
+    // run of 14 Oct 2026 (evidence/v03/testnet.tsv), all past their end.
     Chain c;
     c.rpc = "https://testnet.lez.logos.co";
     c.explorer = "https://explorer.testnet.lez.logos.co";
     c.program = prog;
     int pending = 4;
     auto fin = [&]() { if (--pending == 0) { std::printf("%d checks, %d failed\n", checks, failures); app.exit(failures ? 1 : 0); } };
-    c.lookup("testnet4-lin", [&](const QJsonObject& o) {
+    c.lookup("testnet7-lin", [&](const QJsonObject& o) {
         const QJsonObject s = o.value("schedule").toObject();
-        eq(o.value("kind").toString(), "schedule", "live lookup testnet4-lin");
-        eq(s.value("claimed").toString(), "60", "live claimed");
-        eq(s.value("escrowHeld").toString(), "540", "live escrow");
-        std::printf("live testnet4-lin: claimable %s, escrow %s, clock %.0f\n", qPrintable(s.value("claimable").toString()),
+        eq(o.value("kind").toString(), "schedule", "live lookup testnet7-lin");
+        eq(s.value("claimed").toString(), "260", "live claimed");
+        eq(s.value("escrowHeld").toString(), "340", "live escrow");
+        std::printf("live testnet7-lin: claimable %s, escrow %s, clock %.0f\n", qPrintable(s.value("claimable").toString()),
                     qPrintable(s.value("escrowHeld").toString()), s.value("now").toDouble());
         fin();
     });
-    c.lookup("testnet4-batch8", [&](const QJsonObject& o) {
+    c.lookup("testnet7-batch8", [&](const QJsonObject& o) {
         eq(o.value("kind").toString(), "list", "live batch");
         eq(QString::number(o.value("count").toInt()), "8", "live batch count");
-        eq(o.value("claimable").toString(), "4221", "live batch claimable");
+        eq(o.value("claimable").toString(), "4223", "live batch claimable");
         fin();
     });
-    c.lookup("2xub3k7XNpfsPk44Gt52dZtadG4zXrqqdPKKgjFZuKfn", [&](const QJsonObject& o) {
+    c.lookup("FAo5e4a1LFPzksErSJUX6Jtg6BV7iqm4snD8c9deXpSV", [&](const QJsonObject& o) {
         eq(o.value("kind").toString(), "list", "live account search");
         std::printf("live account search: %s\n", qPrintable(o.value("subtitle").toString()));
-        check(o.value("items").toArray().size() >= 8, "the beneficiary has at least the examples");
+        check(o.value("items").toArray().size() >= 6, "the beneficiary has at least the six examples it is the beneficiary of");
         fin();
     });
-    c.activity(scheduleAccount(prog, idBytes("testnet4-lin")), [&](const QJsonObject& o) {
+    c.activity(scheduleAccount(prog, idBytes("testnet7-lin")), [&](const QJsonObject& o) {
         check(o.value("consistent").toBool(), "live activity replay is consistent: " + o.value("note").toString());
         fin();
     });

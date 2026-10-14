@@ -509,14 +509,17 @@ QJsonObject replayActivity(const QJsonArray& txs, const QByteArray& program, con
 
 const QList<Example>& examples() {
     static const QList<Example> list{
-        {"testnet4-lin", "", "Linear, 60 of 600 claimed"},
-        {"testnet4-nc", "", "Made non-cancelable"},
-        {"testnet4-mil", "", "Milestones, two of four signalled"},
-        {"testnet4-tok", "", "Token escrow, cancelled"},
-        {"testnet4-auth", "", "Cancelled by a nominated authority"},
-        {"testnet4-tr", "", "Transferred to a new beneficiary"},
-        {"testnet4-priv", "", "Claimed into a shielded account"},
-        {"testnet4-batch8", "batch", "Eight schedules over one escrow"},
+        // The run of 14 Oct 2026, after the testnet's reset to v0.3.1; every
+        // one is past its end, so these states no longer change. v0.3.1 has no
+        // builtin token program, so no token schedule exists there.
+        {"testnet7-lin", "", "Linear, 260 of 600 claimed"},
+        {"testnet7-can", "", "The unvested part refunded"},
+        {"testnet7-nc", "", "Made non-cancelable"},
+        {"testnet7-mil", "", "Milestones, two of four signalled"},
+        {"testnet7-auth", "", "Cancelled by a nominated authority"},
+        {"testnet7-tr", "", "Transferred to a new beneficiary"},
+        {"testnet7-priv", "", "Claimed into a shielded account"},
+        {"testnet7-batch8", "batch", "Eight schedules over one escrow"},
     };
     return list;
 }

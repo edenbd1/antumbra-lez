@@ -58,7 +58,7 @@ workflow against the live testnet. Design note: [D-36](docs/DECISIONS.md).
 
 <img src="app/design/icon-256.png" width="64" alt="Antumbra Vesting">
 
-A Basecamp 0.3.0 app ([`app/`](app/), version 0.4.1) to look up a schedule on
+A Basecamp 0.3.0 app ([`app/`](app/), version 0.4.2) to look up a schedule on
 the public testnet by its id, its batch or an account, and see what the chain
 holds: what is claimable now against the chain's clock, the vesting curve, the
 escrow's real balance, the accounts, and every transaction on the schedule
