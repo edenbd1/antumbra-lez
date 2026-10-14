@@ -335,8 +335,30 @@ impl Ctx {
         let program = self.program()?;
         let before = self.schedule_shard(&watch).await?;
         let data = Program::serialize_instruction(ix.clone())?;
-        let sent = self.wallet().send_pub_tx_paid_by(mentions, data, program, self.payer).await;
-        self.report(op, sent.map_err(|e| anyhow!("{e:?}")), &watch, before).await
+        // The public testnet drops transactions: one not included within three
+        // minutes is sent again, up to three attempts. Each attempt is signed
+        // with the payer's nonce as the chain has it, so while an earlier one is
+        // only late they share a nonce and at most one lands; every earlier
+        // attempt is looked for before the next is sent.
+        let copy = |m: &[AccountMention]| -> Vec<AccountMention> {
+            m.iter().map(|a| AccountMention { identity: a.identity.clone(), program_account_id: a.program_account_id }).collect()
+        };
+        let mut hashes = vec![];
+        for attempt in 1..=3 {
+            match self.wallet().send_pub_tx_paid_by(copy(&mentions), data.clone(), program, self.payer).await {
+                Ok(h) => hashes.push(h),
+                Err(e) if hashes.is_empty() => return self.report(op, Err(anyhow!("{e:?}")), &watch, before).await,
+                Err(e) => eprintln!("{op}: attempt {attempt} not sent: {e:?}"),
+            }
+            for (i, h) in hashes.iter().enumerate() {
+                let wait = if i + 1 == hashes.len() { 180 } else { 5 };
+                if let Ok(Ok((_, block))) = tokio::time::timeout(Duration::from_secs(wait), self.wallet().poll_transaction(*h)).await {
+                    return self.report_found(op, *h, Some(block), &watch, before).await;
+                }
+            }
+            eprintln!("{op}: attempt {attempt} not included yet");
+        }
+        self.report_found(op, *hashes.last().expect("one attempt was sent"), None, &watch, before).await
     }
 
     async fn report(&self, op: &str, sent: Result<common::HashType>, watch: &[u8; 32], before: Vec<u8>) -> Result<()> {
@@ -355,6 +377,10 @@ impl Ctx {
             Ok(Ok((_, block))) => Some(block),
             _ => None,
         };
+        self.report_found(op, hash, block, watch, before).await
+    }
+
+    async fn report_found(&self, op: &str, hash: common::HashType, block: Option<u64>, watch: &[u8; 32], before: Vec<u8>) -> Result<()> {
         let after = self.schedule_shard(watch).await?;
         let verdict = match block {
             None => "not-included",
