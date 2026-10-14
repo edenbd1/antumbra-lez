@@ -138,6 +138,14 @@ token), cancellation with refund, milestones, transfer, non-cancelable, the
 nominated authority, a batch, and the batch ceiling. The private claims prove
 locally and take minutes each. Rerunning on the same chain needs a new `TAG`.
 
+On the current testnet (sequencer v0.3.1), run `SECTIONS="1 2 4 5 6 7 8 9 10"`:
+v0.3.1 removed the builtin token program, so section 3 and the private token
+claim of section 8 have no token to use there. The testnet drops some
+transactions and includes others late; the CLI sends a dropped one again with
+the same payer nonce and records every attempt (`# attempts` lines), and the
+run re-reads every block at its end (`scripts/reresolve.py`). A single section
+can be rerun alone with its own `TAG` and `OUT`, as `testnet-section1.tsv` was.
+
 ## 5. Verify and cite
 
 ```bash

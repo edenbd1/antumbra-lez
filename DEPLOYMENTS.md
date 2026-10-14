@@ -4,48 +4,61 @@
 
 `antumbra_vesting` runs on the public LEZ testnet v0.3
 (`https://testnet.lez.logos.co`), ported from v0.2.4
-([`docs/v03-port-plan.md`](docs/v03-port-plan.md)) and driven through its whole
-lifecycle there on 2026-10-02. The design decisions behind it, and the v0.2.4 ones
-they replaced, are logged in [`docs/DECISIONS.md`](docs/DECISIONS.md).
+([`docs/v03-port-plan.md`](docs/v03-port-plan.md)). The testnet was reset and
+moved to sequencer v0.3.1 on 2026-10-12; the program was redeployed on
+2026-10-14 at the **same program id** (the deploying wallet keeps the header
+and segment accounts) and driven through its lifecycle again the same day. The
+design decisions behind it, and the v0.2.4 ones they replaced, are logged in
+[`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 | | v0.3 |
 |---|---|
 | Program (header account) | `FCrja8g2ZKvxZwNZchdppKWQCDxPNUHxnEMidrmqrt6X` |
 | ImageID | `72d5cdc05004a9502be72239829071982237638b49b8fe7d1b45fd7371a425f4`, read back from the header's `program_loader` record |
-| Source | `programs/vesting/`, LEZ `v0.3.0` (`db66590a`) |
+| Source | `programs/vesting/`, LEZ `v0.3.0` (`db66590a`); run against sequencer v0.3.1 (`1a003bfb`), whose block format the CLI patches in (`cli/vendor/lez-common`) |
 | Artifact | `artifacts/programs/v0.3/antumbra_vesting.bin`, RISC Zero Docker builder `r0.1.91.1`; CI rebuilds it from source and compares |
-| Deploy | [`ca945d54…432fd03d`](https://explorer.testnet.lez.logos.co/transaction/ca945d54612af5d18bbd0f6dc7c7a4c034aaf6c06511509984a06db0432fd03d), [`137e09c3…3f15a9f1`](https://explorer.testnet.lez.logos.co/transaction/137e09c348b8a0de6b89bf9a1372eb12d67efbade49944b0aab35ebc3f15a9f1), [`2aa46df7…1b9f6b9b`](https://explorer.testnet.lez.logos.co/transaction/2aa46df7c47ed958c400b15984947e4f1d24609884db0af1246382771b9f6b9b), blocks 743, 747 and 749 |
-| Testnet run | 27 applied, 14 refused on chain as required, 20 state checks; manifest [`evidence/v03/testnet.tsv`](evidence/v03/testnet.tsv), transcript [`evidence/v03/testnet-transcript.txt`](evidence/v03/testnet-transcript.txt) |
-| Re-checked | `./scripts/verify-onchain.sh --manifest evidence/v03/testnet.tsv --rpc https://testnet.lez.logos.co`: 66 checks pass, 0 fail ([output](evidence/v03/testnet-verify.txt)) |
+| Testnet run | sections 1, 2 and 4 to 10 of `scripts/e2e-v03.sh`: 21 applied, 15 refused on chain as required, 14 state checks; manifest [`evidence/v03/testnet.tsv`](evidence/v03/testnet.tsv), transcript [`evidence/v03/testnet-transcript.txt`](evidence/v03/testnet-transcript.txt) |
+| Section 1, rerun alone | 2 applied, 3 refused, 5 state checks, 0 failures; manifest [`evidence/v03/testnet-section1.tsv`](evidence/v03/testnet-section1.tsv), transcript [`evidence/v03/testnet-section1-transcript.txt`](evidence/v03/testnet-section1-transcript.txt) |
+| Re-checked | `./scripts/verify-onchain.sh --manifest evidence/v03/testnet.tsv --rpc https://testnet.lez.logos.co`: 57 checks pass, 0 fail ([output](evidence/v03/testnet-verify.txt)); the same on `testnet-section1.tsv`: 9 checks pass, 0 fail ([output](evidence/v03/testnet-section1-verify.txt)) |
 
 Each refusal is a transaction the program reverted, included in a block and
 charged, with no effect on state; the run reads the state back around every
 step, and the verifier compares the final state of every account it touched.
-Two manifest rows were corrected from the chain after the run, as noted at the
-top of the manifest: the CLI had stopped polling before one transaction was
-included, and had recorded another one block early.
+
+Two things differ from the run on the earlier chain. **Section 3, the token
+escrow, cannot run on this testnet**: v0.3.1 removed the builtin token program,
+so there is no token to escrow; the token paths are exercised on a local
+sequencer (`evidence/v03/local-e2e.tsv`) and through the committed binary in
+`executor-tests`. And **the full run reports one failure that is not one**: its
+first transaction, `create-linear`, was recorded `not-included` because that
+run's CLI kept only the hash of its last attempt, while an earlier attempt is
+the one the sequencer included; the section's own checks need it applied
+(escrow funded exactly 600, `claim-linear` applied). The CLI now records every
+attempt, and section 1 was rerun alone with it, clean.
+
+The testnet's block explorer had indexed blocks only up to about 7,585 on
+2026-10-14, while these transactions are in blocks 10,345 to 10,811, so the
+links below resolve once it catches up; the verifier asks the sequencer
+directly and does not depend on it.
 
 | Step | Transaction | Block |
 |---|---|---|
-| deploy (segments and header) | [`ca945d54…432fd03d`](https://explorer.testnet.lez.logos.co/transaction/ca945d54612af5d18bbd0f6dc7c7a4c034aaf6c06511509984a06db0432fd03d) | 743, 747, 749 |
-| create a linear native schedule, funded in the same transaction | [`b18bdbfb…bedfa7b8`](https://explorer.testnet.lez.logos.co/transaction/b18bdbfbd8f9e9e5a2dc1aa0458a1a3b4193aaa3e4784951b9fa1083bedfa7b8) | 2091 |
-| claim one unit more than vested: refused | [`8aca5fca…e99cef30`](https://explorer.testnet.lez.logos.co/transaction/8aca5fca741f1100fae512b20ea7625f6bc2abf57aff5a045050f75be99cef30) | 2093 |
-| claim exactly what has vested | [`8c0695f0…23c7fa25`](https://explorer.testnet.lez.logos.co/transaction/8c0695f04d1b768aeea137726f21da226da3ad61db72dea65dde0fb423c7fa25) | 2097 |
-| cancel: the unvested part goes home, the vested part stays claimable | [`28e4fc8d…ff811978`](https://explorer.testnet.lez.logos.co/transaction/28e4fc8d2c1498d97185427297b73e4bc38527cac2e94c23aed8f3b5ff811978) | 2106 |
-| create a schedule escrowed in a real token | [`7372f532…8eb2f28f`](https://explorer.testnet.lez.logos.co/transaction/7372f532867f64d43353f30030bcac99cab4b0b7949c044ca80957ae8eb2f28f) | 2115 |
-| claim the token schedule | [`3692379b…79bfe80d`](https://explorer.testnet.lez.logos.co/transaction/3692379b7cd39c7ee106386d0027eab48e2314af9fb29f02f228162979bfe80d) | 2117 |
-| milestones: a nominated authority signals, the holder claims two of four tranches | [`8c1d28a4…bdd62449`](https://explorer.testnet.lez.logos.co/transaction/8c1d28a415ab66621b67fa128e3bf959e20f40d95d4c0fa6d9ef5862bdd62449) | 2129 |
-| transfer a position; the new holder claims it | [`e5043f5c…2ce5575d`](https://explorer.testnet.lez.logos.co/transaction/e5043f5ce169fceeebbccbd2a1ea626a636ba1219b276e8ffaec72d92ce5575d) | 2141 |
-| make a schedule non-cancelable (one way) | [`f422792d…42af7400`](https://explorer.testnet.lez.logos.co/transaction/f422792d986f8a3f1220c7ae565f54d483fe1975feeceba09e42d31c42af7400) | 2147 |
-| cancel by a nominated cancel authority | [`df0ced4f…e284e5c7`](https://explorer.testnet.lez.logos.co/transaction/df0ced4fd401a8ac89c92bd6d55086cb35cce7526e995eccf454692ae284e5c7) | 2153 |
-| one transaction funds a batch of 8 schedules | [`18407397…740482f7`](https://explorer.testnet.lez.logos.co/transaction/18407397d10cedf5860fb8af877a3c1fb2c4b6d68dbd7cf98f0ba8bc740482f7) | 2155 |
-| private claim of native balance into a shielded account | [`d7675ca0…21a94098`](https://explorer.testnet.lez.logos.co/transaction/d7675ca003ddbbfff6f53c22fcdca243be9a1b84c31f91ce4f75158521a94098) | 2171 |
-| private claim of a token into a shielded account | [`e0324810…b6c5148a`](https://explorer.testnet.lez.logos.co/transaction/e03248103f663d946dab8017493bf2e77108f5fde07baacb18cd68e6b6c5148a) | 2183 |
-| batch of 450 schedules in one transaction, under the 10M gas cap | [`1c66b966…c8819e6c`](https://explorer.testnet.lez.logos.co/transaction/1c66b96607298ac9e44c2a4b4e6645f4793c687fe720026d42c4c55cc8819e6c) | 2186 |
-| batch of 451: refused | [`5e53b5c9…5a46c416`](https://explorer.testnet.lez.logos.co/transaction/5e53b5c9e33068f70ecd92c244a9b712937bd5d898dbc6ee2b3f55b45a46c416) | 2189 |
-| a claim dated after the chain's clock: refused | [`bab0c0fc…2a36e839`](https://explorer.testnet.lez.logos.co/transaction/bab0c0fc211abc4dc27071d95578756341cc38a73aad649dce0688232a36e839) | 2193 |
+| create a linear native schedule, funded in the same transaction (section 1 rerun) | [`729fea51…f15b1344`](https://explorer.testnet.lez.logos.co/transaction/729fea5133b1a9da3fba715caf3138a6c0cc4a411a99c2d237d4fb57f15b1344) | 10768 |
+| claim one unit more than vested: refused (section 1 rerun) | [`baacfe81…84772f93`](https://explorer.testnet.lez.logos.co/transaction/baacfe818edc08130166c7a74b640925afbf8166abd59c9a1924911d84772f93) | 10774 |
+| claim exactly what has vested (section 1 rerun) | [`1b5d3a16…a82e9443`](https://explorer.testnet.lez.logos.co/transaction/1b5d3a16b5af3d53946f68c572e6534e400e4d08b24237b69de094a1a82e9443) | 10799 |
+| cancel: the unvested part goes home, the vested part stays claimable | [`b0bc8b50…38aaae4b`](https://explorer.testnet.lez.logos.co/transaction/b0bc8b50a003363312362bae9863340177d37fd8252495d4d825b63238aaae4b) | 10369 |
+| the vested part, claimed after the cancellation | [`092130ae…1f77ffef`](https://explorer.testnet.lez.logos.co/transaction/092130ae6dc9a5d32cb8e51f0642a58771970643d78f8702ff0de40c1f77ffef) | 10440 |
+| milestones: a nominated authority signals, the holder claims two of four tranches | [`f5516c7f…db78d7b7`](https://explorer.testnet.lez.logos.co/transaction/f5516c7fd4a08763b6be9491b1948469018ef7a50660d5647056e0bedb78d7b7) | 10517 |
+| transfer a position; the new holder claims it | [`7e4f08af…62f3389b`](https://explorer.testnet.lez.logos.co/transaction/7e4f08af8994bd765fb9d2e726346871ac8098efe3380a3b593b612862f3389b) | 10589 |
+| make a schedule non-cancelable (one way) | [`778d0dbf…e27b7a41`](https://explorer.testnet.lez.logos.co/transaction/778d0dbf19bc17d6a3edadc8712bf4784b59c16953529bd7d6876002e27b7a41) | 10607 |
+| cancel by a nominated cancel authority | [`5c5f8edd…7db239fa`](https://explorer.testnet.lez.logos.co/transaction/5c5f8eddcc44d75e8f830aef5e56bb9ad2b3f271876e23a9122877647db239fa) | 10626 |
+| one transaction funds a batch of 8 schedules | [`c3483b09…91d356e6`](https://explorer.testnet.lez.logos.co/transaction/c3483b09d55514ac199c57cb07e00ab1c135aaeb5867e75d26cada6b91d356e6) | 10629 |
+| private claim of native balance into a shielded account | [`268e4463…9622c95a`](https://explorer.testnet.lez.logos.co/transaction/268e44635797b075df8dc073396a1a9a7b1ba963ae4a967d1b230d1d9622c95a) | 10660 |
+| batch of 450 schedules in one transaction, under the 10M gas cap | [`8d553905…c4d56ec4`](https://explorer.testnet.lez.logos.co/transaction/8d553905f12a9a655fcef5795e1cf8b2d5eb38c1fe3197ab22b07705c4d56ec4) | 10674 |
+| batch of 451: refused | [`e8030e3a…9c27295b`](https://explorer.testnet.lez.logos.co/transaction/e8030e3ae7d2beedeb521b811f76742c22c95137fa25317a270411dd9c27295b) | 10683 |
+| a claim dated after the chain's clock: refused | [`c010024b…675ff5fd`](https://explorer.testnet.lez.logos.co/transaction/c010024b329855719fddeab6600ffd928a93213a1cf64367b8054240675ff5fd) | 10698 |
 
-The same run on a local v0.3.0 sequencer is in [`evidence/v03/`](evidence/v03/)
+The same lifecycle on a local v0.3 sequencer is in [`evidence/v03/`](evidence/v03/)
 (`local-e2e.tsv`); the deploy runbook is [`docs/deploy-v03.md`](docs/deploy-v03.md).
 
 Everything below this section is **historical**: the v0.2.4 deployments and

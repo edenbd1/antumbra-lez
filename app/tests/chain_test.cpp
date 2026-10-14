@@ -8,7 +8,7 @@
 // Offline, every check runs against bytes saved from the public testnet v0.3
 // (tests/fixtures): the schedules of the end-to-end run of 2 Oct 2026 and the
 // explorer's transactions for them. The verdicts the replay gives must be the
-// ones the run's manifest (evidence/v03/testnet.tsv) recorded for each step.
+// ones the run's manifest (evidence/v03/testnet-2026-10-02.tsv) recorded for each step.
 #include <QCoreApplication>
 #include <QFile>
 #include <QJsonDocument>

@@ -19,9 +19,13 @@ the beneficiary's wallet.
   an account whose schedules are wanted. Typing works: this is a `ui_qml`
   module, not the legacy widget the v0.2 panel was.
 - **Examples** are the schedules the end-to-end run of 2 Oct 2026 created on
-  the public testnet ([`evidence/v03/testnet.tsv`](../evidence/v03/testnet.tsv)),
-  read live: linear, milestones, a token escrow, cancelled, transferred,
-  non-cancelable, claimed privately, and a batch of eight.
+  the public testnet (`testnet4-*`): linear, milestones, a token escrow,
+  cancelled, transferred, non-cancelable, claimed privately, and a batch of
+  eight. The testnet's reset of 12 Oct erased them, so the built-in examples
+  now read empty until the package is rebuilt; the app tests keep them as
+  recorded fixtures. Any schedule of the current run
+  ([`evidence/v03/testnet.tsv`](../evidence/v03/testnet.tsv)) can be typed in
+  the field, `testnet7-lin` or `testnet7-batch8` for example, and is read live.
 - **A schedule** shows the claimable amount, status chips, a claimed /
   claimable / locked bar, the vesting curve (or one bar per milestone) with
   the start, the cliff, the end, each claim, a cancellation and a marker for

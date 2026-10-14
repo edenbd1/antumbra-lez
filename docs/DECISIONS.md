@@ -102,9 +102,12 @@ exact-refund check in
 (refund check at
 [programs/vesting/core/src/lib.rs:894](../programs/vesting/core/src/lib.rs#L894)).
 Proven by the Kani harnesses `everything_vests_by_the_end` and
-`cancel_splits_the_total_exactly` (D-27), and on testnet by the manifest checks
-"refund is exactly the unvested part" and "token refund plus escrow plus
-claimed is the total" in [`evidence/v03/testnet.tsv`](../evidence/v03/testnet.tsv).
+`cancel_splits_the_total_exactly` (D-27), on testnet by the manifest check
+"refund is exactly the unvested part" in
+[`evidence/v03/testnet.tsv`](../evidence/v03/testnet.tsv), and for a token by
+"token refund plus escrow plus claimed is the total" in
+[`evidence/v03/local-e2e.tsv`](../evidence/v03/local-e2e.tsv) (the v0.3.1
+testnet has no builtin token program).
 
 ## D-02: No cached vested amount: `vested_at` is a pure function
 
@@ -875,16 +878,22 @@ resolve.
 lines do. Reading hashes from a manifest instead of from the script keeps the
 checker the same across runs and chains.
 
-**Trade-offs.** Each refusal costs a fee on a chain with real fees (D-31). The
-manifest records two rows corrected from the chain after the run, as noted at
-its top.
+**Trade-offs.** Each refusal costs a fee on a chain with real fees (D-31). A
+testnet that drops some transactions and includes others late needs the
+client's help: the CLI sends a dropped transaction again with the same payer
+nonce, records every attempt, and the run re-reads every block at its end. The
+current manifest's one failure, `create-linear`, predates attempt recording:
+an earlier attempt landed, and section 1 was rerun alone, clean
+([`evidence/v03/testnet-section1.tsv`](../evidence/v03/testnet-section1.tsv)).
 
 **Where.** [`scripts/verify-onchain.sh`](../scripts/verify-onchain.sh),
 [`scripts/e2e-v03.sh`](../scripts/e2e-v03.sh),
 [`evidence/v03/testnet.tsv`](../evidence/v03/testnet.tsv),
-[`evidence/v03/testnet-verify.txt`](../evidence/v03/testnet-verify.txt) (66
-checks, 0 failures), [`evidence/v03/README.md`](../evidence/v03/README.md) for
-the local run.
+[`evidence/v03/testnet-verify.txt`](../evidence/v03/testnet-verify.txt) (57
+checks, 0 failures),
+[`evidence/v03/testnet-section1-verify.txt`](../evidence/v03/testnet-section1-verify.txt)
+(9 checks, 0 failures), [`evidence/v03/README.md`](../evidence/v03/README.md)
+for the local run.
 
 ## D-31: Fees: a named payer, `FUND_EACH`, and declared gas sized to the instruction
 
@@ -1100,7 +1109,7 @@ four that need none. `scripts/e2e-v03.sh` sets `ANTUMBRA_RPC` to its own
 **Rationale.** The typed client decodes accounts with the same types the
 wallet uses, so the read path cannot drift from the write path. Defaulting the
 program and the node to the public deployment makes the reviewer's command
-`show testnet4-lin`, with nothing to configure.
+`show testnet7-lin`, with nothing to configure.
 
 **Trade-offs.** A default program means a command run against a local
 sequencer without `ANTUMBRA_PROGRAM` reads the testnet header's PDAs, which
@@ -1210,7 +1219,7 @@ check so a dry run walks the whole path.
 **Rationale.** The chain decides when the evidence can exist, not a person
 watching it. Re-driving the whole run for one shape would spend fees on forty
 transactions already on chain. A separate manifest keeps
-`evidence/v03/testnet.tsv` and its 66 checks exactly as cited.
+`evidence/v03/testnet.tsv` and its 57 checks exactly as cited.
 
 **Trade-offs.** The claim after the cliff happens whenever the chain's clock
 passes it, so the amount is the lump plus whatever accrued until then, checked

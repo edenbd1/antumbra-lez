@@ -9,9 +9,9 @@ driven end to end on the public testnet v0.3.
 |---|---|
 | Program (header account) | `FCrja8g2ZKvxZwNZchdppKWQCDxPNUHxnEMidrmqrt6X` |
 | ImageID | `72d5cdc05004a9502be72239829071982237638b49b8fe7d1b45fd7371a425f4`, read back from the header's loader record |
-| On chain | linear and milestone schedules (cliff covered by an executor test; [`scripts/cliff-when-live.sh`](scripts/cliff-when-live.sh) puts one on chain as soon as the testnet, stalled at block 13,982 since 7 October, moves again), cancellation with refund, transferable and non-cancelable positions, nominated authorities, native and token escrow, private claims of native balance and of a token into shielded accounts, a batch of 450 schedules in one transaction (451 refused under the 10M gas cap) |
+| On chain | redeployed at the same program id after the 2026-10-12 reset to sequencer v0.3.1, and driven again on 2026-10-14: linear and milestone schedules (cliff covered by an executor test; [`scripts/cliff-when-live.sh`](scripts/cliff-when-live.sh) puts one on chain), cancellation with refund, transferable and non-cancelable positions, nominated authorities, native escrow, a private claim of native balance into a shielded account, a batch of 450 schedules in one transaction (451 refused under the 10M gas cap). Token escrow and private token claims run on a local sequencer and in `executor-tests`: v0.3.1 removed the testnet's builtin token program |
 | Every transaction | [`DEPLOYMENTS.md`](DEPLOYMENTS.md), manifest and transcript in [`evidence/v03/`](evidence/v03/) |
-| Re-check it yourself | `./scripts/verify-onchain.sh --manifest evidence/v03/testnet.tsv --rpc https://testnet.lez.logos.co` (66 checks) |
+| Re-check it yourself | `./scripts/verify-onchain.sh --manifest evidence/v03/testnet.tsv --rpc https://testnet.lez.logos.co` (57 checks), and the same on `evidence/v03/testnet-section1.tsv` (9 checks) |
 | Reproducible build | CI rebuilds the guest from source in RISC Zero's pinned Docker builder and compares it with the committed binary |
 | Source | [`programs/vesting/`](programs/vesting/) (LEZ `v0.3.0`, `db66590a`), port notes in [`docs/v03-port-plan.md`](docs/v03-port-plan.md), requirement tests in [`executor-tests/`](executor-tests/), CLI in [`cli/`](cli/), Basecamp module in [`app/`](app/), runbook in [`docs/deploy-v03.md`](docs/deploy-v03.md) |
 | Design decisions | [`docs/DECISIONS.md`](docs/DECISIONS.md): each major decision with its context, options, rationale and trade-offs, v0.2.4 ones kept and marked superseded |
@@ -32,21 +32,21 @@ defaults to the deployed header. Only the commands that sign open a wallet.
 git clone https://github.com/edenbd1/antumbra-lez && cd antumbra-lez
 # Rust 1.98.1, as LEZ v0.3.0; on Linux also libpcsclite-dev, libclang-dev, libssl-dev
 cargo build --release --manifest-path cli/Cargo.toml
-cli/target/release/antumbra-vesting show testnet4-lin
-cli/target/release/antumbra-vesting show --batch-id testnet4-batch8
+cli/target/release/antumbra-vesting show testnet7-lin
+cli/target/release/antumbra-vesting show --batch-id testnet7-batch8
 ```
 
-`show testnet4-lin` prints the decoded schedule against the chain's clock, among
-its fields `"total":"600"`, `"claimed":"60"`, `"vested":"600"` and
-`"claimable":"540"`. `show --batch-id testnet4-batch8` derives each member's id
+`show testnet7-lin` prints the decoded schedule against the chain's clock, among
+its fields `"total":"600"`, `"claimed":"260"`, `"vested":"600"` and
+`"claimable":"340"`. `show --batch-id testnet7-batch8` derives each member's id
 as `sha256(batch ‖ i)`, prints one line per schedule until one is missing, then
 the batch's totals:
 
 ```text
-{"beneficiary":"2xub3k7X…","cancelled_at":0,"claimable":"381","claimed":"219","index":0,…,"total":"600","vested":"600"}
-{"beneficiary":"Ffhdk2bb…","cancelled_at":1790916551492,"claimable":"240","claimed":"0","index":1,…,"total":"600","vested":"240"}
+{"beneficiary":"FAo5e4a1…","cancelled_at":0,"claimable":"370","claimed":"230","index":0,…,"total":"600","vested":"600"}
+{"beneficiary":"8Dphf6DW…","cancelled_at":1791989945862,"claimable":"253","claimed":"0","index":1,…,"total":"600","vested":"253"}
 … six more, 600 claimable each …
-{"batch_id":"746573746e6574342d626174636838…","claimable":"4221","claimed":"219","clock":1791352286660,"holding":"2PGcDdbvicrt4gewMf6BofQBbkEM3XZoRvx6Ve4aDsDW","schedules":8,"total":"4800"}
+{"batch_id":"746573746e6574372d626174636838…","claimable":"4223","claimed":"230","clock":1791992136012,"holding":"6xBhkWiJmtEtVd78WG6GayGKHuBrnwvRDFYCe9m4Sejy","schedules":8,"total":"4800"}
 ```
 
 `scripts/cli-readonly.sh` runs these from an empty `HOME` and checks those
@@ -311,8 +311,9 @@ needs to see it.
 ## Deployed
 
 **LEZ v0.3.** `antumbra_vesting` has been ported to v0.3 and driven end to end on
-a local v0.3.0 sequencer, then deployed on the public testnet v0.3 and driven
-there in full ([`DEPLOYMENTS.md`](DEPLOYMENTS.md), [`evidence/v03/`](evidence/v03/)).
+a local v0.3 sequencer, then deployed on the public testnet v0.3 and driven
+there; after the testnet's reset to v0.3.1 on 2026-10-12 it was redeployed at
+the same program id and driven again ([`DEPLOYMENTS.md`](DEPLOYMENTS.md), [`evidence/v03/`](evidence/v03/)).
 `./scripts/verify-onchain.sh --manifest evidence/v03/testnet.tsv --rpc https://testnet.lez.logos.co`
 re-checks the run from its manifest.
 
