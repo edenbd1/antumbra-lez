@@ -5,7 +5,8 @@ committed `artifacts/programs/v0.3/antumbra_vesting.bin` deployed through
 `program_loader` at header `EAkwPsUMwyKivN6KGkLAMUDMaZM929QiR9o7X3Z342tR`, ImageID
 `72d5cdc05004a9502be72239829071982237638b49b8fe7d1b45fd7371a425f4`, and
 `scripts/e2e-v03.sh` driving the whole lifecycle through the `antumbra-vesting`
-CLI. Nothing here was sent to the public testnet.
+CLI. That local run is described first; the public testnet runs are listed at
+the end.
 
 **Result: 27 transactions applied, 15 refused exactly where they must be, 20
 balance and state checks read back from the chain, 0 failures.**
@@ -36,3 +37,11 @@ final-state lines pin down. The fee payer spent 269,211,440 atomic units
 
 Reproduce: see `docs/deploy-v03.md`, with `RPC=http://127.0.0.1:3040` and the
 genesis keys of the debug sequencer configuration.
+
+## The public testnet runs
+
+| Files | Run |
+|---|---|
+| `testnet.tsv`, `testnet-transcript.txt`, `testnet-verify.txt` | 2026-10-14, sequencer v0.3.1, after the 2026-10-12 reset, the program redeployed at the same id: sections 1, 2 and 4 to 10, 21 applied, 15 refused as required, 14 state checks; the verifier: 57 checks pass, 0 fail. Section 3 (token escrow) cannot run there, because v0.3.1 removed the builtin token program. The one failure the transcript reports, `create-linear` recorded `not-included`, is an earlier attempt that landed while the CLI kept only the last attempt's hash (see the note at the end of the manifest) |
+| `testnet-section1.tsv`, `testnet-section1-transcript.txt`, `testnet-section1-verify.txt` | 2026-10-14, section 1 rerun alone with every attempt recorded: 2 applied, 3 refused, 5 state checks, 0 failures; the verifier: 9 checks pass, 0 fail |
+| `testnet-2026-10-02.tsv`, `testnet-2026-10-02-transcript.txt`, `testnet-2026-10-02-verify.txt` | 2026-10-02, sequencer v0.3.0, the first full run (27 applied, 14 refused, 20 state checks, 66 checks pass, 0 fail when it was recorded). Kept as the record: the 2026-10-12 reset erased that chain, so its hashes no longer resolve. The app tests replay its schedules from saved fixtures |

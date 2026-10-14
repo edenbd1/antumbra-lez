@@ -1,0 +1,15 @@
+# run against https://testnet.lez.logos.co, 2026-10-14T15:15:57Z
+# program FCrja8g2ZKvxZwNZchdppKWQCDxPNUHxnEMidrmqrt6X 72d5cdc05004a9502be72239829071982237638b49b8fe7d1b45fd7371a425f4
+# creator FGGesvW4xRtquZtfjTNgjZLaBxw1CUir23VzbVnEad6F payer 9nqn7xA7z54QZPHs8wWn5VzTeXTgbwq8SREr38tVK9aw beneficiary 3uB5LdvQm7NWer6VDj9D6PMriZqipG6csrmkBhXH3NaC authority2 Aje242KtY8EpoB14DUYvtC96yYPsDMKixsq5Dk9kGXkR second 6S65io9sViPK9Lc7nEJ2PmsaoZWLzTqqNEB3BkYPPD6G refund FUCLLwTDrSDqXGm4RN4T9NTiLszsJYPaJXcSZPhMr87v dest AFuxP2ojN5XpvJhHPDAbrGUH57NjeTdDcH2WC4mpnFYE private Gf5MuPcU5GCkHbzMGAGw9ZA9C3AKT8cyd81qqWD4V5uA 5ndVTjExb9ykEuJtM6EsViuKNRwkmLPCvBeqDnLhypQN
+create-linear	applied	applied	10768	729fea5133b1a9da3fba715caf3138a6c0cc4a411a99c2d237d4fb57f15b1344
+# check ok: linear escrow funded exactly = 600
+claim-overclaim	refused	reverted	10774	baacfe818edc08130166c7a74b640925afbf8166abd59c9a1924911d84772f93
+claim-by-creator	refused	reverted	10792	509c0cf1c80885ea66b318c5e3cb0677fd58fbb5fdb4d86fa36fbf3251e6c224
+# check ok: escrow untouched by refusals = 600
+claim-linear	applied	applied	10799	1b5d3a16b5af3d53946f68c572e6534e400e4d08b24237b69de094a1a82e9443
+# check ok: claimed equals floor(600*(t-start)/(end-start)) at the claim's time = 100
+# check ok: destination received the claim = 100
+create-duplicate	refused	reverted	10811	48aeeadd20c641ccc6b7aca9344dd056e69e02fd2951d1a40efdb0da56b0a864
+# check ok: duplicate took no second funding = 500
+# final 63KBiwcsJUZLRetVRtHApViKYjkVuRGJbUbEdcPyaN5N FCrja8g2ZKvxZwNZchdppKWQCDxPNUHxnEMidrmqrt6X 59945c8d6ccf48e756d25f62415b9694e915dffd1e34713a475fa1dd6fc2d2c6
+# final 6T75reH2g3EcZzZH8ipKSEo4AdsAa2H6g1vK2CQUSNW9 11111111111111111111111111111111 d5d2305cf2f2c48681cd8e8ec2b1ca1f21aefd5fe742051326b03eea87b2349f

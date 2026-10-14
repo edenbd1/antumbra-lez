@@ -1,68 +1,59 @@
 antumbra_vesting v0.3 against https://testnet.lez.logos.co, from evidence/v03/testnet.tsv
   ok   program header FCrja8g2ZKvx… names ImageID 72d5cdc05004a950…
-  ok   create-linear: applied, in block 2091
-  ok   claim-overclaim: reverted, in block 2093
-  ok   claim-by-creator: reverted, in block 2095
-  ok   claim-linear: applied, in block 2097
-  ok   create-duplicate: reverted, in block 2099
-  ok   create-cancelable: applied, in block 2101
-  ok   cancel-wrong-refund: reverted, in block 2103
-  ok   cancel-by-beneficiary: reverted, in block 2105
-  ok   cancel: applied, in block 2106
-  ok   cancel-again: reverted, in block 2108
-  ok   claim-after-cancel: applied, in block 2109
-  ok   create-token: applied, in block 2115
-  ok   claim-token: applied, in block 2117
-  ok   cancel-token: applied, in block 2118
-  ok   create-milestones: applied, in block 2120
-  ok   signal-by-creator: reverted, in block 2122
-  ok   signal-0: applied, in block 2123
+  ok   create-linear: not-included, and it does not resolve
+  ok   claim-overclaim: reverted, in block 10345
+  ok   claim-by-creator: reverted, in block 10348
+  ok   claim-linear: applied, in block 10354
+  ok   create-duplicate: reverted, in block 10360
+  ok   create-cancelable: applied, in block 10361
+  ok   cancel-wrong-refund: reverted, in block 10367
+  ok   cancel-by-beneficiary: reverted, in block 10369
+  ok   cancel: applied, in block 10369
+  ok   cancel-again: not-included, and it does not resolve
+  ok   claim-after-cancel: applied, in block 10440
+  ok   create-milestones: applied, in block 10453
+  ok   signal-by-creator: reverted, in block 10465
+  ok   signal-0: applied, in block 10480
   ok   signal-0-again: not-included, and it does not resolve
-  ok   signal-2: applied, in block 2127
-  ok   claim-milestones: applied, in block 2129
-  ok   create-transferable: applied, in block 2131
-  ok   transfer-by-creator: reverted, in block 2133
-  ok   transfer: applied, in block 2137
-  ok   claim-by-old-holder: reverted, in block 2139
-  ok   claim-by-new-holder: applied, in block 2141
-  ok   create-for-nc: applied, in block 2143
-  ok   nc-by-beneficiary: reverted, in block 2145
-  ok   make-non-cancelable: applied, in block 2147
-  ok   cancel-after-nc: reverted, in block 2149
-  ok   create-with-authority: applied, in block 2152
-  ok   cancel-by-creator-not-authority: reverted, in block 2152
-  ok   cancel-by-authority: applied, in block 2153
-  ok   batch-8: applied, in block 2155
-  ok   batch-claim-0: applied, in block 2157
-  ok   batch-cancel-1: applied, in block 2159
-  ok   create-for-private: applied, in block 2161
-  ok   claim-private-native: applied, in block 2171
-  ok   create-token-for-private: applied, in block 2173
-  ok   claim-private-token: applied, in block 2183
-  ok   batch-450: applied, in block 2186
-  ok   batch-451: reverted, in block 2189
-  ok   claim-in-the-future: reverted, in block 2193
-  ok   final state of ERiBqLX9VnL3… shard FCrja8g2… is as the run left it
-  ok   final state of 46jcRC8aGtyL… shard 11111111… is as the run left it
-  ok   final state of 5gwvx6BLNtAp… shard FCrja8g2… is as the run left it
-  ok   final state of 4x3W4L2urwpQ… shard 11111111… is as the run left it
-  ok   final state of 6YMPPGzbiDC5… shard FCrja8g2… is as the run left it
-  ok   final state of bebWKGVViveC… shard AxDdLwqk… is as the run left it
-  ok   final state of 2FDx5GQNuQnc… shard FCrja8g2… is as the run left it
-  ok   final state of Epb5xGY5Vbnx… shard 11111111… is as the run left it
-  ok   final state of 14bv3EJzyh6o… shard FCrja8g2… is as the run left it
-  ok   final state of 6GGZ3fyuGi9t… shard 11111111… is as the run left it
-  ok   final state of EJXG1FPNC8Qd… shard FCrja8g2… is as the run left it
-  ok   final state of Hx7T9fKcgrPj… shard 11111111… is as the run left it
-  ok   final state of 2G1WGxo1AekX… shard FCrja8g2… is as the run left it
-  ok   final state of GJwGqjsD6Wwb… shard 11111111… is as the run left it
-  ok   final state of 14nEdGurTbFW… shard FCrja8g2… is as the run left it
-  ok   final state of 2PGcDdbvicrt… shard 11111111… is as the run left it
-  ok   final state of kpDCawStUGQA… shard FCrja8g2… is as the run left it
-  ok   final state of 2PGcDdbvicrt… shard 11111111… is as the run left it
-  ok   final state of 6rXwQtrAQBdm… shard FCrja8g2… is as the run left it
-  ok   final state of 7YC9ua8aWUgR… shard 11111111… is as the run left it
-  ok   final state of GNFwMGc7FVoe… shard FCrja8g2… is as the run left it
-  ok   final state of 6uEn6VTYUicN… shard AxDdLwqk… is as the run left it
+  ok   signal-2: applied, in block 10511
+  ok   claim-milestones: applied, in block 10517
+  ok   create-transferable: applied, in block 10523
+  ok   transfer-by-creator: reverted, in block 10528
+  ok   transfer: applied, in block 10569
+  ok   claim-by-old-holder: reverted, in block 10582
+  ok   claim-by-new-holder: applied, in block 10589
+  ok   create-for-nc: applied, in block 10595
+  ok   nc-by-beneficiary: reverted, in block 10598
+  ok   make-non-cancelable: applied, in block 10607
+  ok   cancel-after-nc: reverted, in block 10608
+  ok   create-with-authority: applied, in block 10614
+  ok   cancel-by-creator-not-authority: reverted, in block 10620
+  ok   cancel-by-authority: applied, in block 10626
+  ok   batch-8: applied, in block 10629
+  ok   batch-claim-0: applied, in block 10633
+  ok   batch-cancel-1: applied, in block 10640
+  ok   create-for-private: applied, in block 10642
+  ok   claim-private-native: applied, in block 10660
+  ok   batch-450: applied, in block 10674
+  ok   batch-451: reverted, in block 10683
+  ok   claim-in-the-future: reverted, in block 10698
+  ok   final state of GhUB7Ddr9QWB… shard FCrja8g2… is as the run left it
+  ok   final state of 86HpXy88RxmN… shard 11111111… is as the run left it
+  ok   final state of 7o24iv8nfYEd… shard FCrja8g2… is as the run left it
+  ok   final state of 6qxWHbubdGcx… shard 11111111… is as the run left it
+  ok   final state of 8X1KFTzqQncn… shard FCrja8g2… is as the run left it
+  ok   final state of HzoSch2TTd3v… shard 11111111… is as the run left it
+  ok   final state of AcJLZ9kAqRKR… shard FCrja8g2… is as the run left it
+  ok   final state of 4DUYbXeeo9Ta… shard 11111111… is as the run left it
+  ok   final state of AzKWznfFEFCQ… shard FCrja8g2… is as the run left it
+  ok   final state of FJaXSWKKfaVj… shard 11111111… is as the run left it
+  ok   final state of DoSjhwJNvQ71… shard FCrja8g2… is as the run left it
+  ok   final state of DmzRVJNQ1tP1… shard 11111111… is as the run left it
+  ok   final state of 4Vujr1ucsTZu… shard FCrja8g2… is as the run left it
+  ok   final state of 6xBhkWiJmtEt… shard 11111111… is as the run left it
+  ok   final state of JAo8FYRmZiji… shard FCrja8g2… is as the run left it
+  ok   final state of 6xBhkWiJmtEt… shard 11111111… is as the run left it
+  ok   final state of 9uvCLMX2cTfK… shard FCrja8g2… is as the run left it
+  ok   final state of EVLzzmAV3GAC… shard 11111111… is as the run left it
   ok   control: a random hash does not resolve
-66 checks pass, 0 fail (20 state checks recorded during the run)
+57 checks pass, 0 fail (14 state checks recorded during the run)

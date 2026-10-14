@@ -1,0 +1,32 @@
+# run against https://testnet.lez.logos.co, 2026-10-14T15:15:57Z
+# program FCrja8g2ZKvxZwNZchdppKWQCDxPNUHxnEMidrmqrt6X 72d5cdc05004a9502be72239829071982237638b49b8fe7d1b45fd7371a425f4
+  fund 3uB5LdvQm7NWer6VDj9D6PMriZqipG6csrmkBhXH3NaC: Transaction hash is b21ea46995b4825c064e600166c19e651ddcee9c6c0998af4c7aab11d730ba3c
+  fund Aje242KtY8EpoB14DUYvtC96yYPsDMKixsq5Dk9kGXkR: Transaction hash is c398a20bca899dd10185e16b61ff60ef2e534b63cd45cb1167b6697672377538
+  fund 6S65io9sViPK9Lc7nEJ2PmsaoZWLzTqqNEB3BkYPPD6G: Transaction hash is d44101960dd5f4f69dc0c259fb15175a2a8352627f3dd7b7a8f7e72182d5caed
+  fund FUCLLwTDrSDqXGm4RN4T9NTiLszsJYPaJXcSZPhMr87v: Transaction hash is a0e91fa9e89cc458ec70e6c5aa12d9cc1203abd1a147fe022a71e6485bc8cd19
+== 1. linear native: create funded, claim to the unit, refusals
+{"block":10768,"label":"create-linear","op":"create","tx":"729fea5133b1a9da3fba715caf3138a6c0cc4a411a99c2d237d4fb57f15b1344","verdict":"applied"}
+  ok  create-linear: applied
+  ok  linear escrow funded exactly: 600
+{"block":10774,"label":"claim-overclaim","op":"claim","tx":"baacfe818edc08130166c7a74b640925afbf8166abd59c9a1924911d84772f93","verdict":"reverted"}
+  ok  claim-overclaim: reverted
+{"block":10792,"label":"claim-by-creator","op":"claim","tx":"509c0cf1c80885ea66b318c5e3cb0677fd58fbb5fdb4d86fa36fbf3251e6c224","verdict":"reverted"}
+  ok  claim-by-creator: reverted
+  ok  escrow untouched by refusals: 600
+{"block":10799,"label":"claim-linear","op":"claim","tx":"1b5d3a16b5af3d53946f68c572e6534e400e4d08b24237b69de094a1a82e9443","verdict":"applied"}
+  ok  claim-linear: applied
+  ok  claimed equals floor(600*(t-start)/(end-start)) at the claim's time: 100
+  ok  destination received the claim: 100
+{"block":10811,"label":"create-duplicate","op":"create","tx":"48aeeadd20c641ccc6b7aca9344dd056e69e02fd2951d1a40efdb0da56b0a864","verdict":"reverted"}
+  ok  create-duplicate: reverted
+  ok  duplicate took no second funding: 500
+== 2. cancellation: unvested home, vested stays claimable
+== 3. token escrow: create funded in tokens, claim, cancel
+== 4. milestones, signalled once by a nominated authority
+== 5. holder-only transfer; one-way non-cancelable
+== 6. nominated cancel authority
+== 7. batch: one transfer funds N, each schedule moves only its share
+== 8. private claims: native and token into shielded accounts
+== 9. batch ceiling under the 10M gas cap
+== 10. a claim for a time the chain has not reached is never included
+summary: 2 applied, 3 refused as expected, 5 state checks ok, failures=0

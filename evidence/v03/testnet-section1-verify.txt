@@ -1,0 +1,11 @@
+antumbra_vesting v0.3 against https://testnet.lez.logos.co, from evidence/v03/testnet-section1.tsv
+  ok   program header FCrja8g2ZKvx… names ImageID 72d5cdc05004a950…
+  ok   create-linear: applied, in block 10768
+  ok   claim-overclaim: reverted, in block 10774
+  ok   claim-by-creator: reverted, in block 10792
+  ok   claim-linear: applied, in block 10799
+  ok   create-duplicate: reverted, in block 10811
+  ok   final state of 63KBiwcsJUZL… shard FCrja8g2… is as the run left it
+  ok   final state of 6T75reH2g3Ec… shard 11111111… is as the run left it
+  ok   control: a random hash does not resolve
+9 checks pass, 0 fail (5 state checks recorded during the run)
