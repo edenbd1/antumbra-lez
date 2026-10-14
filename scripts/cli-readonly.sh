@@ -4,10 +4,10 @@
 #
 #   scripts/cli-readonly.sh [--rpc URL] [--expect FILE] [--out FILE]
 #
-# Runs image-id, ids, now, `show testnet4-lin` and `show --batch-id
-# testnet4-batch8`, writes their transcript to --out (default
+# Runs image-id, ids, now, `show testnet7-lin` and `show --batch-id
+# testnet7-batch8`, writes their transcript to --out (default
 # /tmp/cli-readonly.txt), and checks what the testnet holds for those two
-# schedules: 540 claimable on testnet4-lin, 8 schedules and 4,221 claimable in
+# schedules: 340 claimable on testnet7-lin, 8 schedules and 4,223 claimable in
 # the batch, the deployed ImageID. It then checks that a command that signs
 # still asks for a wallet, and that nothing was written under HOME. With
 # --expect the transcript must also equal FILE byte for byte, which is how CI
@@ -51,10 +51,10 @@ except Exception: print("?")' "$1" "$2"; }
 
 {
   run image-id
-  run ids --schedule-id testnet4-lin
-  run ids --schedule-id x --batch-id testnet4-batch8
-  run show testnet4-lin
-  run show --batch-id testnet4-batch8
+  run ids --schedule-id testnet7-lin
+  run ids --schedule-id x --batch-id testnet7-batch8
+  run show testnet7-lin
+  run show --batch-id testnet7-batch8
 } > "$OUT"
 
 img="$(run image-id | tail -1)"
@@ -63,17 +63,17 @@ img="$(run image-id | tail -1)"
 now="$(run now | tail -1)"
 [[ "$now" =~ ^[0-9]{13}$ ]] && ok "now reads the chain clock ($now ms)" || bad "now: $now"
 
-lin="$(run show testnet4-lin | tail -1)"
-[ "$(field "$lin" claimable)" = 540 ] && [ "$(field "$lin" claimed)" = 60 ] && [ "$(field "$lin" total)" = 600 ] \
-  && ok "show testnet4-lin: 600 total, 60 claimed, 540 claimable" || bad "show testnet4-lin: $lin"
+lin="$(run show testnet7-lin | tail -1)"
+[ "$(field "$lin" claimable)" = 340 ] && [ "$(field "$lin" claimed)" = 260 ] && [ "$(field "$lin" total)" = 600 ] \
+  && ok "show testnet7-lin: 600 total, 260 claimed, 340 claimable" || bad "show testnet7-lin: $lin"
 
-batch="$(run show --batch-id testnet4-batch8)"
-[ "$(field "$batch" schedules)" = 8 ] && [ "$(field "$batch" claimable)" = 4221 ] && [ "$(field "$batch" total)" = 4800 ] \
-  && ok "show --batch-id testnet4-batch8: 8 schedules, 4800 total, 4221 claimable" || bad "show --batch-id: $(echo "$batch" | tail -1)"
+batch="$(run show --batch-id testnet7-batch8)"
+[ "$(field "$batch" schedules)" = 8 ] && [ "$(field "$batch" claimable)" = 4223 ] && [ "$(field "$batch" total)" = 4800 ] \
+  && ok "show --batch-id testnet7-batch8: 8 schedules, 4800 total, 4223 claimable" || bad "show --batch-id: $(echo "$batch" | tail -1)"
 members="$(echo "$batch" | grep -c '"index"')"
 [ "$members" = 8 ] && ok "one line per member" || bad "$members member lines"
 
-signs="$(run claim --schedule-id testnet4-lin --beneficiary 11111111111111111111111111111111 --to Public/11111111111111111111111111111111)"
+signs="$(run claim --schedule-id testnet7-lin --beneficiary 11111111111111111111111111111111 --to Public/11111111111111111111111111111111)"
 echo "$signs" | grep -q "needs a v0.3 wallet home" && ok "a command that signs still asks for a wallet" || bad "claim without a wallet: $signs"
 
 left="$(cd "$HOME_DIR" && find . -mindepth 1 | head -5)"

@@ -78,5 +78,5 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -y -q libpcsclite-dev libclang-dev clang libssl-dev pkg-config cmake
       - name: Build the CLI
         run: cargo build --release --manifest-path cli/Cargo.toml
-      - name: show testnet4-lin and show --batch-id testnet4-batch8, live
+      - name: show testnet7-lin and show --batch-id testnet7-batch8, live
         run: ./scripts/cli-readonly.sh --rpc https://testnet.lez.logos.co
