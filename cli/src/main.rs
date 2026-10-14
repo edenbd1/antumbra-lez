@@ -351,14 +351,14 @@ impl Ctx {
                 Err(e) => eprintln!("{op}: attempt {attempt} not sent: {e:?}"),
             }
             for (i, h) in hashes.iter().enumerate() {
-                let wait = if i + 1 == hashes.len() { 180 } else { 5 };
+                let wait = if i + 1 == hashes.len() { 300 } else { 5 };
                 if let Ok(Ok((_, block))) = tokio::time::timeout(Duration::from_secs(wait), self.wallet().poll_transaction(*h)).await {
-                    return self.report_found(op, *h, Some(block), &watch, before).await;
+                    return self.report_found(op, *h, Some(block), &watch, before, &hashes).await;
                 }
             }
             eprintln!("{op}: attempt {attempt} not included yet");
         }
-        self.report_found(op, *hashes.last().expect("one attempt was sent"), None, &watch, before).await
+        self.report_found(op, *hashes.last().expect("one attempt was sent"), None, &watch, before, &hashes).await
     }
 
     async fn report(&self, op: &str, sent: Result<common::HashType>, watch: &[u8; 32], before: Vec<u8>) -> Result<()> {
@@ -372,24 +372,28 @@ impl Ctx {
         };
         // A transaction outside its validity window is held and never
         // included; three minutes is dozens of blocks.
-        let polled = tokio::time::timeout(Duration::from_secs(180), self.wallet().poll_transaction(hash)).await;
+        let polled = tokio::time::timeout(Duration::from_secs(900), self.wallet().poll_transaction(hash)).await;
         let block = match polled {
             Ok(Ok((_, block))) => Some(block),
             _ => None,
         };
-        self.report_found(op, hash, block, watch, before).await
+        self.report_found(op, hash, block, watch, before, &[hash]).await
     }
 
-    async fn report_found(&self, op: &str, hash: common::HashType, block: Option<u64>, watch: &[u8; 32], before: Vec<u8>) -> Result<()> {
+    async fn report_found(&self, op: &str, hash: common::HashType, block: Option<u64>, watch: &[u8; 32], before: Vec<u8>, attempts: &[common::HashType]) -> Result<()> {
         let after = self.schedule_shard(watch).await?;
         let verdict = match block {
             None => "not-included",
             Some(_) if after != before => "applied",
             Some(_) => "reverted",
         };
-        let line = serde_json::json!({
+        let mut line = serde_json::json!({
             "op": op, "label": self.label, "tx": hash.to_string(), "block": block, "verdict": verdict,
         });
+        if attempts.len() > 1 {
+            // Every attempt, so a late one can still be found after the run.
+            line["attempts"] = attempts.iter().map(|h| h.to_string()).collect();
+        }
         println!("{line}");
         Ok(())
     }
