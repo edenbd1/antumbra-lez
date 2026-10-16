@@ -1,0 +1,16 @@
+# run against https://testnet.lez.logos.co, 2026-10-14T18:09:08Z, scripts/cliff-when-live.sh
+# program FCrja8g2ZKvxZwNZchdppKWQCDxPNUHxnEMidrmqrt6X 72d5cdc05004a9502be72239829071982237638b49b8fe7d1b45fd7371a425f4
+# creator J4pQeHZtp4uE2xo8hN5j9DQ6hnyd5ikz5ZEKPgdkaCHK payer 9nqn7xA7z54QZPHs8wWn5VzTeXTgbwq8SREr38tVK9aw beneficiary HhAAJAXGqKqrZhiXyrwEmz2Uf44dV1BS45rxCpbaM55U dest 9FtLjVNY9V2VGNTn4h3Ct9fe1FWoMeLciV3PVyB2E4Q
+create-cliff	applied	applied	11428	1316a5975bb4c1fc8122b83e04dcf5543db3eb37a1b1cee6abcb6464d096d06f
+# check ok: cliff escrow funded exactly = 600
+# check ok: kind is cliff = 0
+claim-before-cliff	refused	reverted	11430	11206fb73235a688eb8639621be924fee2808a51e67f13d63c20c462772906f8
+# check ok: escrow untouched by the refused claim = 600
+claim-after-cliff	applied	applied	11448	22f55dfa85565874dbb1d244f33744c7913f2c37a1f07bf2daaee434bc9e8447
+# check ok: claimed equals floor(600*(t-start)/(end-start)) at the claim's time = 283
+# check ok: the claim was dated at or after the cliff = yes
+# check ok: the claim includes the whole lump accrued by the cliff (280) = yes
+# check ok: destination received the claim = 283
+# check ok: escrow holds the rest = 317
+# final ESeTNjWvuabiMYKoeKxLn6aQMZVypCgAxYRwSCzsLNVK FCrja8g2ZKvxZwNZchdppKWQCDxPNUHxnEMidrmqrt6X 5afa43543114ada028ca1dec8afc212081bf713e0a685f4d3375539b78e2ab6a
+# final 8qKJeFcRQDpPKz3VhwXejNcQJ689mHUfqHXVx5GX1C3g 11111111111111111111111111111111 bf11b0abcb2dd013c5e4a0e7607881debd8234233ff130393011ec2585c7f978

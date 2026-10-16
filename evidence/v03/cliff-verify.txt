@@ -1,0 +1,9 @@
+antumbra_vesting v0.3 against https://testnet.lez.logos.co, from evidence/v03/cliff.tsv
+  ok   program header FCrja8g2ZKvx… names ImageID 72d5cdc05004a950…
+  ok   create-cliff: applied, in block 11428 (now in block 11430: moved by a block rewrite)
+  ok   claim-before-cliff: reverted, in block 11430
+  ok   claim-after-cliff: applied, in block 11448
+  ok   final state of ESeTNjWvuabi… shard FCrja8g2… is as the run left it
+  ok   final state of 8qKJeFcRQDpP… shard 11111111… is as the run left it
+  ok   control: a random hash does not resolve
+7 checks pass, 0 fail (8 state checks recorded during the run; 1 transactions moved by a block rewrite since)
