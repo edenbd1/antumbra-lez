@@ -173,6 +173,22 @@ jobs:
           [ "$built" = "$committed" ]
           echo "the v0.3 rebuild matches the committed artifact ($committed)" >> "$GITHUB_STEP_SUMMARY"
 
+      # The build for LEZ v0.3.1, whose token program is a loaded one
+      # (scripts/token-run-v031.sh): same guest, feature deployed-token.
+      - name: Rebuild the deployed-token build in Docker
+        env:
+          RISC0_DOCKER_CONTAINER_TAG: r0.1.91.1
+        run: cargo risczero build --manifest-path programs/vesting/Cargo.toml --features deployed-token
+
+      - name: The deployed-token rebuild is its committed artifact, byte for byte
+        run: |
+          set -e
+          built=$(sha256sum programs/vesting/target/riscv32im-risc0-zkvm-elf/docker/antumbra_vesting.bin | cut -d' ' -f1)
+          committed=$(sha256sum artifacts/programs/v0.3.1/antumbra_vesting.bin | cut -d' ' -f1)
+          echo "rebuilt    $built"; echo "committed  $committed"
+          [ "$built" = "$committed" ] && [ "$committed" = "$(cat artifacts/programs/v0.3.1/antumbra_vesting.bin.sha256)" ]
+          echo "the deployed-token rebuild matches artifacts/programs/v0.3.1 ($committed)" >> "$GITHUB_STEP_SUMMARY"
+
   # The CLI's read-only commands, run as a reviewer runs them: a fresh HOME, no
   # wallet, only a sequencer URL. The sequencer here is a recording of the
   # public testnet's answers (scripts/rpc-fixture.py), so an outage cannot turn

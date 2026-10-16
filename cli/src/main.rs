@@ -123,6 +123,23 @@ enum Cmd {
         /// A segment account already in the wallet, in order; with `--header`.
         #[arg(long, requires = "header")]
         segment: Vec<AccountId>,
+        /// Load the program immutable: its header can never be updated.
+        #[arg(long)]
+        immutable: bool,
+    },
+    /// Create a fungible token in the token program this client pays out
+    /// through (`deployed-token` build: the loaded one, else the builtin):
+    /// `--definition` and `--supply` are fresh wallet accounts; the supply
+    /// receives the whole `--total`.
+    TokenNew {
+        #[arg(long)]
+        definition: AccountId,
+        #[arg(long)]
+        supply: AccountId,
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        total: u128,
     },
     /// Print the chain clock (ms). Reads `--rpc`; needs no wallet.
     Now,
@@ -535,7 +552,7 @@ async fn main() -> Result<()> {
 
 async fn run(mut ctx: Ctx, cmd: Cmd) -> Result<()> {
     match cmd {
-        Cmd::Deploy { payer, header, segment } => {
+        Cmd::Deploy { payer, header, segment, immutable } => {
             let bytecode = std::fs::read(&ctx.elf).with_context(|| format!("reading {}", ctx.elf.display()))?;
             let program = Program::new(bytecode.clone().into())?;
             // The loader chunks the user ELF inside the program binary, not the binary itself.
@@ -555,8 +572,41 @@ async fn run(mut ctx: Ctx, cmd: Cmd) -> Result<()> {
                     (h, s)
                 }
             };
-            ProgramLoader(&*wallet).deploy(header, &segs, bytecode, false, Some(payer)).await?;
-            println!("{}", serde_json::json!({"op": "deploy", "header": header.to_string(), "image_id": image_hex(&program), "segments": segs.len()}));
+            ProgramLoader(&*wallet).deploy(header, &segs, bytecode, immutable, Some(payer)).await?;
+            println!(
+                "{}",
+                serde_json::json!({
+                    "op": "deploy", "header": header.to_string(), "image_id": image_hex(&program), "segments": segs.len(),
+                    "segment_ids": segs.iter().map(ToString::to_string).collect::<Vec<_>>(), "immutable": immutable,
+                })
+            );
+        }
+        Cmd::TokenNew { definition, supply, name, total } => {
+            let token = core::token_program();
+            let ix = token_core::Instruction::NewFungibleDefinition { name, total_supply: total };
+            let m = vec![
+                AccountIdentity::Public(definition).select_program_shard(token),
+                AccountIdentity::Public(supply).select_program_shard(token),
+            ];
+            let data = Program::serialize_instruction(ix)?;
+            let h = ctx
+                .wallet()
+                .send_pub_tx_paid_by(m, data, token, ctx.payer)
+                .await
+                .map_err(|e| anyhow!("{e:?}"))?;
+            let block = match tokio::time::timeout(Duration::from_secs(300), ctx.wallet().poll_transaction(h)).await {
+                Ok(Ok((_, b))) => Some(b),
+                _ => None,
+            };
+            let applied = !ctx.account(supply).await?.data.shard(token).is_empty();
+            println!(
+                "{}",
+                serde_json::json!({
+                    "op": "token-new", "label": ctx.label, "tx": h.to_string(), "block": block,
+                    "verdict": if block.is_none() { "not-included" } else if applied { "applied" } else { "reverted" },
+                    "token_program": token.to_string(),
+                })
+            );
         }
         Cmd::Now => println!("{}", ctx.now().await?),
         Cmd::ImageId => {
@@ -644,7 +694,9 @@ async fn run(mut ctx: Ctx, cmd: Cmd) -> Result<()> {
             let bytecode = std::fs::read(&ctx.elf).with_context(|| format!("reading {}", ctx.elf.display()))?;
             let mut deps = HashMap::new();
             if matches!(asset, Asset::Token { .. }) {
-                deps.insert(programs::token_account_id(), programs::token());
+                // The token program's bytes are LEZ v0.3.0's token.bin either
+                // way; only the id it is reached at differs (see token_program).
+                deps.insert(core::token_program(), programs::token());
             }
             let pwd = ProgramWithDependencies::new(Program::new(bytecode.into())?, p, deps);
             let before = ctx.schedule_shard(&sid).await?;

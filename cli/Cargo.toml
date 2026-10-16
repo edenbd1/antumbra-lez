@@ -15,6 +15,10 @@ publish = false
 name = "antumbra-vesting"
 path = "src/main.rs"
 
+[features]
+# A client for the deployed-token build of the guest (LEZ v0.3.1).
+deployed-token = ["antumbra-vesting-core/deployed-token"]
+
 [dependencies]
 antumbra-vesting-core = { path = "../programs/vesting/core" }
 wallet     = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", rev = "db66590ab821a4e142c211017a3866d007f6fa77" }

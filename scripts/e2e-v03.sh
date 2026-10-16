@@ -44,6 +44,9 @@ fi
 export ANTUMBRA_PROGRAM
 echo "# run against $RPC, $(date -u +%Y-%m-%dT%H:%M:%SZ)" | tee "$OUT"
 echo "# program $ANTUMBRA_PROGRAM $("$CLI" image-id)" | tee -a "$OUT"
+if [ -n "${TOKEN_PROGRAM:-}" ]; then
+  echo "# program $TOKEN_PROGRAM ${TOKEN_IMAGE:?set TOKEN_IMAGE to the token program ImageID} (the token program)" | tee -a "$OUT"
+fi
 
 new_pub() { "$W" account new public 2>/dev/null | grep -oE 'Public/[A-Za-z0-9]+' | head -1 | cut -d/ -f2; }
 new_priv() { "$W" account new private 2>/dev/null | grep -oE 'Private/[A-Za-z0-9]+' | head -1 | cut -d/ -f2; }
@@ -55,7 +58,11 @@ import json,sys
 r=json.load(sys.stdin).get("result") or {}
 print(bytes((r.get("data") or {}).get("shards",{}).get(sys.argv[1],[])).hex())' "$2"; }
 NATIVE=11111111111111111111111111111111
-TOKEN=AxDdLwqkWgR9qaSctvABV1ZtvWJJyzXB8199xZueifPj
+# The builtin token program of v0.3.0. On v0.3.1, which has none, set
+# TOKEN_PROGRAM to the header of the token program loaded as an ordinary one
+# (and use the deployed-token build of the guest and the CLI); the token is
+# then minted through the CLI. See scripts/token-run-v031.sh.
+TOKEN="${TOKEN_PROGRAM:-AxDdLwqkWgR9qaSctvABV1ZtvWJJyzXB8199xZueifPj}"
 bal() { python3 -c 'import sys;h=sys.argv[1];print(int.from_bytes(bytes.fromhex(h),"little") if h else 0)' "$(shard "$1" $NATIVE)"; }
 tok() { python3 -c '
 import sys;b=bytes.fromhex(sys.argv[1])
@@ -188,7 +195,11 @@ if want 3; then
   # The creator holds the supply in its own token shard, and pays the fee.
   DEF=$(new_pub); SUPPLY=$CREATOR
   fund "$DEF"
-  "$W" token new --definition-account-id "Public/$DEF" --supply-account-id "Public/$SUPPLY" --name ANTV --total-supply 1000000 2>&1 | grep -E "hash|included" | sed "s/^/  wallet: /"
+  if [ -n "${TOKEN_PROGRAM:-}" ]; then
+    step token-new applied -- "${P[@]}" token-new --definition "$DEF" --supply "$SUPPLY" --name ANTV --total 1000000
+  else
+    "$W" token new --definition-account-id "Public/$DEF" --supply-account-id "Public/$SUPPLY" --name ANTV --total-supply 1000000 2>&1 | grep -E "hash|included" | sed "s/^/  wallet: /"
+  fi
   for _ in $(seq 1 12); do [ "$(tok "$SUPPLY")" = 1000000 ] && break; sleep 5; done
   check "token supply minted" "$(tok "$SUPPLY")" 1000000
   echo "# token definition $DEF supply $SUPPLY" >> "$OUT"
@@ -273,6 +284,8 @@ fi
 
 echo "== 8. private claims: native and token into shielded accounts"
 if want 8; then
+ # PRIVATE_NATIVE=0 leaves out the native private claim (one proof fewer).
+ if [ "${PRIVATE_NATIVE:-1}" = 1 ]; then
   S="$TAG-priv"
   step create-for-private applied -- "${P[@]}" create --schedule-id "$S" --beneficiary "$BEN" --creator "$CREATOR" \
     --kind linear --start now-30m --end now-1m --total 250 --refund-to "$REFUND"
@@ -280,6 +293,7 @@ if want 8; then
   step claim-private-native applied -- "${P[@]}" claim --schedule-id "$S" --beneficiary "$BEN" --to "Private/$PNAT"
   check "private native claim recorded on the schedule" "$(jget "$(show "$S")" claimed)" 250
   check "the wallet decrypted the native claim into the shielded account" "$(privbal "$PNAT")" 250
+ fi
   if [ -n "${DEF:-}" ]; then
     S="$TAG-ptok"
     step create-token-for-private applied -- "${P[@]}" create --schedule-id "$S" --beneficiary "$BEN" --creator "$SUPPLY" \

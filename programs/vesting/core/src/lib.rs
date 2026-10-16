@@ -56,12 +56,12 @@ pub const CANCEL_WINDOW_MS: u64 = 120_000;
 /// Milestone schedules keep one bit per tranche in a `u64`.
 pub const MAX_TRANCHES: u32 = 64;
 
-/// The token program's account id on every LEZ v0.3 chain, derived from its
-/// builtin name rather than read from anything the caller passes, so a payout
-/// can never be routed through a lookalike program.
+/// The token program's account id: on v0.3.0 the builtin's, derived from its
+/// name, with `deployed-token` the constant DEPLOYED_TOKEN_PROGRAM; never read
+/// from anything the caller passes, so no payout goes through a lookalike.
 #[must_use]
 pub fn token_program() -> AccountId {
-    token_core::token_account_id()
+    #[cfg(not(feature = "deployed-token"))] return token_core::token_account_id(); #[cfg(feature = "deployed-token")] return AccountId::new(DEPLOYED_TOKEN_PROGRAM);
 }
 
 /// What a schedule escrows.
@@ -1017,3 +1017,14 @@ pub mod rows {
 
 #[cfg(test)]
 mod tests;
+
+/// `3cwJjDqD17a7k5zMaYM82sgai7WdRzWfLCtRGntZ6SBb`: where the `deployed-token`
+/// build reaches the token program. LEZ v0.3.1 removed the builtin, so this is
+/// LEZ v0.3.0's own token program (artifacts/lez/programs/token.bin, the bytes
+/// the builtin ran) loaded as an ordinary, immutable program. Kept at the end
+/// of the file so the default build's panic locations, and so its bytes, do not
+/// move. See scripts/token-run-v031.sh.
+pub const DEPLOYED_TOKEN_PROGRAM: [u8; 32] = [
+    0x26, 0xec, 0x1b, 0x13, 0xb5, 0x15, 0x47, 0x9d, 0x9f, 0xf3, 0xe1, 0x0b, 0xc1, 0xa0, 0x9e, 0x89, 0xcd, 0x3f, 0xb0,
+    0x9e, 0x0e, 0x10, 0x87, 0x78, 0x8e, 0xe7, 0x26, 0xcb, 0x2a, 0xd1, 0x5f, 0x52,
+];

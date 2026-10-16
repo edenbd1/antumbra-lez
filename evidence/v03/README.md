@@ -46,3 +46,24 @@ genesis keys of the debug sequencer configuration.
 | `testnet-section1.tsv`, `testnet-section1-transcript.txt`, `testnet-section1-verify.txt` | 2026-10-14, section 1 rerun alone with every attempt recorded: 2 applied, 3 refused, 5 state checks, 0 failures; the verifier: 9 checks pass, 0 fail |
 | `cliff.tsv`, `cliff-transcript.txt`, `cliff-verify.txt` | 2026-10-14 18:09 UTC, sequencer v0.3.1, `scripts/cliff-when-live.sh`: a cliff schedule of 600 native (start now-10m, cliff now+4m, end now+20m). Create applied (`1316a597…`, block 11,428, moved to 11,430 by a block rewrite), a claim of 1 before the cliff refused with the escrow untouched (`11206fb7…`, block 11,430), the claim after the cliff applied and paid 283, which includes the whole lump of 280 accrued by the cliff (`22f55dfa…`, block 11,448). 8 state checks, 0 failures; the verifier: 7 checks pass, 0 fail. Re-checked 2026-10-16: the three program transactions and the two funding transfers resolve on the sequencer (`getTransaction`) and on the explorer as `Type: Public Transaction`, the three with Program ID `FCrja8g2…`; a random hash resolves to nothing |
 | `testnet-2026-10-02.tsv`, `testnet-2026-10-02-transcript.txt`, `testnet-2026-10-02-verify.txt` | 2026-10-02, sequencer v0.3.0, the first full run (27 applied, 14 refused, 20 state checks, 66 checks pass, 0 fail when it was recorded). Kept as the record: the 2026-10-12 reset erased that chain, so its hashes no longer resolve. The app tests replay its schedules from saved fixtures |
+
+## Token escrow on a v0.3.1 chain
+
+v0.3.1 removed the builtin token program, and the deployed program (ImageID
+`72d5cdc0…`) reaches the token program only at the builtin's name-derived id,
+which nothing can be loaded at. `scripts/token-run-v031.sh` closes that gap
+without touching the deployed program: it loads LEZ v0.3.0's own
+`token.bin` (`artifacts/programs/v0.3.1/token.bin`, rebuilt in RISC Zero's
+Docker builder r0.1.91.1 from LEZ `db66590a` and byte-identical to LEZ's
+committed artifact, sha256 `728e7a33…`, ImageID `912d412c…`) as an ordinary,
+**immutable** program at `3cwJjDqD17a7k5zMaYM82sgai7WdRzWfLCtRGntZ6SBb`, and
+the `deployed-token` build of the same guest
+(`artifacts/programs/v0.3.1/antumbra_vesting.bin`, ImageID `cf7b6592…`,
+rebuilt and compared by CI's reproduce job), which differs from the deployed
+one only in that its token program is that header, a constant compiled into
+the guest. The default build still reproduces `72d5cdc0…` byte for byte.
+
+| Files | Run |
+|---|---|
+| `local-v031-token.tsv`, `local-v031-token-transcript.txt` | 2026-10-16, a fresh local v0.3.1 sequencer (`1a003bf`), the script exactly as it is meant to run on the public testnet: both programs loaded, an ANTV token minted, a schedule funded in tokens (escrow exactly 100,000), a public claim, a cancellation whose refund, escrow and claim add up to the total, and a **private token claim** of 5,000 into a shielded account, decrypted by the wallet. 6 applied, 6 state checks, 0 failures; the verifier (in the transcript): 14 checks pass, 0 fail, including that the token program's header is immutable. The payer spent 30,135,752, of which about 21M moved to the run's own signer accounts |
+

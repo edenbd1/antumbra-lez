@@ -9,6 +9,7 @@
 #   label  expected(applied|refused)  verdict  block  tx
 # and comment lines, of which three kinds are checked:
 #   # program <header>  <image-id-hex>        the header's program_loader shard names this ImageID
+#   # immutable <header>                      and its loader record is immutable (no update can replace it)
 #   # final   <account> <shard-program> <sha256-of-shard-bytes>
 #   # check ok: ...                            (informational; counted, not re-run)
 #
@@ -85,6 +86,11 @@ for line in open(manifest):
         # ProgramHeader { image_id: [u32; 8], program_first_segment, immutable }
         got = h[:32].hex() if len(h) >= 32 else ""
         report(got == image, f"program header {header[:12]}… names ImageID {image[:16]}…" + ("" if got == image else f" (chain has {got or 'nothing'})"))
+    elif line.startswith("# immutable "):
+        header = line.split()[2]
+        h = shard(header, LOADER)
+        # borsh ProgramHeader: image_id (32 bytes), program_first_segment (32), immutable (bool)
+        report(len(h) >= 65 and h[64] == 1, f"program header {header[:12]}… is immutable")
     elif line.startswith("# final "):
         _, _, account, program, want = line.split()[:5]
         got = hashlib.sha256(shard(account, program)).hexdigest()

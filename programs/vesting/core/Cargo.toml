@@ -13,5 +13,10 @@ token_core = { git = "https://github.com/logos-blockchain/logos-execution-zone.g
 risc0-zkvm = { version = "=3.0.5", default-features = false, features = ["std"] }
 borsh      = { version = "1.5", features = ["derive"] }
 
+[features]
+# Pay token schedules out through the token program loaded at
+# DEPLOYED_TOKEN_PROGRAM instead of the v0.3.0 builtin (LEZ v0.3.1 has none).
+deployed-token = []
+
 [dev-dependencies]
 serde_json = "1"

@@ -23,6 +23,11 @@ antumbra-vesting-core = { path = "core" }
 lee_core   = { git = "https://github.com/logos-blockchain/logos-execution-zone.git", rev = "db66590ab821a4e142c211017a3866d007f6fa77" }
 risc0-zkvm = { version = "=3.0.5", default-features = false, features = ["std"] }
 
+[features]
+# The build for LEZ v0.3.1, whose token program is an ordinary deployed one:
+# cargo risczero build --manifest-path programs/vesting/Cargo.toml --features deployed-token
+deployed-token = ["antumbra-vesting-core/deployed-token"]
+
 [profile.release]
 opt-level     = 3
 lto           = "thin"
