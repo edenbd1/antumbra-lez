@@ -1,4 +1,4 @@
-2026-10-14 20:09:08 run testnet5-cliff-202610142009, phase new, manifest /Users/eden/logos-monitor/rfp017-cliff/testnet5-cliff-202610142009.tsv
+2026-10-14 20:09:08 run testnet5-cliff-202610142009, phase new, manifest ~/logos-monitor/rfp017-cliff/testnet5-cliff-202610142009.tsv
   fund HhAAJAXGqKqrZhiXyrwEmz2Uf44dV1BS45rxCpbaM55U: Transaction hash is cbe1bbdf2340c6c847ee21c36d5ed93525bfddae1ac0856c83be2950f2ea97e5
   fund J4pQeHZtp4uE2xo8hN5j9DQ6hnyd5ikz5ZEKPgdkaCHK: Transaction hash is 4a1af15263facecdf03106565ac32525aef46b770c0bd2bf8949582148a82d9a
 2026-10-14 20:14:20   {"block":11428,"label":"create-cliff","op":"create","tx":"1316a5975bb4c1fc8122b83e04dcf5543db3eb37a1b1cee6abcb6464d096d06f","verdict":"applied"}
