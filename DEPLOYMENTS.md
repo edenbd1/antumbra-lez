@@ -26,15 +26,22 @@ charged, with no effect on state; the run reads the state back around every
 step, and the verifier compares the final state of every account it touched.
 
 Two things differ from the run on the earlier chain. **Section 3, the token
-escrow, cannot run on this testnet**: v0.3.1 removed the builtin token program,
-so there is no token to escrow; the token paths are exercised on a local
-sequencer (`evidence/v03/local-e2e.tsv`) and through the committed binary in
-`executor-tests`. And **the full run reports one failure that is not one**: its
+escrow, does not run in this run**: v0.3.1 removed the builtin token program.
+It ran separately on 2026-10-17 (below, "Token escrow on the testnet"). And **the full run reports one failure that is not one**: its
 first transaction, `create-linear`, was recorded `not-included` because that
 run's CLI kept only the hash of its last attempt, while an earlier attempt is
 the one the sequencer included; the section's own checks need it applied
 (escrow funded exactly 600, `claim-linear` applied). The CLI now records every
 attempt, and section 1 was rerun alone with it, clean.
+
+### Token escrow on the testnet (2026-10-17)
+
+| | |
+|---|---|
+| Token program | LEZ v0.3.0's `token.bin` (sha256 `728e7a33…`, ImageID `912d412c6e82c5a5be4a6ad0749358dd85e269655940147f274d3c168c4a14ab`), loaded **immutable** at `3cwJjDqD17a7k5zMaYM82sgai7WdRzWfLCtRGntZ6SBb` |
+| Vesting, `deployed-token` build | ImageID `cf7b65926099c7802226a1eb4a7cd359d73a3457c8261ca787de676be87487ea` at `B2ZDRw7fJCo5ucMNNZDVmAPpFVCcueSggXWZ1aWfgiMy`; identical to the deployed program except that its token program is the header above |
+| Run | `scripts/token-run-v031.sh`, blocks 28,388 to 28,420: an ANTV token minted (supply 1,000,000), a schedule funded in tokens (escrow exactly 100,000), a public claim of 3,888, a cancellation whose refund, escrow and claim add up to 100,000, and a **private token claim** of 5,000 into a shielded account, decrypted by the wallet. 6 applied, 6 state checks, 0 failures; manifest [`evidence/v03/token-v031.tsv`](evidence/v03/token-v031.tsv), transcript [`evidence/v03/token-v031-transcript.txt`](evidence/v03/token-v031-transcript.txt) |
+| Re-checked | `./scripts/verify-onchain.sh --manifest evidence/v03/token-v031.tsv --rpc https://testnet.lez.logos.co`: 14 checks pass, 0 fail, including that the token program's header is immutable (end of the transcript) |
 
 The testnet's block explorer had indexed blocks only up to about 7,585 on
 2026-10-14, while these transactions are in blocks 10,345 to 10,811, so the

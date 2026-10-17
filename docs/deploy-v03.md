@@ -140,7 +140,10 @@ locally and take minutes each. Rerunning on the same chain needs a new `TAG`.
 
 On the current testnet (sequencer v0.3.1), run `SECTIONS="1 2 4 5 6 7 8 9 10"`:
 v0.3.1 removed the builtin token program, so section 3 and the private token
-claim of section 8 have no token to use there. The testnet drops some
+claim of section 8 have no token to use there. They run instead through
+`scripts/token-run-v031.sh`, which loads LEZ v0.3.0's `token.bin` as an
+immutable program and a `deployed-token` build of the guest
+(`evidence/v03/token-v031.tsv`, 2026-10-17). The testnet drops some
 transactions and includes others late; the CLI sends a dropped one again with
 the same payer nonce and records every attempt (`# attempts` lines), and the
 run re-reads every block at its end (`scripts/reresolve.py`). A single section

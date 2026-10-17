@@ -106,8 +106,9 @@ Proven by the Kani harnesses `everything_vests_by_the_end` and
 "refund is exactly the unvested part" in
 [`evidence/v03/testnet.tsv`](../evidence/v03/testnet.tsv), and for a token by
 "token refund plus escrow plus claimed is the total" in
-[`evidence/v03/local-e2e.tsv`](../evidence/v03/local-e2e.tsv) (the v0.3.1
-testnet has no builtin token program).
+[`evidence/v03/local-e2e.tsv`](../evidence/v03/local-e2e.tsv) and, on the
+v0.3.1 testnet with LEZ's token program loaded as an ordinary one, in
+[`evidence/v03/token-v031.tsv`](../evidence/v03/token-v031.tsv).
 
 ## D-02: No cached vested amount: `vested_at` is a pure function
 
@@ -506,7 +507,8 @@ instruction must select the asset's shard, which the plan checks.
 (payout at
 [programs/vesting/core/src/lib.rs:580-592](../programs/vesting/core/src/lib.rs#L580-L592));
 executor test `a_token_schedule_escrows_claims_and_refunds_the_token`; on
-testnet, manifest rows `create-token`, `claim-token`, `cancel-token`.
+testnet, manifest rows `create-token`, `claim-token`, `cancel-token` and
+`claim-private-token` in [`evidence/v03/token-v031.tsv`](../evidence/v03/token-v031.tsv).
 
 ## D-16: Private claims through privacy-preserving transactions
 
